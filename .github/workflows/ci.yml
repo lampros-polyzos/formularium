@@ -37,10 +37,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 27
+        uses: actions/setup-java@v3
         with:
-          java-version: '17'
+          java-version: '27'
           distribution: 'temurin'
           
       - name: Cache Maven packages
