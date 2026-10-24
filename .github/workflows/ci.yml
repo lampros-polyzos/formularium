@@ -26,7 +26,7 @@ jobs:
         run: npm ci # ci is strictly for automated environments
         
       - name: Run React Tests
-        run: npm test -- --watchAll=false
+        run: npm test
 
   backend-tests:
     runs-on: ubuntu-latest
@@ -48,6 +48,9 @@ jobs:
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          
+      
+      - name: Grant execute permission for mvnw
+        run: chmod +x mvnw
+
       - name: Run Spring Boot Tests
         run: ./mvnw clean test
