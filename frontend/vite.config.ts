@@ -7,5 +7,6 @@ export default defineConfig({
   test: {
     environment: 'happy-dom', // Updated from jsdom
     globals: true,
+    pool: 'threads',
   }
 })
