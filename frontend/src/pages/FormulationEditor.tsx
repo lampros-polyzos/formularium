@@ -13,6 +13,8 @@ type DatabaseIngredient = {
     max_heating_temp_c: number | null;
     optimal_ph_min: number | null;
     optimal_ph_max: number | null;
+    min_usage_pct: number | null;
+    max_usage_pct: number | null;
 };
 
 type FormulaIngredient = DatabaseIngredient & {
@@ -390,16 +392,43 @@ const FormulationEditor = () => {
                                                                 </select>
                                                             </td>
                                                             <td className="px-4 py-2">
-                                                                <input
-                                                                    type="number"
-                                                                    step="0.01"
-                                                                    min="0"
-                                                                    max="100"
-                                                                    value={item.percentage || ''}
-                                                                    onChange={(e) => handlePercentageChange(item.originalIndex, e.target.value)}
-                                                                    className="w-full max-w-[80px] border border-gray-200 rounded px-2 py-1 text-sm bg-white outline-none focus:border-[#2c4c3b]"
-                                                                    placeholder="0"
-                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <div className="flex items-center gap-1">
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.5"
+                                                                            min="0"
+                                                                            max="100"
+                                                                            value={item.percentage || ''}
+                                                                            onChange={(e) => handlePercentageChange(item.originalIndex, e.target.value)}
+                                                                            className={`w-16 border rounded px-1.5 py-0.5 text-sm bg-white outline-none focus:ring-1 ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
+                                                                                (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
+                                                                                ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
+                                                                                : 'border-gray-200 focus:ring-[#2c4c3b]'
+                                                                                }`}
+                                                                            placeholder="0"
+                                                                        />
+                                                                        <span className="text-xs text-gray-400">%</span>
+                                                                    </div>
+
+                                                                    {/* Compact Range Badge */}
+                                                                    {(item.min_usage_pct !== null || item.max_usage_pct !== null) && (
+                                                                        <span
+                                                                            className={`text-[10px] leading-tight mt-0.5 font-mono ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
+                                                                                (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
+                                                                                ? 'text-amber-600 font-semibold'
+                                                                                : 'text-gray-400'
+                                                                                }`}
+                                                                            title={`Recommended range: ${item.min_usage_pct ?? 0}% - ${item.max_usage_pct ?? 100}%`}
+                                                                        >
+                                                                            {item.min_usage_pct !== null && item.max_usage_pct !== null
+                                                                                ? `${item.min_usage_pct}–${item.max_usage_pct}%`
+                                                                                : item.max_usage_pct !== null
+                                                                                    ? `≤${item.max_usage_pct}%`
+                                                                                    : `≥${item.min_usage_pct}%`}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                             <td className="px-4 py-2 text-gray-600">
                                                                 {item.percentage
