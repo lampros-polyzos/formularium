@@ -56,7 +56,7 @@ const FormulationEditor = () => {
             const { data, error } = await supabase
                 .from('ingredients')
                 .select('*')
-                .or(`trade_name.ilike.%${cleanTerm}%,inci_name.ilike.%${cleanTerm}%`)
+                .or(`trade_name.ilike.%${cleanTerm}%,inci_name.ilike.%${cleanTerm}%,function.ilike.%${cleanTerm}%`)
                 .limit(10);
 
             if (error) {
@@ -307,7 +307,7 @@ const FormulationEditor = () => {
                                 type="text"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search and add ingredients to your formulation..."
+                                placeholder="Search by ingredient, INCI, or function (e.g. emulsifier, active)..."
                                 className="w-full bg-transparent text-sm outline-none text-gray-700"
                             />
                             {isSearching && <span className="text-xs text-gray-400">Searching...</span>}
