@@ -76,14 +76,47 @@ const FormulationEditor = () => {
                 )}
               </h2>
               
-              {/* Compact Target Weight Input */}
-              <div className="flex items-center gap-2 mt-2">
-                <label className="text-sm text-gray-600 font-medium">Target Weight:</label>
-                <input 
-                  type="text" 
-                  defaultValue="100g" 
-                  className="w-24 border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm" 
-                />
+              {/* Compact Setup Inputs (Weight & Profile) */}
+              <div className="flex flex-wrap items-center gap-6 mt-3">
+                
+                {/* Target Weight */}
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 font-medium">Target Weight:</label>
+                  <input 
+                    type="text" 
+                    defaultValue="100g" 
+                    className="w-24 border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm" 
+                  />
+                </div>
+
+                {/* Product Profile Selector */}
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 font-medium">Profile:</label>
+                  <select className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48">
+                    <option value="" disabled selected>Select product type...</option>
+                    
+                    <optgroup label="Emulsions">
+                      <option value="ow_lotion">O/W Lotion or Cream</option>
+                      <option value="wo_cream">W/O Rich Cream or Salve</option>
+                    </optgroup>
+                    
+                    <optgroup label="Anhydrous (Waterless)">
+                      <option value="body_butter">Body Butter or Balm</option>
+                      <option value="facial_oil">Facial or Body Oil</option>
+                    </optgroup>
+                    
+                    <optgroup label="Aqueous & Gels">
+                      <option value="toner_mist">Toner or Face Mist</option>
+                      <option value="water_serum">Water-based Serum or Gel</option>
+                    </optgroup>
+                    
+                    <optgroup label="Surfactants (Wash-off)">
+                      <option value="body_wash">Body Wash or Gel Cleanser</option>
+                      <option value="shampoo">Shampoo</option>
+                    </optgroup>
+                  </select>
+                </div>
+
               </div>
             </div>
             
