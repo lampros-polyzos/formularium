@@ -129,8 +129,9 @@ const FormulationEditor = () => {
 
                 {/* Connect the Profile Selector to state */}
                 <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600 font-medium">Profile:</label>
+                  <label htmlFor="profile-select" className="text-sm text-gray-600 font-medium">Profile:</label>
                   <select 
+                    id="profile-select"
                     value={profileId}
                     onChange={(e) => setProfileId(e.target.value)}
                     className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48"

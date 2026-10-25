@@ -14,7 +14,7 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-// Mock the Companion component to keep the test focused on the Editor's logic
+// Mock the Companion component
 vi.mock('../components/FormulationCompanion', () => ({
   default: ({ alerts }: { alerts: any[] }) => (
     <div data-testid="mock-companion">
@@ -25,17 +25,15 @@ vi.mock('../components/FormulationCompanion', () => ({
 
 describe('FormulationEditor Profile Selector', () => {
   beforeEach(() => {
-    vi.useFakeTimers(); // Enable fake timers for the debounce
+    vi.useFakeTimers();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.runOnlyPendingTimers();
     vi.useRealTimers();
   });
 
   it('fetches validation data successfully when a profile is selected', async () => {
-    // 1. Setup the mock response from the Edge Function
     const mockResponse = {
       data: {
         alerts: [{ type: 'warning', message: 'Test alert from database backend' }]
@@ -44,21 +42,21 @@ describe('FormulationEditor Profile Selector', () => {
     };
     (supabase.functions.invoke as any).mockResolvedValue(mockResponse);
 
-    // 2. Render the component (wrapped in Router since it uses useNavigate)
     render(
       <BrowserRouter>
         <FormulationEditor />
       </BrowserRouter>
     );
 
-    // 3. Find the profile selector and simulate a user changing it
     const profileSelect = screen.getByLabelText(/Profile:/i);
     fireEvent.change(profileSelect, { target: { value: 'ow_lotion' } });
 
-    // 4. Fast-forward past the 500ms debounce timer
+    // Fast-forward past the 500ms debounce timer
     vi.advanceTimersByTime(500);
 
-    // 5. Assert the API was called with the correct payload
+    // Restore real time so `waitFor` can poll the DOM
+    vi.useRealTimers(); 
+
     await waitFor(() => {
       expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
       expect(supabase.functions.invoke).toHaveBeenCalledWith('validate-formula', {
@@ -69,7 +67,6 @@ describe('FormulationEditor Profile Selector', () => {
       });
     });
 
-    // 6. Assert the data successfully reached the child component
     await waitFor(() => {
       expect(screen.getByText('Test alert from database backend')).toBeInTheDocument();
     });
