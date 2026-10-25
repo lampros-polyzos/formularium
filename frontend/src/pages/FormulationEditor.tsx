@@ -22,6 +22,15 @@ type FormulaIngredient = DatabaseIngredient & {
     percentage: number;
 };
 
+type ProfileConfig = {
+    id: string;
+    name: string;
+    category: string;
+    max_oil_phase_percent: number | null;
+    default_ph_min: number | null;
+    default_ph_max: number | null;
+};
+
 const FormulationEditor = () => {
     const navigate = useNavigate();
 
@@ -35,6 +44,7 @@ const FormulationEditor = () => {
     // Validation state
     const [profileId, setProfileId] = useState('');
     const [alerts, setAlerts] = useState<{ type: 'error' | 'warning' | 'success', message: string }[]>([]);
+    const [activeProfile, setActiveProfile] = useState<ProfileConfig | null>(null);
 
     // 2. New State for Search and Ingredients
     const [searchTerm, setSearchTerm] = useState('');
@@ -128,25 +138,92 @@ const FormulationEditor = () => {
         });
     };
 
+    const handleProfileChange = async (newProfileId: string) => {
+        setProfileId(newProfileId);
+
+        // 1. Fetch Profile Data
+        const { data: profileData, error: profileError } = await supabase
+            .from('formulation_profiles')
+            .select('*')
+            .eq('id', newProfileId)
+            .single();
+
+        if (!profileError && profileData) {
+            setActiveProfile(profileData);
+
+            // 2. Auto-populate or update Water if required
+            if (profileData.requires_water) {
+                const { data: aquaData } = await supabase
+                    .from('ingredients')
+                    .select('*')
+                    .eq('inci_name', 'Aqua')
+                    .single();
+
+                if (aquaData) {
+                    const defaultWaterPercentages: Record<string, number> = {
+                        toner_mist: 90,
+                        water_serum: 80,
+                        ow_lotion: 70,
+                        body_wash: 60,
+                        shampoo: 60,
+                        wo_cream: 40,
+                    };
+
+                    const targetPct = defaultWaterPercentages[newProfileId] || 50;
+
+                    setFormulaIngredients(prev => {
+                        const waterIndex = prev.findIndex(ing => ing.inci_name === 'Aqua');
+
+                        if (waterIndex >= 0) {
+                            // Water exists: update its percentage to the new profile's default
+                            const updated = [...prev];
+                            updated[waterIndex] = { ...updated[waterIndex], percentage: targetPct };
+                            return updated;
+                        } else {
+                            // Water doesn't exist: add it to Phase A
+                            const waterIngredient: FormulaIngredient = {
+                                ...aquaData,
+                                phase: 'A',
+                                percentage: targetPct
+                            };
+                            return [...prev, waterIngredient];
+                        }
+                    });
+                }
+            }
+        }
+    };
+
     const removeIngredient = (index: number) => {
         setFormulaIngredients(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Debounced API call to the Edge Function
     useEffect(() => {
         if (!profileId) return;
 
         const validateFormula = async () => {
             const totalPct = formulaIngredients.reduce((sum, item) => sum + item.percentage, 0);
+            const oilPhasePct = formulaIngredients
+                .filter(i => i.phase === 'B' || i.solubility === 'oil')
+                .reduce((sum, item) => sum + item.percentage, 0);
 
             const payload = {
                 profileId,
+                profile: activeProfile,
                 ingredients: formulaIngredients.map(i => ({
+                    id: i.id,
                     name: i.inci_name,
+                    trade_name: i.trade_name,
                     function: i.function,
-                    percentage: i.percentage
+                    phase: i.phase,
+                    percentage: i.percentage,
+                    solubility: i.solubility,
+                    optimal_ph_min: i.optimal_ph_min,
+                    optimal_ph_max: i.optimal_ph_max,
+                    max_heating_temp_c: i.max_heating_temp_c
                 })),
-                totalPercentage: totalPct
+                totalPercentage: totalPct,
+                oilPhasePercentage: oilPhasePct
             };
 
             const { data, error } = await supabase.functions.invoke('validate-formula', {
@@ -165,7 +242,7 @@ const FormulationEditor = () => {
         }, 500);
 
         return () => clearTimeout(debounceTimer);
-    }, [profileId, formulaIngredients]);
+    }, [profileId, activeProfile, formulaIngredients]);
 
     const handleNameKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -207,7 +284,7 @@ const FormulationEditor = () => {
                 <div className="flex-1 flex flex-col gap-5">
 
                     {/* Header Actions & Compact Setup */}
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                         <div>
                             {/* Editable Project Name */}
                             <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -264,7 +341,7 @@ const FormulationEditor = () => {
                                     <select
                                         id="profile-select"
                                         value={profileId}
-                                        onChange={(e) => setProfileId(e.target.value)}
+                                        onChange={(e) => handleProfileChange(e.target.value)}
                                         className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48"
                                     >
                                         <option value="" disabled>Select product type...</option>
@@ -286,6 +363,18 @@ const FormulationEditor = () => {
                                         </optgroup>
                                     </select>
                                 </div>
+
+                                {activeProfile && (
+                                    <div className="mt-3 bg-[#e9eee7] border border-[#c1d1b9] rounded-md px-3 py-1.5 flex flex-wrap items-center gap-4 text-xs text-[#2c4c3b]">
+                                        <span className="font-semibold">{activeProfile.name} Specifications:</span>
+                                        {activeProfile.default_ph_min && activeProfile.default_ph_max && (
+                                            <span>Target pH: <strong>{activeProfile.default_ph_min} – {activeProfile.default_ph_max}</strong></span>
+                                        )}
+                                        {activeProfile.max_oil_phase_percent !== null && (
+                                            <span>Max Oil Phase: <strong>≤ {activeProfile.max_oil_phase_percent}%</strong></span>
+                                        )}
+                                    </div>
+                                )}
 
                             </div>
                         </div>
@@ -367,11 +456,11 @@ const FormulationEditor = () => {
                                             <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
                                                 <thead>
                                                     <tr className="border-b border-gray-200 text-xs text-gray-500">
-                                                        <th className="px-4 py-2 font-medium w-[28%]">Ingredient</th>
+                                                        <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
                                                         <th className="px-4 py-2 font-medium w-[24%]">Function</th>
-                                                        <th className="px-4 py-2 font-medium w-[16%]">Phase</th>
-                                                        <th className="px-4 py-2 font-medium w-[14%]">Target %</th>
-                                                        <th className="px-4 py-2 font-medium w-[12%]">Weight (g)</th>
+                                                        <th className="px-4 py-2 font-medium w-[12%]">Phase</th>
+                                                        <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
+                                                        <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
                                                         <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
                                                     </tr>
                                                 </thead>
