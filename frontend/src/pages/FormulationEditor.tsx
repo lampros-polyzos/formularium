@@ -45,14 +45,22 @@ const FormulationEditor = () => {
 
     const fetchIngredients = async () => {
       setIsSearching(true);
+      const cleanTerm = searchTerm.trim();
+
       const { data, error } = await supabase
         .from('ingredients')
         .select('*')
-        .or(`trade_name.ilike.%${searchTerm}%,inci_name.ilike.%${searchTerm}%`)
+        .or(`trade_name.ilike.%${cleanTerm}%,inci_name.ilike.%${cleanTerm}%`)
         .limit(10);
 
-      if (!error && data) {
-        setSearchResults(data);
+      if (error) {
+        console.error("Ingredients search query failed:", error);
+      } else if (data) {
+        // Deduplicate in memory by inci_name or id
+        const uniqueItems = Array.from(
+          new Map(data.map((item) => [item.inci_name.toLowerCase(), item])).values()
+        );
+        setSearchResults(uniqueItems);
       }
       setIsSearching(false);
     };
