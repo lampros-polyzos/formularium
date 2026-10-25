@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './App.css'
 import LandingPage from './pages/LandingPage';
+import StudioPage from './pages/StudioPage';
 
 function App() {
 
@@ -15,8 +16,7 @@ function App() {
           
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
-            {/* Future private routes go here */}
-            {/* <Route path="/studio" element={<StudioPage />} /> */}
+            <Route path="/studio" element={<StudioPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -11,9 +11,13 @@ import {
   Code,
 } from 'lucide-react';
 import AuthModal from '../components/AuthModal';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const LandingPage = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-[#f7f8f6] font-sans text-gray-900 selection:bg-[#d8e2d3]">
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
@@ -35,15 +39,25 @@ const LandingPage = () => {
         </div>
 
         <div className="flex items-center gap-6 text-[#2c4c3b] font-medium text-sm">
-          <a href="#" className="hover:text-black hidden sm:block">Studio</a>
           <a href="#" className="hover:text-black hidden sm:block">Library</a>
           <a href="#" className="hover:text-black hidden sm:block">Community</a>
-          <button 
-            onClick={() => setIsAuthModalOpen(true)} 
-            className="px-5 py-1.5 bg-transparent border border-[#2c4c3b] rounded-full hover:bg-[#2c4c3b] hover:text-white transition-colors"
-          >
-            Sign in
-          </button>
+          <div>
+          {user ? (
+            <button 
+              onClick={() => navigate('/studio')}
+              className="py-2.5 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
+            >
+              Go to Studio
+            </button>
+          ) : (
+            <button 
+              onClick={() => setIsAuthModalOpen(true)}
+              className="py-2.5 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
+            >
+              Sign In
+            </button>
+          )}
+        </div>
         </div>
       </nav>
 
