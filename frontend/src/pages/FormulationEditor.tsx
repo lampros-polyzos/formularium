@@ -1,8 +1,20 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 
 const FormulationEditor = () => {
   const navigate = useNavigate();
+  
+  // State for inline project name editing
+  const [projectName, setProjectName] = useState('New Project');
+  const [isEditingName, setIsEditingName] = useState(false);
+
+  // Handle saving the name when hitting Enter
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      setIsEditingName(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#f3f5f2] text-[#1f382a] font-sans flex flex-col">
@@ -29,10 +41,41 @@ const FormulationEditor = () => {
         
         {/* Left Column: Formulation Panel */}
         <div className="flex-1 flex flex-col gap-5">
+          
           {/* Header Actions & Compact Setup */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
             <div>
-              <h2 className="text-2xl font-bold">Formulation Studio: <span className="font-normal text-gray-600">New Project</span></h2>
+              {/* Editable Project Name */}
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                Formulation Studio: 
+                {isEditingName ? (
+                  <input
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    onBlur={() => setIsEditingName(false)}
+                    onKeyDown={handleNameKeyDown}
+                    autoFocus
+                    className="font-normal text-gray-800 bg-white border border-[#c1d1b9] rounded px-2 py-0.5 text-xl outline-none focus:ring-1 focus:ring-[#2c4c3b] w-64 shadow-sm"
+                  />
+                ) : (
+                  <span 
+                    className="font-normal text-gray-600 flex items-center gap-2 group cursor-pointer"
+                    onClick={() => setIsEditingName(true)}
+                  >
+                    {projectName}
+                    <button 
+                      className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-[#2c4c3b]" 
+                      aria-label="Edit project name"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+              </h2>
+              
               {/* Compact Target Weight Input */}
               <div className="flex items-center gap-2 mt-2">
                 <label className="text-sm text-gray-600 font-medium">Target Weight:</label>
@@ -43,6 +86,7 @@ const FormulationEditor = () => {
                 />
               </div>
             </div>
+            
             <div className="flex gap-2">
               <button className="px-4 py-1.5 bg-[#1f382a] text-white rounded shadow-sm text-sm font-medium hover:bg-[#2c4c3b]">Save</button>
               <button className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50">Review</button>
@@ -50,7 +94,7 @@ const FormulationEditor = () => {
             </div>
           </div>
 
-          {/* Search Ingredients Bar (Moved Above Table) */}
+          {/* Search Ingredients Bar */}
           <div className="bg-white p-3 rounded-lg border border-[#c1d1b9] shadow-sm flex items-center gap-3">
             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -118,7 +162,7 @@ const FormulationEditor = () => {
           </div>
         </div>
 
-        {/* Right Column: Formulation Companion */}
+        {/* Right Column: Formulation Companion Component */}
         <FormulationCompanion />
 
       </div>
