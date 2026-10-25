@@ -1,4 +1,13 @@
-const FormulationCompanion = () => {
+type Alert = {
+  type: 'error' | 'warning' | 'success';
+  message: string;
+};
+
+interface CompanionProps {
+  alerts: Alert[];
+}
+
+const FormulationCompanion = ({ alerts }: CompanionProps) => {
   return (
     <div className="w-full lg:w-80 flex flex-col gap-6">
       <div className="bg-[#e4ebd3] rounded-lg border border-[#c1d1b9] overflow-hidden shadow-sm">
@@ -9,21 +18,20 @@ const FormulationCompanion = () => {
         
         <div className="p-4">
           <h4 className="font-medium mb-3 text-[#1f382a]">Live Health Check</h4>
-          <div className="flex items-center gap-2 mb-2 text-sm">
-            <span className="bg-[#c2d0c2] px-2 py-0.5 rounded text-[#1f382a] font-medium text-xs">Active</span>
-            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-medium text-xs">Green</span>
-          </div>
           
-          <ul className="text-sm space-y-2 mt-4 text-gray-700">
-            <li className="flex items-start gap-2">
-              <span className="text-yellow-600">⚠</span> Phases unbalanced (70%)
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-gray-400">○</span> pH target not set
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-gray-400">○</span> Preservative missing
-            </li>
+          <ul className="text-sm space-y-3 mt-4">
+            {alerts.length === 0 ? (
+              <li className="text-gray-500 italic">Select a profile and add ingredients to see health checks.</li>
+            ) : (
+              alerts.map((alert, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <span className={alert.type === 'error' ? 'text-red-500' : 'text-yellow-600'}>
+                    {alert.type === 'error' ? '✖' : '⚠'}
+                  </span>
+                  <span className="text-gray-700 leading-tight">{alert.message}</span>
+                </li>
+              ))
+            )}
           </ul>
         </div>
       </div>

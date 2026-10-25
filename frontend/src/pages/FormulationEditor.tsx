@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
+import { supabase } from '../lib/supabase';
 
 const FormulationEditor = () => {
   const navigate = useNavigate();
@@ -8,6 +9,43 @@ const FormulationEditor = () => {
   // State for inline project name editing
   const [projectName, setProjectName] = useState('New Project');
   const [isEditingName, setIsEditingName] = useState(false);
+
+  // New state for validation
+  const [profileId, setProfileId] = useState('');
+  const [alerts, setAlerts] = useState<{type: 'error'|'warning'|'success', message: string}[]>([]);
+
+  // Debounced API call to the Edge Function
+  useEffect(() => {
+    if (!profileId) return;
+
+    const validateFormula = async () => {
+      // Mocking the ingredients array from the table data for now
+      const payload = {
+        profileId,
+        ingredients: [
+          { name: 'Distilled Water', function: 'Solvent', percentage: 70 }
+        ],
+        totalPercentage: 70
+      };
+
+      const { data, error } = await supabase.functions.invoke('validate-formula', {
+        body: payload
+      });
+
+      if (data?.alerts) {
+        setAlerts(data.alerts);
+      } else if (error) {
+        console.error("Validation error:", error);
+      }
+    };
+
+    // Wait 500ms after the user stops typing/selecting before calling the backend
+    const debounceTimer = setTimeout(() => {
+      validateFormula();
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [profileId]); // Add ingredients state to this dependency array later
 
   // Handle saving the name when hitting Enter
   const handleNameKeyDown = (e: React.KeyboardEvent) => {
@@ -89,27 +127,27 @@ const FormulationEditor = () => {
                   />
                 </div>
 
-                {/* Product Profile Selector */}
+                {/* Connect the Profile Selector to state */}
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-gray-600 font-medium">Profile:</label>
-                  <select className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48">
-                    <option value="" disabled selected>Select product type...</option>
-                    
+                  <select 
+                    value={profileId}
+                    onChange={(e) => setProfileId(e.target.value)}
+                    className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48"
+                  >
+                    <option value="" disabled>Select product type...</option>
                     <optgroup label="Emulsions">
                       <option value="ow_lotion">O/W Lotion or Cream</option>
                       <option value="wo_cream">W/O Rich Cream or Salve</option>
                     </optgroup>
-                    
                     <optgroup label="Anhydrous (Waterless)">
                       <option value="body_butter">Body Butter or Balm</option>
                       <option value="facial_oil">Facial or Body Oil</option>
                     </optgroup>
-                    
                     <optgroup label="Aqueous & Gels">
                       <option value="toner_mist">Toner or Face Mist</option>
                       <option value="water_serum">Water-based Serum or Gel</option>
                     </optgroup>
-                    
                     <optgroup label="Surfactants (Wash-off)">
                       <option value="body_wash">Body Wash or Gel Cleanser</option>
                       <option value="shampoo">Shampoo</option>
@@ -195,8 +233,8 @@ const FormulationEditor = () => {
           </div>
         </div>
 
-        {/* Right Column: Formulation Companion Component */}
-        <FormulationCompanion />
+        {/* Pass alerts to the Companion */}
+        <FormulationCompanion alerts={alerts} />
 
       </div>
     </div>
