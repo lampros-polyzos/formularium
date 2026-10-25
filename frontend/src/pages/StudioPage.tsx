@@ -49,13 +49,13 @@ const StudioPage = () => {
       <main className="flex-1 p-10">
         <header className="flex justify-between items-center mb-10">
           <h1 className="text-3xl font-bold text-[#1f382a]">My Formulations</h1>
-          <button className="py-3 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors">
+          <button onClick={() => navigate('/studio/new')}className="py-3 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors">
             + New Formulation
           </button>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <button className="bg-white p-6 rounded-2xl border-2 border-dashed border-[#c1d1b9] shadow-sm flex flex-col items-center justify-center text-center h-48 hover:border-[#2c4c3b] hover:bg-gray-50 transition-all">
+          <button onClick={() => navigate('/studio/new')} className="bg-white p-6 rounded-2xl border-2 border-dashed border-[#c1d1b9] shadow-sm flex flex-col items-center justify-center text-center h-48 hover:border-[#2c4c3b] hover:bg-gray-50 transition-all">
             <span className="text-[#3a5a4a] font-medium">Create your first formulation</span>
           </button>
         </div>

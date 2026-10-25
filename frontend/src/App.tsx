@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import './App.css'
 import LandingPage from './pages/LandingPage';
 import StudioPage from './pages/StudioPage';
+import FormulationEditor from './pages/FormulationEditor';
 
 function App() {
 
@@ -17,6 +18,7 @@ function App() {
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
             <Route path="/studio" element={<StudioPage />} />
+            <Route path="/studio/new" element={<FormulationEditor />} />
           </Route>
         </Routes>
       </BrowserRouter>
