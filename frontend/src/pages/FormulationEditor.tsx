@@ -15,6 +15,8 @@ type DatabaseIngredient = {
     optimal_ph_max: number | null;
     min_usage_pct: number | null;
     max_usage_pct: number | null;
+    description?: string;
+    common_uses?: string;
 };
 
 type FormulaIngredient = DatabaseIngredient & {
@@ -51,6 +53,8 @@ const FormulationEditor = () => {
     const [searchResults, setSearchResults] = useState<DatabaseIngredient[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [formulaIngredients, setFormulaIngredients] = useState<FormulaIngredient[]>([]);
+    const [selectedIngredient, setSelectedIngredient] = useState<DatabaseIngredient | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
     // 3. Debounced Database Search Effect
     useEffect(() => {
@@ -467,7 +471,19 @@ const FormulationEditor = () => {
                                                 <tbody>
                                                     {phaseItems.map((item) => (
                                                         <tr key={item.originalIndex} className="border-b border-gray-100 hover:bg-gray-50">
-                                                            <td className="px-4 py-2 font-medium text-[#1f382a] truncate">{item.trade_name}</td>
+                                                            <td className="px-4 py-2 font-medium text-[#1f382a] truncate">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setSelectedIngredient(item);
+                                                                        setIsModalOpen(true);
+                                                                    }}
+                                                                    className="hover:underline hover:text-[#2c4c3b] text-left transition-colors flex flex-col"
+                                                                    title="View ingredient details"
+                                                                >
+                                                                    <span>{item.trade_name}</span>
+                                                                    <span className="text-[10px] text-gray-500 font-normal">{item.inci_name}</span>
+                                                                </button>
+                                                            </td>
                                                             <td className="px-4 py-2 text-gray-600 truncate">{item.function}</td>
                                                             <td className="px-4 py-2">
                                                                 <select
@@ -558,6 +574,86 @@ const FormulationEditor = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Ingredient Details Modal */}
+                {isModalOpen && selectedIngredient && (
+                    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden">
+                            {/* Header */}
+                            <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-lg font-bold text-[#1f382a]">{selectedIngredient.trade_name}</h3>
+                                    <p className="text-xs text-gray-600 font-mono">{selectedIngredient.inci_name}</p>
+                                </div>
+                                <button
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="text-gray-500 hover:text-gray-800 text-xl font-bold leading-none"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-6 text-sm text-gray-700 space-y-4">
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-1">Summary</h4>
+                                    <p>{selectedIngredient.description || 'No summary available.'}</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-1">Common Uses</h4>
+                                    <p>{selectedIngredient.common_uses || 'No common uses specified.'}</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">Key Attributes</h4>
+                                    <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded border border-gray-100 text-xs">
+                                        <div>
+                                            <span className="text-gray-500 block mb-0.5">Function</span>
+                                            <span className="font-medium">{selectedIngredient.function}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-500 block mb-0.5">Solubility</span>
+                                            <span className="font-medium capitalize">{selectedIngredient.solubility}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-500 block mb-0.5">Usage Rate</span>
+                                            <span className="font-medium">
+                                                {selectedIngredient.min_usage_pct ?? 0}% – {selectedIngredient.max_usage_pct ?? 100}%
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-500 block mb-0.5">Optimal pH</span>
+                                            <span className="font-medium">
+                                                {selectedIngredient.optimal_ph_min && selectedIngredient.optimal_ph_max
+                                                    ? `${selectedIngredient.optimal_ph_min} – ${selectedIngredient.optimal_ph_max}`
+                                                    : 'Broad / Not specified'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-500 block mb-0.5">Heat Tolerance</span>
+                                            <span className="font-medium">
+                                                {selectedIngredient.max_heating_temp_c
+                                                    ? `≤ ${selectedIngredient.max_heating_temp_c}°C`
+                                                    : 'Heat stable'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+                                <button
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="px-4 py-2 bg-[#2c4c3b] text-white text-sm rounded hover:bg-[#1f382a] transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Pass alerts to the Companion */}
                 <FormulationCompanion alerts={alerts} />
