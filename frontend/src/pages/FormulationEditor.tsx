@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
+import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
 
 // 1. Define Types for the Database and Formula state
@@ -46,6 +47,7 @@ const FormulationEditor = () => {
     // Validation state
     const [profileId, setProfileId] = useState('');
     const [alerts, setAlerts] = useState<{ type: 'error' | 'warning' | 'success', message: string }[]>([]);
+    const [recommendations, setRecommendations] = useState<any[]>([]);
     const [activeProfile, setActiveProfile] = useState<ProfileConfig | null>(null);
 
     // 2. New State for Search and Ingredients
@@ -244,6 +246,7 @@ const FormulationEditor = () => {
 
             if (data?.alerts) {
                 setAlerts(data.alerts);
+                setRecommendations(data.recommendations || []);
             } else if (error) {
                 console.error("Validation error:", error);
             }
@@ -663,11 +666,15 @@ const FormulationEditor = () => {
                     </div>
                 )}
 
-                {/* Pass alerts to the Companion */}
-                <FormulationCompanion
-                    alerts={alerts}
-                    hasProfile={!!activeProfile}
-                />
+                {/* Right Column: Sidebar */}
+                <div className="flex flex-col gap-0">
+                    {/* Pass alerts to the Companion */}
+                    <FormulationCompanion
+                        alerts={alerts}
+                        hasProfile={!!activeProfile}
+                    />
+                    <RecommendationsPanel recommendations={recommendations} />
+                </div>
 
             </div>
         </div>
