@@ -7,7 +7,9 @@ interface FormulaIngredient {
   phase: string;
   solubility: string;
   max_heating_temp_c?: number;
-  // Add other properties (percentage, id, etc.)
+  percentage?: number;
+  min_percentage?: number;
+  max_percentage?: number;
 }
 
 const corsHeaders = {
@@ -22,8 +24,14 @@ serve(async (req) => {
   }
 
   try {
-    const { profileId, ingredients, targetPh, totalPercentage } = await req
-      .json();
+    const {
+      profileId,
+      ingredients,
+      targetPh,
+      totalPercentage,
+      oilPhasePercentage,
+      waterPhasePercentage,
+    } = await req.json();
 
     // 1. Initialize Supabase client using the Auth context of the user calling it
     const supabaseClient = createClient(
@@ -117,7 +125,7 @@ serve(async (req) => {
     const hasOrganicAcidPreservative = ingredientNames.some((n: string) =>
       n.includes("sodium benzoate") ||
       n.includes("potassium sorbate") ||
-      n.includes("salicylic acid") // Often used as a preservative co-factor
+      n.includes("salicylic acid")
     );
 
     if (hasVitaminC && hasNiacinamide) {
@@ -237,25 +245,31 @@ serve(async (req) => {
 
     // 3. Analyze the formula against the constraints
     const hasWater = ingredients.some((i: FormulaIngredient) =>
-      i.phase === "A" ||
-      i.solubility === "water" ||
-      (i.function === "Solvent" && i.name.toLowerCase().includes("water"))
+      (i.percentage || 0) > 0 && (
+        i.phase === "A" ||
+        i.solubility === "water" ||
+        (i.function === "Solvent" && i.name.toLowerCase().includes("water"))
+      )
     );
 
     const hasOil = ingredients.some((i: FormulaIngredient) =>
-      i.phase === "B" ||
-      i.solubility === "oil" ||
-      i.function === "Carrier Oil" ||
-      i.function === "Butter"
+      (i.percentage || 0) > 0 && (
+        i.phase === "B" ||
+        i.solubility === "oil" ||
+        i.function === "Carrier Oil" ||
+        i.function === "Butter"
+      )
     );
 
     const hasEmulsifier = ingredients.some((i: FormulaIngredient) =>
-      i.function === "Emulsifier" || i.function === "Co-emulsifier" ||
-      i.function === "Cationic Emulsifier"
+      (i.percentage || 0) > 0 && (
+        i.function === "Emulsifier" || i.function === "Co-emulsifier" ||
+        i.function === "Cationic Emulsifier"
+      )
     );
 
     const hasPreservative = ingredients.some((i: FormulaIngredient) =>
-      i.function === "Preservative"
+      (i.percentage || 0) > 0 && i.function === "Preservative"
     );
 
     const hasChelator = ingredients.some((i: FormulaIngredient) =>
@@ -309,6 +323,48 @@ serve(async (req) => {
         type: "error",
         message:
           `Missing broad-spectrum preservative. This formulation is unsafe for long-term storage.`,
+      });
+    }
+    // Phase Balance & Structural Stability Checks
+    if (
+      profile.max_oil_phase_percent !== null &&
+      oilPhasePercentage > profile.max_oil_phase_percent
+    ) {
+      alerts.push({
+        type: "error",
+        message: `Oil phase (${
+          oilPhasePercentage.toFixed(2)
+        }%) exceeds the maximum allowed (${profile.max_oil_phase_percent}%) for this product type.`,
+      });
+    }
+
+    if (profileId === "ow_lotion" && oilPhasePercentage > 35) {
+      alerts.push({
+        type: "warning",
+        message: `High oil phase (${
+          oilPhasePercentage.toFixed(2)
+        }%). In an O/W emulsion, exceeding 35% oil risks phase inversion, separation, and an overly greasy texture.`,
+      });
+    }
+
+    if (profileId === "wo_cream" && oilPhasePercentage < 20) {
+      alerts.push({
+        type: "error",
+        message: `Low oil phase (${
+          oilPhasePercentage.toFixed(2)
+        }%). Water-in-Oil (W/O) emulsions require at least 20-25% lipids to form a stable continuous outer phase.`,
+      });
+    }
+
+    if (
+      (profileId === "toner_mist" || profileId === "water_serum") &&
+      oilPhasePercentage > 5
+    ) {
+      alerts.push({
+        type: "error",
+        message: `High oil phase (${
+          oilPhasePercentage.toFixed(2)
+        }%). Thin aqueous products cannot hold more than 5% lipids without specialized solubilizers; this will separate.`,
       });
     }
 
@@ -376,6 +432,35 @@ serve(async (req) => {
           "Niacinamide risk: At a target pH below 5.0, Niacinamide hydrolyzes into nicotinic acid, which causes severe skin flushing and irritation. Raise your target pH.",
       });
     }
+
+    ingredients.forEach((i: FormulaIngredient) => {
+      if (i.percentage === undefined || i.percentage === 0) return;
+
+      if (i.max_percentage && i.percentage > i.max_percentage) {
+        alerts.push({
+          type: "error",
+          message:
+            `${i.name} is at ${i.percentage}%, exceeding its maximum safe usage rate of ${i.max_percentage}%. This may cause irritation or formula instability.`,
+        });
+      }
+
+      if (i.min_percentage && i.percentage < i.min_percentage) {
+        // Preservatives and emulsifiers get errors; actives get warnings
+        const alertType =
+          (i.function === "Preservative" || i.function === "Emulsifier")
+            ? "error"
+            : "warning";
+        const impact = alertType === "error"
+          ? "fail to protect/stabilize the formula"
+          : "be ineffective";
+
+        alerts.push({
+          type: alertType,
+          message:
+            `${i.name} is at ${i.percentage}%, below its minimum effective rate of ${i.min_percentage}%. It will likely ${impact}.`,
+        });
+      }
+    });
 
     // 4. Return the alerts to the frontend
     return new Response(

@@ -18,11 +18,15 @@ type DatabaseIngredient = {
     max_usage_pct: number | null;
     description?: string;
     common_uses?: string;
+    min_percentage?: number | null;
+    max_percentage?: number | null;
+    QS?: boolean; // Flag to indicate if this ingredient is a Q.S. (Quantity Sufficient) ingredient
 };
 
 type FormulaIngredient = DatabaseIngredient & {
     phase: 'A' | 'B' | 'C';
     percentage: number;
+    isQS: boolean; // Flag to indicate if this ingredient is a Q.S. (Quantity Sufficient) ingredient
 };
 
 type ProfileConfig = {
@@ -111,13 +115,36 @@ const FormulationEditor = () => {
     };
 
     // 4. Add Ingredient Handler
+    // 4. Add Ingredient Handler
     const handleAddIngredient = (ingredient: DatabaseIngredient) => {
         const assignedPhase = determinePhase(ingredient);
+
+        // Calculate smart default percentage based on safe ranges
+        let defaultPct = 0;
+        const min = ingredient.min_usage_pct;
+        const max = ingredient.max_usage_pct;
+
+        if (min !== null && max !== null && min !== undefined && max !== undefined) {
+            if (ingredient.function === "Preservative") {
+                // Always default preservatives to their maximum safe limit
+                defaultPct = max;
+            } else {
+                // Default others to the mathematical median
+                defaultPct = parseFloat(((min + max) / 2).toFixed(2));
+            }
+        } else if (max !== null && max !== undefined) {
+            // If only max is defined
+            defaultPct = ingredient.function === "Preservative" ? max : parseFloat((max / 2).toFixed(2));
+        } else if (min !== null && min !== undefined) {
+            // If only min is defined
+            defaultPct = min;
+        }
 
         const newIngredient: FormulaIngredient = {
             ...ingredient,
             phase: assignedPhase,
-            percentage: 0
+            percentage: defaultPct,
+            isQS: false // Initialize the Q.S. flag
         };
 
         setFormulaIngredients(prev => [...prev, newIngredient]);
@@ -233,7 +260,9 @@ const FormulationEditor = () => {
                     solubility: i.solubility,
                     optimal_ph_min: i.optimal_ph_min,
                     optimal_ph_max: i.optimal_ph_max,
-                    max_heating_temp_c: i.max_heating_temp_c
+                    max_heating_temp_c: i.max_heating_temp_c,
+                    min_percentage: i.min_usage_pct,
+                    max_percentage: i.max_usage_pct
                 })),
                 totalPercentage: totalPct,
                 oilPhasePercentage: oilPhasePct,
@@ -270,6 +299,41 @@ const FormulationEditor = () => {
     // Helper to filter ingredients by phase
     const getPhaseIngredients = (phase: 'A' | 'B' | 'C') => {
         return formulaIngredients.map((ing, idx) => ({ ...ing, originalIndex: idx })).filter(ing => ing.phase === phase);
+    };
+
+    // Auto-balance the Q.S. ingredient
+    useEffect(() => {
+        const qsIndex = formulaIngredients.findIndex(i => i.isQS);
+
+        if (qsIndex !== -1) {
+            // Sum everything EXCEPT the Q.S. ingredient
+            const fixedTotal = formulaIngredients
+                .filter((_, idx) => idx !== qsIndex)
+                .reduce((sum, i) => sum + (i.percentage || 0), 0);
+
+            // Calculate remaining balance (prevent negative numbers)
+            const newBalance = Math.max(0, parseFloat((100 - fixedTotal).toFixed(2)));
+
+            // Only update state if the balance actually changed to prevent infinite loops
+            if (formulaIngredients[qsIndex].percentage !== newBalance) {
+                const updated = [...formulaIngredients];
+                updated[qsIndex].percentage = newBalance;
+                setFormulaIngredients(updated);
+            }
+        }
+    }, [formulaIngredients]);
+
+    const totalPercentage = formulaIngredients.reduce((sum, i) => sum + (i.percentage || 0), 0);
+    const fixedTotal = formulaIngredients.filter(i => !i.isQS).reduce((sum, i) => sum + (i.percentage || 0), 0);
+    const qsTotal = formulaIngredients.filter(i => i.isQS).reduce((sum, i) => sum + (i.percentage || 0), 0);
+    const isOverLimit = totalPercentage > 100;
+
+    const cyclePhase = (current: 'A' | 'B' | 'C', dir: number): 'A' | 'B' | 'C' => {
+        const phases: ('A' | 'B' | 'C')[] = ['A', 'B', 'C'];
+        let idx = phases.indexOf(current) + dir;
+        if (idx < 0) idx = 2;
+        if (idx > 2) idx = 0;
+        return phases[idx];
     };
 
     return (
@@ -469,16 +533,14 @@ const FormulationEditor = () => {
                                     ) : (
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
-                                                <thead>
-                                                    <tr className="border-b border-gray-200 text-xs text-gray-500">
-                                                        <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
-                                                        <th className="px-4 py-2 font-medium w-[24%]">Function</th>
-                                                        <th className="px-4 py-2 font-medium w-[12%]">Phase</th>
-                                                        <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
-                                                        <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
-                                                        <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
-                                                    </tr>
-                                                </thead>
+                                                <tr className="border-b border-gray-200 text-xs text-gray-500">
+                                                    <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
+                                                    <th className="px-4 py-2 font-medium w-[22%]">Function</th>
+                                                    <th className="px-4 py-2 font-medium w-[12%] text-center">Phase</th>
+                                                    <th className="px-4 py-2 font-medium w-[14%]">Target %</th>
+                                                    <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
+                                                    <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
+                                                </tr>
                                                 <tbody>
                                                     {phaseItems.map((item) => (
                                                         <tr key={item.originalIndex} className="border-b border-gray-100 hover:bg-gray-50">
@@ -497,40 +559,73 @@ const FormulationEditor = () => {
                                                             </td>
                                                             <td className="px-4 py-2 text-gray-600 truncate">{item.function}</td>
                                                             <td className="px-4 py-2">
-                                                                <select
-                                                                    value={item.phase}
-                                                                    onChange={(e) => handlePhaseChange(item.originalIndex, e.target.value as 'A' | 'B' | 'C')}
-                                                                    className="w-full border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white text-gray-700 outline-none"
-                                                                >
-                                                                    <option value="A">Phase A</option>
-                                                                    <option value="B">Phase B</option>
-                                                                    <option value="C">Phase C</option>
-                                                                </select>
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handlePhaseChange(item.originalIndex, cyclePhase(item.phase, -1))}
+                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
+                                                                    >
+                                                                        ◀
+                                                                    </button>
+                                                                    <span className="font-bold text-gray-700 w-4 text-center">{item.phase}</span>
+                                                                    <button
+                                                                        onClick={() => handlePhaseChange(item.originalIndex, cyclePhase(item.phase, 1))}
+                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
+                                                                    >
+                                                                        ▶
+                                                                    </button>
+                                                                </div>
                                                             </td>
                                                             <td className="px-4 py-2">
-                                                                <div className="flex flex-col">
-                                                                    <div className="flex items-center gap-1">
-                                                                        <input
-                                                                            type="number"
-                                                                            step="0.5"
-                                                                            min="0"
-                                                                            max="100"
-                                                                            value={item.percentage || ''}
-                                                                            onChange={(e) => handlePercentageChange(item.originalIndex, e.target.value)}
-                                                                            className={`w-16 border rounded px-1.5 py-0.5 text-sm bg-white outline-none focus:ring-1 ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
-                                                                                (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
-                                                                                ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
-                                                                                : 'border-gray-200 focus:ring-[#2c4c3b]'
+                                                                <div className="flex flex-col justify-center">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="relative">
+                                                                            <input
+                                                                                type="number"
+                                                                                step="0.5"
+                                                                                min="0"
+                                                                                max="100"
+                                                                                value={item.percentage === 0 ? '' : item.percentage}
+                                                                                disabled={item.isQS}
+                                                                                onChange={(e) => handlePercentageChange(item.originalIndex, e.target.value)}
+                                                                                className={`w-16 border rounded py-0.5 pl-2 pr-6 text-sm bg-white outline-none focus:ring-1 
+        [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
+        ${item.isQS ? 'bg-blue-50 text-blue-700 font-bold border-blue-200' : ''}
+        ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
+                                                                                        ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
+                                                                                        : 'border-gray-200 focus:ring-[#2c4c3b]'
+                                                                                    }`}
+                                                                                placeholder="0"
+                                                                            />
+                                                                            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
+                                                                        </div>
+
+                                                                        {/* Tiny Q.S. Toggle Pill */}
+                                                                        <button
+                                                                            type="button"
+                                                                            title="Quantum Satis: Auto-balance to 100%"
+                                                                            onClick={() => {
+                                                                                setFormulaIngredients(prev => {
+                                                                                    const updated = [...prev];
+                                                                                    if (!item.isQS) {
+                                                                                        updated.forEach(ing => ing.isQS = false); // Uncheck others
+                                                                                    }
+                                                                                    updated[item.originalIndex].isQS = !item.isQS;
+                                                                                    return updated;
+                                                                                });
+                                                                            }}
+                                                                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-colors focus:outline-none ${item.isQS
+                                                                                ? 'bg-blue-100 text-blue-600 border-blue-300'
+                                                                                : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-200 hover:text-gray-600'
                                                                                 }`}
-                                                                            placeholder="0"
-                                                                        />
-                                                                        <span className="text-xs text-gray-400">%</span>
+                                                                        >
+                                                                            Q.S.
+                                                                        </button>
                                                                     </div>
 
-                                                                    {/* Compact Range Badge */}
+                                                                    {/* Compact Range Badge (Directly underneath) */}
                                                                     {(item.min_usage_pct !== null || item.max_usage_pct !== null) && (
                                                                         <span
-                                                                            className={`text-[10px] leading-tight mt-0.5 font-mono ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
+                                                                            className={`text-[10px] leading-tight mt-1 font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
                                                                                 (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
                                                                                 ? 'text-amber-600 font-semibold'
                                                                                 : 'text-gray-400'
@@ -583,6 +678,40 @@ const FormulationEditor = () => {
                                 </span>
                             )}
                         </div>
+                    </div>
+                    <div className="mt-4 p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
+                        <div className="flex justify-between mb-3 text-sm font-medium">
+                            <span className="text-gray-700 uppercase tracking-wide text-xs font-bold">Formula Allocation</span>
+                            <span className={isOverLimit ? 'text-red-600 font-bold' : 'text-[#1f382a] font-bold'}>
+                                {totalPercentage.toFixed(2)}% / 100.00%
+                            </span>
+                        </div>
+
+                        <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                            {/* Fixed Ingredients (Green) */}
+                            <div
+                                className="bg-[#c1d1b9] h-full transition-all duration-300"
+                                style={{ width: `${Math.min(fixedTotal, 100)}%` }}
+                            />
+                            {/* Q.S. Auto-balance (Blue) */}
+                            <div
+                                className="bg-blue-300 h-full transition-all duration-300"
+                                style={{ width: `${Math.min(qsTotal, Math.max(0, 100 - fixedTotal))}%` }}
+                            />
+                            {/* Over Limit (Red) - Only shows if > 100% */}
+                            {isOverLimit && (
+                                <div
+                                    className="bg-red-400 h-full transition-all duration-300"
+                                    style={{ width: `${totalPercentage - 100}%` }}
+                                />
+                            )}
+                        </div>
+
+                        {isOverLimit && (
+                            <p className="text-red-500 text-xs mt-3 flex items-center gap-1">
+                                <span>⚠️</span> Formula exceeds 100%. Please reduce fixed ingredient percentages.
+                            </p>
+                        )}
                     </div>
                 </div>
 
