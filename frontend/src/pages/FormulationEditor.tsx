@@ -207,8 +207,15 @@ const FormulationEditor = () => {
 
         const validateFormula = async () => {
             const totalPct = formulaIngredients.reduce((sum, item) => sum + item.percentage, 0);
+
+            // Calculate Oil Phase (Phase B or oil soluble)
             const oilPhasePct = formulaIngredients
                 .filter(i => i.phase === 'B' || i.solubility === 'oil')
+                .reduce((sum, item) => sum + item.percentage, 0);
+
+            // Add: Calculate Water Phase (Phase A or water soluble)
+            const waterPhasePct = formulaIngredients
+                .filter(i => i.phase === 'A' || i.solubility === 'water')
                 .reduce((sum, item) => sum + item.percentage, 0);
 
             const payload = {
@@ -219,7 +226,7 @@ const FormulationEditor = () => {
                     name: i.inci_name,
                     trade_name: i.trade_name,
                     function: i.function,
-                    phase: i.phase,
+                    phase: i.phase, // Sends 'A', 'B', or 'C'
                     percentage: i.percentage,
                     solubility: i.solubility,
                     optimal_ph_min: i.optimal_ph_min,
@@ -227,7 +234,8 @@ const FormulationEditor = () => {
                     max_heating_temp_c: i.max_heating_temp_c
                 })),
                 totalPercentage: totalPct,
-                oilPhasePercentage: oilPhasePct
+                oilPhasePercentage: oilPhasePct,
+                waterPhasePercentage: waterPhasePct // Send to backend
             };
 
             const { data, error } = await supabase.functions.invoke('validate-formula', {
@@ -656,7 +664,10 @@ const FormulationEditor = () => {
                 )}
 
                 {/* Pass alerts to the Companion */}
-                <FormulationCompanion alerts={alerts} />
+                <FormulationCompanion
+                    alerts={alerts}
+                    hasProfile={!!activeProfile}
+                />
 
             </div>
         </div>
