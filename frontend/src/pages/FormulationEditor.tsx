@@ -193,33 +193,27 @@ const FormulationEditor = () => {
                     .single();
 
                 if (aquaData) {
-                    const defaultWaterPercentages: Record<string, number> = {
-                        toner_mist: 90,
-                        water_serum: 80,
-                        ow_lotion: 70,
-                        body_wash: 60,
-                        shampoo: 60,
-                        wo_cream: 40,
-                    };
-
-                    const targetPct = defaultWaterPercentages[newProfileId] || 50;
-
                     setFormulaIngredients(prev => {
                         const waterIndex = prev.findIndex(ing => ing.inci_name === 'Aqua');
 
                         if (waterIndex >= 0) {
-                            // Water exists: update its percentage to the new profile's default
+                            // Water exists: force it to be the Q.S. base
                             const updated = [...prev];
-                            updated[waterIndex] = { ...updated[waterIndex], percentage: targetPct };
+                            updated.forEach(ing => ing.isQS = false); // Clear others
+                            updated[waterIndex] = { ...updated[waterIndex], isQS: true };
                             return updated;
                         } else {
-                            // Water doesn't exist: add it to Phase A
+                            // Water doesn't exist: add it to Phase A as the 100% Q.S. base
                             const waterIngredient: FormulaIngredient = {
                                 ...aquaData,
                                 phase: 'A',
-                                percentage: targetPct
+                                percentage: 100, // Starts at 100, auto-balances down
+                                isQS: true       // Automatically designated as Q.S.
                             };
-                            return [...prev, waterIngredient];
+
+                            // Clear any existing Q.S. flags before adding
+                            const updatedPrev = prev.map(ing => ({ ...ing, isQS: false }));
+                            return [...updatedPrev, waterIngredient];
                         }
                     });
                 }
@@ -534,10 +528,10 @@ const FormulationEditor = () => {
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
                                                 <tr className="border-b border-gray-200 text-xs text-gray-500">
-                                                    <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
-                                                    <th className="px-4 py-2 font-medium w-[22%]">Function</th>
-                                                    <th className="px-4 py-2 font-medium w-[12%] text-center">Phase</th>
-                                                    <th className="px-4 py-2 font-medium w-[14%]">Target %</th>
+                                                    <th className="px-4 py-2 font-medium w-[38%]">Ingredient</th>
+                                                    <th className="px-4 py-2 font-medium w-[21%]">Function</th>
+                                                    <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
+                                                    <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
                                                     <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
                                                     <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
                                                 </tr>
@@ -577,68 +571,53 @@ const FormulationEditor = () => {
                                                             </td>
                                                             <td className="px-4 py-2">
                                                                 <div className="flex flex-col justify-center">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="relative">
-                                                                            <input
-                                                                                type="number"
-                                                                                step="0.5"
-                                                                                min="0"
-                                                                                max="100"
-                                                                                value={item.percentage === 0 ? '' : item.percentage}
-                                                                                disabled={item.isQS}
-                                                                                onChange={(e) => handlePercentageChange(item.originalIndex, e.target.value)}
-                                                                                className={`w-16 border rounded py-0.5 pl-2 pr-6 text-sm bg-white outline-none focus:ring-1 
-        [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
-        ${item.isQS ? 'bg-blue-50 text-blue-700 font-bold border-blue-200' : ''}
-        ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
-                                                                                        ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
-                                                                                        : 'border-gray-200 focus:ring-[#2c4c3b]'
-                                                                                    }`}
-                                                                                placeholder="0"
-                                                                            />
-                                                                            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
-                                                                        </div>
-
-                                                                        {/* Tiny Q.S. Toggle Pill */}
-                                                                        <button
-                                                                            type="button"
-                                                                            title="Quantum Satis: Auto-balance to 100%"
-                                                                            onClick={() => {
-                                                                                setFormulaIngredients(prev => {
-                                                                                    const updated = [...prev];
-                                                                                    if (!item.isQS) {
-                                                                                        updated.forEach(ing => ing.isQS = false); // Uncheck others
-                                                                                    }
-                                                                                    updated[item.originalIndex].isQS = !item.isQS;
-                                                                                    return updated;
-                                                                                });
-                                                                            }}
-                                                                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-colors focus:outline-none ${item.isQS
-                                                                                ? 'bg-blue-100 text-blue-600 border-blue-300'
-                                                                                : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-200 hover:text-gray-600'
+                                                                    <div className="relative w-16">
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.5"
+                                                                            min="0"
+                                                                            max="100"
+                                                                            value={item.percentage === 0 ? '' : item.percentage}
+                                                                            disabled={item.isQS}
+                                                                            onChange={(e) => handlePercentageChange(item.originalIndex, e.target.value)}
+                                                                            className={`w-full border rounded py-0.5 pl-1.5 pr-4 text-sm outline-none focus:ring-1 
+                    [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
+                    ${item.isQS
+                                                                                    ? 'bg-blue-50 text-blue-700 font-bold border-blue-200 cursor-not-allowed'
+                                                                                    : 'bg-white text-gray-800 border-gray-200 focus:ring-[#2c4c3b]'
+                                                                                }
+                    ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
+                                                                                    ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
+                                                                                    : ''
                                                                                 }`}
-                                                                        >
-                                                                            Q.S.
-                                                                        </button>
+                                                                            placeholder="0"
+                                                                        />
+                                                                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
                                                                     </div>
 
-                                                                    {/* Compact Range Badge (Directly underneath) */}
-                                                                    {(item.min_usage_pct !== null || item.max_usage_pct !== null) && (
-                                                                        <span
-                                                                            className={`text-[10px] leading-tight mt-1 font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
-                                                                                (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
-                                                                                ? 'text-amber-600 font-semibold'
-                                                                                : 'text-gray-400'
-                                                                                }`}
-                                                                            title={`Recommended range: ${item.min_usage_pct ?? 0}% - ${item.max_usage_pct ?? 100}%`}
-                                                                        >
-                                                                            {item.min_usage_pct !== null && item.max_usage_pct !== null
-                                                                                ? `${item.min_usage_pct}–${item.max_usage_pct}%`
-                                                                                : item.max_usage_pct !== null
-                                                                                    ? `≤${item.max_usage_pct}%`
-                                                                                    : `≥${item.min_usage_pct}%`}
-                                                                        </span>
-                                                                    )}
+                                                                    {/* Status / Range Badge */}
+                                                                    <div className="mt-1">
+                                                                        {item.isQS ? (
+                                                                            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Q.S. Base</span>
+                                                                        ) : (
+                                                                            (item.min_usage_pct !== null || item.max_usage_pct !== null) && (
+                                                                                <span
+                                                                                    className={`text-[10px] leading-tight font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
+                                                                                        (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
+                                                                                        ? 'text-amber-600 font-semibold'
+                                                                                        : 'text-gray-400'
+                                                                                        }`}
+                                                                                    title={`Recommended range: ${item.min_usage_pct ?? 0}% - ${item.max_usage_pct ?? 100}%`}
+                                                                                >
+                                                                                    {item.min_usage_pct !== null && item.max_usage_pct !== null
+                                                                                        ? `${item.min_usage_pct}–${item.max_usage_pct}%`
+                                                                                        : item.max_usage_pct !== null
+                                                                                            ? `≤${item.max_usage_pct}%`
+                                                                                            : `≥${item.min_usage_pct}%`}
+                                                                                </span>
+                                                                            )
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </td>
                                                             <td className="px-4 py-2 text-gray-600">
