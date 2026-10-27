@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 // 1. Define Types for the Database and Formula state
 type DatabaseIngredient = {
@@ -40,6 +41,7 @@ type ProfileConfig = {
 
 const FormulationEditor = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     // Batch setup state
     const [targetWeight, setTargetWeight] = useState<number>(100);
@@ -53,8 +55,10 @@ const FormulationEditor = () => {
     const [alerts, setAlerts] = useState<{ type: 'error' | 'warning' | 'success', message: string }[]>([]);
     const [recommendations, setRecommendations] = useState<any[]>([]);
     const [activeProfile, setActiveProfile] = useState<ProfileConfig | null>(null);
+    const [formulaId, setFormulaId] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
 
-    // 2. New State for Search and Ingredients
+    // New State for Search and Ingredients
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<DatabaseIngredient[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -62,7 +66,82 @@ const FormulationEditor = () => {
     const [selectedIngredient, setSelectedIngredient] = useState<DatabaseIngredient | null>(null);
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
-    // 3. Debounced Database Search Effect
+    const { id } = useParams();
+
+    useEffect(() => {
+        const loadSavedFormulation = async () => {
+            if (!id || id === 'new') return;
+
+            try {
+                // 1. Fetch top-level formulation data
+                const { data: formulation, error: formError } = await supabase
+                    .from('formulations')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+
+                if (formError) throw formError;
+
+                setFormulaId(formulation.id);
+                setProjectName(formulation.name);
+                setProfileId(formulation.profile_id);
+                setTargetWeight(formulation.target_weight_g);
+
+                if (formulation.profile_id) {
+                    const { data: profileData } = await supabase
+                        .from('formulation_profiles')
+                        .select('*')
+                        .eq('id', formulation.profile_id)
+                        .single();
+
+                    if (profileData) setActiveProfile(profileData);
+                }
+
+                // 2. Fetch phases and associated ingredients in a joined query
+                const { data: phaseData, error: phaseError } = await supabase
+                    .from('formulation_phases')
+                    .select(`
+                        id,
+                        phase_letter,
+                        formulation_ingredients (
+                            percentage,
+                            is_qs,
+                            ingredients (*)
+                        )
+                    `)
+                    .eq('formulation_id', id);
+
+                if (phaseError) throw phaseError;
+
+                // 3. Reconstruct the flat formulaIngredients array for the UI
+                const loadedIngredients: any[] = [];
+
+                phaseData?.forEach(phase => {
+                    phase.formulation_ingredients?.forEach((fi: any) => {
+                        if (fi.ingredients) {
+                            loadedIngredients.push({
+                                ...fi.ingredients,
+                                phase: phase.phase_letter,
+                                percentage: Number(fi.percentage), // Ensure it's a number, not a string from Postgres
+                                isQS: fi.is_qs || false,
+                                originalIndex: loadedIngredients.length // <--- CRITICAL for your UI table mapping
+                            });
+                        }
+                    });
+                });
+
+                setFormulaIngredients(loadedIngredients);
+
+            } catch (error) {
+                console.error("Error loading formulation:", error);
+                alert("Could not load the formulation data.");
+            }
+        };
+
+        loadSavedFormulation();
+    }, [id]);
+
+    // Debounced Database Search Effect
     useEffect(() => {
         if (!searchTerm.trim()) {
             setSearchResults([]);
@@ -114,8 +193,7 @@ const FormulationEditor = () => {
         return 'A';
     };
 
-    // 4. Add Ingredient Handler
-    // 4. Add Ingredient Handler
+    // Add Ingredient Handler
     const handleAddIngredient = (ingredient: DatabaseIngredient) => {
         const assignedPhase = determinePhase(ingredient);
 
@@ -161,7 +239,7 @@ const FormulationEditor = () => {
         });
     };
 
-    // 5. Update Ingredient Percentage Handler
+    // Update Ingredient Percentage Handler
     const handlePercentageChange = (index: number, newPct: string) => {
         const value = parseFloat(newPct) || 0;
         setFormulaIngredients(prev => {
@@ -317,6 +395,103 @@ const FormulationEditor = () => {
         }
     }, [formulaIngredients]);
 
+    const handleSave = async () => {
+        if (!profileId) {
+            alert("Please select a product profile before saving.");
+            return;
+        }
+        if (!user) {
+            alert("You must be logged in to save.");
+            return;
+        }
+
+        setIsSaving(true);
+
+        try {
+            // 1. Prepare top-level formulation data
+            const formulationData = {
+                name: projectName,
+                profile_id: profileId,
+                target_weight_g: targetWeight,
+                user_id: user.id,
+                status: 'Draft' // Matches your ERD status column
+            };
+
+            let currentFormulationId = formulaId;
+
+            // 2. Insert or Update the formulations table
+            if (currentFormulationId) {
+                const { error: updateError } = await supabase
+                    .from('formulations')
+                    .update(formulationData)
+                    .eq('id', currentFormulationId);
+
+                if (updateError) throw updateError;
+            } else {
+                const { data: newFormulation, error: insertError } = await supabase
+                    .from('formulations')
+                    .insert([formulationData])
+                    .select('id')
+                    .single();
+
+                if (insertError) throw insertError;
+                currentFormulationId = newFormulation.id;
+                setFormulaId(currentFormulationId);
+            }
+
+            // 3. Clean up old phases (cascades to delete old ingredients)
+            if (formulaId) {
+                const { error: deleteError } = await supabase
+                    .from('formulation_phases')
+                    .delete()
+                    .eq('formulation_id', currentFormulationId);
+
+                if (deleteError) throw deleteError;
+            }
+
+            // 4. Determine unique phases used ('A', 'B', etc.) and insert them
+            const uniquePhases = Array.from(new Set(formulaIngredients.map(ing => ing.phase)));
+
+            if (uniquePhases.length > 0) {
+                const phasesToInsert = uniquePhases.map(phaseLetter => ({
+                    formulation_id: currentFormulationId,
+                    phase_letter: phaseLetter
+                }));
+
+                const { data: insertedPhases, error: phaseError } = await supabase
+                    .from('formulation_phases')
+                    .insert(phasesToInsert)
+                    .select('id, phase_letter');
+
+                if (phaseError) throw phaseError;
+
+                // 5. Map ingredients to their new phase IDs and insert
+                const ingredientsToInsert = formulaIngredients.map(ing => {
+                    const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
+                    return {
+                        phase_id: matchedPhase!.id,
+                        ingredient_id: ing.id,
+                        percentage: ing.percentage,
+                        is_qs: ing.isQS || false
+                    };
+                });
+
+                const { error: ingredientsError } = await supabase
+                    .from('formulation_ingredients')
+                    .insert(ingredientsToInsert);
+
+                if (ingredientsError) throw ingredientsError;
+            }
+
+            alert("Project saved successfully!");
+        } catch (error: any) {
+            console.error("Error saving formula:", error.message || error);
+            alert(`Save failed: ${error.message || "Check the console for details."}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const totalPercentage = formulaIngredients.reduce((sum, i) => sum + (i.percentage || 0), 0);
     const fixedTotal = formulaIngredients.filter(i => !i.isQS).reduce((sum, i) => sum + (i.percentage || 0), 0);
     const qsTotal = formulaIngredients.filter(i => i.isQS).reduce((sum, i) => sum + (i.percentage || 0), 0);
@@ -453,7 +628,14 @@ const FormulationEditor = () => {
                         </div>
 
                         <div className="flex gap-2">
-                            <button className="px-4 py-1.5 bg-[#1f382a] text-white rounded shadow-sm text-sm font-medium hover:bg-[#2c4c3b]">Save</button>
+                            <button
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className={`px-4 py-1.5 text-white rounded shadow-sm text-sm font-medium transition-colors 
+        ${isSaving ? 'bg-[#3a5a4a] cursor-not-allowed' : 'bg-[#1f382a] hover:bg-[#2c4c3b]'}`}
+                            >
+                                {isSaving ? 'Saving...' : 'Save'}
+                            </button>
                             <button className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50">Review</button>
                             <button className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50">Print</button>
                         </div>
