@@ -4,6 +4,7 @@ import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import CustomModal from '../components/CustomModal';
 
 // 1. Define Types for the Database and Formula state
 type DatabaseIngredient = {
@@ -67,6 +68,13 @@ const FormulationEditor = () => {
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
     const { id } = useParams();
+
+    const [modal, setModal] = useState({
+        isOpen: false,
+        type: 'error' as 'error' | 'success',
+        title: '',
+        message: ''
+    });
 
     useEffect(() => {
         const loadSavedFormulation = async () => {
@@ -134,7 +142,7 @@ const FormulationEditor = () => {
 
             } catch (error) {
                 console.error("Error loading formulation:", error);
-                alert("Could not load the formulation data.");
+                setModal({ isOpen: true, type: 'error', title: 'Missing Profile', message: 'Could not load the formulation data.' });
             }
         };
 
@@ -397,11 +405,11 @@ const FormulationEditor = () => {
 
     const handleSave = async () => {
         if (!profileId) {
-            alert("Please select a product profile before saving.");
+            setModal({ isOpen: true, type: 'error', title: 'Missing Profile', message: 'Please select a product profile before saving.' });
             return;
         }
         if (!user) {
-            alert("You must be logged in to save.");
+            setModal({ isOpen: true, type: 'error', title: 'Not Logged In', message: 'You must be logged in to save.' });
             return;
         }
 
@@ -483,10 +491,93 @@ const FormulationEditor = () => {
                 if (ingredientsError) throw ingredientsError;
             }
 
-            alert("Project saved successfully!");
+            setModal({ isOpen: true, type: 'success', title: 'Save Successful', message: 'Your project has been saved successfully.' });
         } catch (error: any) {
             console.error("Error saving formula:", error.message || error);
-            alert(`Save failed: ${error.message || "Check the console for details."}`);
+            setModal({ isOpen: true, type: 'error', title: 'Save Failed', message: `Failed to save project: ${error.message || "Check the console for details."}` });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleClone = async () => {
+        if (!profileId) {
+            setModal({ isOpen: true, type: 'error', title: 'Missing Profile', message: 'Please select a product profile before cloning.' });
+            return;
+        }
+        if (!user) {
+            setModal({ isOpen: true, type: 'error', title: 'Not Logged In', message: 'You must be logged in to clone.' });
+            return;
+        }
+
+        setIsSaving(true); // Re-using the saving state for the button spinner
+        const clonedProjectName = `${projectName} - Copy`;
+
+        try {
+            // 1. Prepare cloned formulation data as a new entity
+            const formulationData = {
+                name: clonedProjectName,
+                profile_id: profileId,
+                target_weight_g: targetWeight,
+                user_id: user.id,
+                status: 'Draft'
+            };
+
+            // 2. Insert as a NEW formulation (generates a new UUID)
+            const { data: newFormulation, error: insertError } = await supabase
+                .from('formulations')
+                .insert([formulationData])
+                .select('id')
+                .single();
+
+            if (insertError) throw insertError;
+            const newFormulationId = newFormulation.id;
+
+            // 3. Determine unique phases and insert them tied to the NEW ID
+            const uniquePhases = Array.from(new Set(formulaIngredients.map(ing => ing.phase)));
+
+            if (uniquePhases.length > 0) {
+                const phasesToInsert = uniquePhases.map(phaseLetter => ({
+                    formulation_id: newFormulationId,
+                    phase_letter: phaseLetter
+                }));
+
+                const { data: insertedPhases, error: phaseError } = await supabase
+                    .from('formulation_phases')
+                    .insert(phasesToInsert)
+                    .select('id, phase_letter');
+
+                if (phaseError) throw phaseError;
+
+                // 4. Map existing ingredients to their new cloned phase IDs and insert
+                const ingredientsToInsert = formulaIngredients.map(ing => {
+                    const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
+                    return {
+                        phase_id: matchedPhase!.id,
+                        ingredient_id: ing.id,
+                        percentage: ing.percentage,
+                        is_qs: ing.isQS || false
+                    };
+                });
+
+                const { error: ingredientsError } = await supabase
+                    .from('formulation_ingredients')
+                    .insert(ingredientsToInsert);
+
+                if (ingredientsError) throw ingredientsError;
+            }
+
+            // 5. Update local state to reflect the new project
+            setProjectName(clonedProjectName);
+            setFormulaId(newFormulationId);
+
+            // 6. Update the URL so a standard page refresh loads the cloned project
+            navigate(`/studio/${newFormulationId}`, { replace: true });
+
+            setModal({ isOpen: true, type: 'success', title: 'Clone Successful', message: 'Your project has been cloned successfully.' });
+        } catch (error: any) {
+            console.error("Error cloning formula:", error.message || error);
+            setModal({ isOpen: true, type: 'error', title: 'Clone Failed', message: `Failed to clone project: ${error.message || "Check the console for details."}` });
         } finally {
             setIsSaving(false);
         }
@@ -636,7 +727,15 @@ const FormulationEditor = () => {
                             >
                                 {isSaving ? 'Saving...' : 'Save'}
                             </button>
-                            <button className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50">Review</button>
+                            <button
+                                onClick={handleClone}
+                                disabled={isSaving || !formulaId}
+                                title={!formulaId ? "Save this project first before cloning" : "Duplicate this formula"}
+                                className={`px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium transition-colors
+        ${isSaving || !formulaId ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                            >
+                                Clone
+                            </button>
                             <button className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50">Print</button>
                         </div>
                     </div>
@@ -967,6 +1066,14 @@ const FormulationEditor = () => {
                 </div>
 
             </div>
+
+            <CustomModal
+                isOpen={modal.isOpen}
+                type={modal.type}
+                title={modal.title}
+                message={modal.message}
+                onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

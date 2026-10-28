@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import CustomModal from '../components/CustomModal';
 
 // Define the formula type based on your database schema
 type SavedFormula = {
@@ -19,6 +20,14 @@ const StudioPage = () => {
 
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [modal, setModal] = useState({
+    isOpen: false,
+    type: 'confirm' as 'confirm' | 'error',
+    title: '',
+    message: '',
+    targetId: ''
+  });
 
   // Fetch saved formulas on mount
   useEffect(() => {
@@ -44,6 +53,43 @@ const StudioPage = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate('/');
+  };
+
+  const requestDelete = (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    setModal({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Delete Formulation',
+      message: `Are you sure you want to delete "${name}"? This action cannot be undone.`,
+      targetId: id
+    });
+  };
+
+  const executeDelete = async () => {
+    try {
+      const { error } = await supabase
+        .from('formulations')
+        .delete()
+        .eq('id', modal.targetId);
+
+      if (error) throw error;
+
+      setFormulas(prev => prev.filter(formula => formula.id !== modal.targetId));
+      setModal(prev => ({ ...prev, isOpen: false }));
+
+    } catch (error: any) {
+      console.error("Error deleting formulation:", error);
+      setModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Delete Failed',
+        message: error.code === '23503'
+          ? "Please ensure your database is set to CASCADE deletes for formulation_phases."
+          : error.message || "An unexpected error occurred.",
+        targetId: ''
+      });
+    }
   };
 
   return (
@@ -151,12 +197,30 @@ const StudioPage = () => {
                     <span className="text-xs text-gray-400 font-medium">
                       Created {formattedDate}
                     </span>
-                    <span className="text-sm font-medium text-[#2c4c3b] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                      Edit
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </span>
+
+                    {/* Action Buttons Container */}
+                    <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                      {/* Delete Button */}
+                      <button
+                        onClick={(e) => requestDelete(e, formula.id, formula.name)}
+                        className="text-gray-400 hover:text-red-500 transition-colors flex items-center p-1"
+                        title="Delete formulation"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+
+                      {/* Edit Button Text */}
+                      <span className="text-sm font-medium text-[#2c4c3b] flex items-center gap-1">
+                        Edit
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </span>
+
+                    </div>
                   </div>
                 </div>
               );
@@ -164,6 +228,15 @@ const StudioPage = () => {
 
           </div>
         )}
+
+        <CustomModal
+          isOpen={modal.isOpen}
+          type={modal.type}
+          title={modal.title}
+          message={modal.message}
+          onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={executeDelete}
+        />
       </main>
     </div>
   );
