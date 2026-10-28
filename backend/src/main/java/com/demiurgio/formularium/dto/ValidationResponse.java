@@ -6,6 +6,7 @@ import java.util.List;
 public class ValidationResponse {
     private List<Alert> alerts = new ArrayList<>();
     private List<Recommendation> recommendations = new ArrayList<>();
+    private List<ClaimViolation> claimViolations = new ArrayList<>();
 
     public ValidationResponse() {}
 
@@ -15,6 +16,11 @@ public class ValidationResponse {
 
     public void addRecommendation(String type, String title, String message, String action) {
         recommendations.add(new Recommendation(type, title, message, action));
+    }
+
+    // Helper method to add a single violation
+    public void addClaimViolation(ClaimViolation violation) {
+        this.claimViolations.add(violation);
     }
 
     public List<Alert> getAlerts() {
@@ -31,6 +37,14 @@ public class ValidationResponse {
 
     public void setRecommendations(List<Recommendation> recommendations) {
         this.recommendations = recommendations;
+    }
+
+    public List<ClaimViolation> getClaimViolations() {
+        return claimViolations;
+    }
+
+    public void setClaimViolations(List<ClaimViolation> claimViolations) {
+        this.claimViolations = claimViolations;
     }
 
     public record Alert(String type, String message) {}

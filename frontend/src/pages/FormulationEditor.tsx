@@ -5,6 +5,8 @@ import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
+import { ClaimsPanel } from '../components/ClaimsPanel';
+import type { MarketingClaim, ClaimViolation } from '../types/claims';
 
 // 1. Define Types for the Database and Formula state
 type DatabaseIngredient = {
@@ -30,6 +32,13 @@ type FormulaIngredient = DatabaseIngredient & {
     percentage: number;
     isQS: boolean;
     originalIndex?: number;
+    is_vegan?: boolean;
+    is_sulfate?: boolean;
+    is_silicone?: boolean;
+    is_paraben?: boolean;
+    is_fragrance?: boolean;
+    cosmos_compliant?: boolean;
+    comedogenic_rating?: number;
 };
 
 type ProfileConfig = {
@@ -64,6 +73,8 @@ const FormulationEditor = () => {
     const [activeProfile, setActiveProfile] = useState<ProfileConfig | null>(null);
     const [formulaId, setFormulaId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [targetClaims, setTargetClaims] = useState<MarketingClaim[]>([]);
+    const [claimViolations, setClaimViolations] = useState<ClaimViolation[]>([]);
 
     // Search and Ingredients State
     const [searchTerm, setSearchTerm] = useState('');
@@ -395,6 +406,7 @@ const FormulationEditor = () => {
                 profileId,
                 profile: activeProfile,
                 targetPh: targetPh ?? null,
+                targetClaims: targetClaims, // Added target claims array
                 ingredients: formulaIngredients.map(i => ({
                     id: i.id,
                     name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
@@ -404,7 +416,15 @@ const FormulationEditor = () => {
                     solubility: i.solubility || "water",
                     maxHeatingTempC: i.max_heating_temp_c ?? null,
                     minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
-                    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null
+                    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null,
+                    // Map the new compliance fields from Supabase to your Java DTO
+                    isVegan: i.is_vegan ?? null,
+                    isSulfate: i.is_sulfate ?? null,
+                    isSilicone: i.is_silicone ?? null,
+                    isParaben: i.is_paraben ?? null,
+                    isFragrance: i.is_fragrance ?? null,
+                    cosmosCompliant: i.cosmos_compliant ?? null,
+                    comedogenicRating: i.comedogenic_rating ?? null
                 })),
                 totalPercentage: totalPct,
                 oilPhasePercentage: oilPhasePct,
@@ -424,6 +444,7 @@ const FormulationEditor = () => {
                     const data = await response.json();
                     setAlerts(data.alerts || []);
                     setRecommendations(data.recommendations || []);
+                    setClaimViolations(data.claimViolations || []); // Capture claim violations
                 } else {
                     console.error("Validation engine returned an error status:", response.status);
                 }
@@ -437,7 +458,7 @@ const FormulationEditor = () => {
         }, 400);
 
         return () => clearTimeout(debounceTimer);
-    }, [profileId, activeProfile, targetPh, targetWeight, projectName, formulaIngredients]);
+    }, [profileId, activeProfile, targetPh, targetWeight, projectName, formulaIngredients, targetClaims]); // Added targetClaims to dependencies
 
     const handleNameKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -1236,6 +1257,14 @@ const FormulationEditor = () => {
                     <FormulationCompanion
                         alerts={alerts}
                         hasProfile={!!activeProfile}
+                    />
+                    {/* Render the new Claims Panel */}
+                    <ClaimsPanel
+                        selectedClaims={targetClaims}
+                        violations={claimViolations}
+                        onChangeClaims={(newClaims) => {
+                            setTargetClaims(newClaims);
+                        }}
                     />
                     <RecommendationsPanel recommendations={recommendations} />
                 </div>

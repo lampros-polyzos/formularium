@@ -8,6 +8,7 @@ public record ValidationRequest(
     String profileId,
     ProfileConfig profile,
     List<FormulaIngredient> ingredients,
+    List<MarketingClaim> targetClaims,
     double totalPercentage,
     double waterPhasePercentage,
     double oilPhasePercentage,

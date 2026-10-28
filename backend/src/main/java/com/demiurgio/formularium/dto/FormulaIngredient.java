@@ -9,5 +9,12 @@ public record FormulaIngredient(
     String solubility,
     Double maxHeatingTempC,
     Double minPercentage,
-    Double maxPercentage
+    Double maxPercentage,
+    Boolean isVegan,
+    Boolean isSulfate,
+    Boolean isSilicone,
+    Boolean isParaben,
+    Boolean isFragrance,
+    Boolean cosmosCompliant,
+    Integer comedogenicRating
 ) {}
