@@ -162,6 +162,52 @@ const FormulationEditor = () => {
         loadSavedFormulation();
     }, [id]);
 
+    // Favorites State
+    const [favorites, setFavorites] = useState<DatabaseIngredient[]>([]);
+    const [showFavoritesMenu, setShowFavoritesMenu] = useState(false);
+
+    // Fetch favorites on load
+    useEffect(() => {
+        if (!user) return;
+
+        const fetchFavorites = async () => {
+            const { data, error } = await supabase
+                .from('favorite_ingredients')
+                .select('ingredients(*)')
+                .eq('user_id', user.id);
+
+            if (!error && data) {
+                // Supabase joins return the nested object under the table name
+                const validFavorites = data.map((item: any) => item.ingredients).filter(Boolean);
+                setFavorites(validFavorites);
+            }
+        };
+
+        fetchFavorites();
+    }, [user]);
+
+    // Toggle favorite status
+    const toggleFavorite = async (ingredient: DatabaseIngredient) => {
+        if (!user) return;
+
+        const isFav = favorites.some(f => f.id === ingredient.id);
+
+        if (isFav) {
+            // Optimistic UI update
+            setFavorites(prev => prev.filter(f => f.id !== ingredient.id));
+            await supabase
+                .from('favorite_ingredients')
+                .delete()
+                .match({ user_id: user.id, ingredient_id: ingredient.id });
+        } else {
+            // Optimistic UI update
+            setFavorites(prev => [...prev, ingredient]);
+            await supabase
+                .from('favorite_ingredients')
+                .insert({ user_id: user.id, ingredient_id: ingredient.id });
+        }
+    };
+
     // Debounced Database Search Effect
     useEffect(() => {
         if (!searchTerm.trim()) {
@@ -474,7 +520,14 @@ const FormulationEditor = () => {
 
                 if (phaseError) throw phaseError;
 
-                const ingredientsToInsert = formulaIngredients.map(ing => {
+                // SORTING LOGIC: Sort by Phase (A-Z), then by Percentage (Highest to Lowest)
+                const sortedIngredients = [...formulaIngredients].sort((a, b) => {
+                    if (a.phase < b.phase) return -1;
+                    if (a.phase > b.phase) return 1;
+                    return (b.percentage || 0) - (a.percentage || 0); // Highest to lowest
+                });
+
+                const ingredientsToInsert = sortedIngredients.map(ing => {
                     const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
                     return {
                         phase_id: matchedPhase!.id,
@@ -489,6 +542,9 @@ const FormulationEditor = () => {
                     .insert(ingredientsToInsert);
 
                 if (ingredientsError) throw ingredientsError;
+
+                // Optional: Update the UI to reflect the newly sorted order immediately!
+                setFormulaIngredients(sortedIngredients);
             }
 
             setModal({ isOpen: true, type: 'success', title: 'Save Successful', message: 'Your project has been saved successfully.' });
@@ -547,7 +603,14 @@ const FormulationEditor = () => {
 
                 if (phaseError) throw phaseError;
 
-                const ingredientsToInsert = formulaIngredients.map(ing => {
+                // SORTING LOGIC: Sort by Phase (A-Z), then by Percentage (Highest to Lowest)
+                const sortedIngredients = [...formulaIngredients].sort((a, b) => {
+                    if (a.phase < b.phase) return -1;
+                    if (a.phase > b.phase) return 1;
+                    return (b.percentage || 0) - (a.percentage || 0); // Highest to lowest
+                });
+
+                const ingredientsToInsert = sortedIngredients.map(ing => {
                     const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
                     return {
                         phase_id: matchedPhase!.id,
@@ -562,6 +625,9 @@ const FormulationEditor = () => {
                     .insert(ingredientsToInsert);
 
                 if (ingredientsError) throw ingredientsError;
+
+                // Ensure the local state holds the nicely sorted version before navigating
+                setFormulaIngredients(sortedIngredients);
             }
 
             setProjectName(clonedProjectName);
@@ -575,11 +641,6 @@ const FormulationEditor = () => {
             setIsSaving(false);
         }
     };
-
-    const totalPercentage = formulaIngredients.reduce((sum, i) => sum + (i.percentage || 0), 0);
-    const fixedTotal = formulaIngredients.filter(i => !i.isQS).reduce((sum, i) => sum + (i.percentage || 0), 0);
-    const qsTotal = formulaIngredients.filter(i => i.isQS).reduce((sum, i) => sum + (i.percentage || 0), 0);
-    const isOverLimit = totalPercentage > 100;
 
     const cyclePhase = (current: 'A' | 'B' | 'C', dir: number): 'A' | 'B' | 'C' => {
         const phases: ('A' | 'B' | 'C')[] = ['A', 'B', 'C'];
@@ -656,8 +717,55 @@ const FormulationEditor = () => {
                     <span className="text-gray-400">|</span>
                     <h1 className="font-semibold">Formularium Workspace</h1>
                 </div>
-                <div className="flex gap-4 text-sm font-medium">
-                    <span className="cursor-pointer hover:underline">Products</span>
+                <div className="flex gap-6 text-sm font-medium items-center relative">
+
+                    {/* Favorites Dropdown */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowFavoritesMenu(!showFavoritesMenu)}
+                            className="flex items-center gap-1.5 hover:text-[#2c4c3b] transition-colors"
+                        >
+                            Favorites <span className="text-red-500 text-lg leading-none">♥</span>
+                        </button>
+
+                        {showFavoritesMenu && (
+                            <div className="absolute right-0 mt-3 w-80 bg-white border border-[#c1d1b9] rounded-lg shadow-xl z-50 flex flex-col overflow-hidden">
+                                <div className="bg-[#e9eee7] px-4 py-2.5 border-b border-[#c1d1b9] font-bold text-[#1f382a] text-sm flex justify-between items-center">
+                                    Saved Ingredients
+                                    <span className="text-xs font-normal text-gray-500 bg-white px-2 py-0.5 rounded-full">{favorites.length}</span>
+                                </div>
+
+                                <div className="max-h-96 overflow-y-auto">
+                                    {favorites.length === 0 ? (
+                                        <div className="p-6 text-sm text-gray-500 text-center italic">
+                                            No favorites yet. Open an ingredient's details to star it!
+                                        </div>
+                                    ) : (
+                                        <ul className="divide-y divide-gray-100">
+                                            {favorites.map(fav => (
+                                                <li key={fav.id} className="group flex items-center justify-between p-3 hover:bg-[#f3f5f2] transition-colors">
+                                                    <button
+                                                        onClick={() => { handleAddIngredient(fav); setShowFavoritesMenu(false); }}
+                                                        className="flex-1 text-left"
+                                                    >
+                                                        <div className="font-medium text-[#1f382a] text-sm truncate">{fav.trade_name || fav.inci_name}</div>
+                                                        <div className="text-xs text-gray-500 truncate">{fav.function}</div>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleFavorite(fav); }}
+                                                        className="text-gray-300 hover:text-red-500 p-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-all rounded-full hover:bg-red-50"
+                                                        title="Remove from favorites"
+                                                    >
+                                                        ✖
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                     <span className="cursor-pointer hover:underline">Links</span>
                 </div>
             </header>
@@ -1032,58 +1140,35 @@ const FormulationEditor = () => {
                             )}
                         </div>
                     </div>
-
-                    <div className="mt-4 p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
-                        <div className="flex justify-between mb-3 text-sm font-medium">
-                            <span className="text-gray-700 uppercase tracking-wide text-xs font-bold">Formula Allocation</span>
-                            <span className={isOverLimit ? 'text-red-600 font-bold' : 'text-[#1f382a] font-bold'}>
-                                {totalPercentage.toFixed(2)}% / 100.00%
-                            </span>
-                        </div>
-
-                        <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
-                            {/* Fixed Ingredients */}
-                            <div
-                                className="bg-[#c1d1b9] h-full transition-all duration-300"
-                                style={{ width: `${Math.min(fixedTotal, 100)}%` }}
-                            />
-                            {/* Q.S. Auto-balance */}
-                            <div
-                                className="bg-blue-300 h-full transition-all duration-300"
-                                style={{ width: `${Math.min(qsTotal, Math.max(0, 100 - fixedTotal))}%` }}
-                            />
-                            {/* Over Limit */}
-                            {isOverLimit && (
-                                <div
-                                    className="bg-red-400 h-full transition-all duration-300"
-                                    style={{ width: `${totalPercentage - 100}%` }}
-                                />
-                            )}
-                        </div>
-
-                        {isOverLimit && (
-                            <p className="text-red-500 text-xs mt-3 flex items-center gap-1">
-                                <span>⚠️</span> Formula exceeds 100%. Please reduce fixed ingredient percentages.
-                            </p>
-                        )}
-                    </div>
                 </div>
 
                 {/* Ingredient Details Modal */}
                 {isModalOpen && selectedIngredient && (
                     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden">
-                            <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-center">
-                                <div>
+                            <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-start">
+                                <div className="pr-4">
                                     <h3 className="text-lg font-bold text-[#1f382a]">{selectedIngredient.trade_name}</h3>
                                     <p className="text-xs text-gray-600 font-mono">{selectedIngredient.inci_name}</p>
                                 </div>
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="text-gray-500 hover:text-gray-800 text-xl font-bold leading-none"
-                                >
-                                    &times;
-                                </button>
+                                <div className="flex items-center gap-4 pt-1">
+                                    <button
+                                        onClick={() => toggleFavorite(selectedIngredient)}
+                                        className={`text-2xl transition-colors hover:scale-110 ${favorites.some(f => f.id === selectedIngredient.id)
+                                            ? 'text-red-500 drop-shadow-sm'
+                                            : 'text-gray-300 hover:text-red-400'
+                                            }`}
+                                        title={favorites.some(f => f.id === selectedIngredient.id) ? "Remove from favorites" : "Add to favorites"}
+                                    >
+                                        {favorites.some(f => f.id === selectedIngredient.id) ? '♥' : '♡'}
+                                    </button>
+                                    <button
+                                        onClick={() => setIsModalOpen(false)}
+                                        className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none -mt-1"
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="p-6 text-sm text-gray-700 space-y-4">

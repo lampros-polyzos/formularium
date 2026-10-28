@@ -30,17 +30,22 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     setMessage('');
 
     try {
+      if (!captchaToken) throw new Error("Please complete the security check.");
+
       if (isSignUp) {
-        if (!captchaToken) throw new Error("Please complete the security check.");
-        const { error } = await supabase.auth.signUp({ 
-          email, 
+        const { error } = await supabase.auth.signUp({
+          email,
           password,
           options: { captchaToken }
         });
         if (error) throw error;
         setMessage('Success! Check your email for the confirmation link.');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+          options: { captchaToken } // Added captcha token here!
+        });
         if (error) throw error;
         onClose();
       }
@@ -64,11 +69,11 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1f382a]/40 backdrop-blur-sm">
-      <div 
+      <div
         className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden relative border border-[#c1d1b9] transform transition-all"
         onClick={(e) => e.stopPropagation()}
       >
-        <button 
+        <button
           onClick={onClose}
           className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full p-2 transition-colors"
         >
@@ -132,14 +137,13 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
               />
             </div>
 
-            {isSignUp && (
-              <div className="flex justify-center py-2">
-                <Turnstile 
-                  siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY} 
-                  onSuccess={(token) => setCaptchaToken(token)}
-                />
-              </div>
-            )}
+            {/* Turnstile is now always rendered for both Sign In and Sign Up */}
+            <div className="flex justify-center py-2">
+              <Turnstile
+                siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY}
+                onSuccess={(token) => setCaptchaToken(token)}
+              />
+            </div>
 
             {message && (
               <div className={`text-sm font-medium p-3 rounded-xl ${message.includes('Success') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -149,7 +153,7 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
             <button
               type="submit"
-              disabled={isLoading || (isSignUp && !captchaToken)}
+              disabled={isLoading || !captchaToken}
               className="w-full py-3.5 px-4 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] focus:outline-none disabled:opacity-50 transition-colors mt-2"
             >
               {isLoading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
@@ -163,7 +167,7 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             onClick={() => {
               setIsSignUp(!isSignUp);
               setMessage('');
-              setCaptchaToken(null);
+              // Do not reset captchaToken here, otherwise switching tabs forces them to solve it again
             }}
             className="text-sm font-medium text-[#3a5a4a] hover:text-[#1f382a] transition-colors"
           >
