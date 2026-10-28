@@ -3,8 +3,18 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import FormulationEditor from './FormulationEditor';
-import { supabase } from '../lib/supabase';
 
+// Mock Auth Context
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'test-user-id', email: 'test@example.com' },
+    session: { access_token: 'fake-token' },
+    loading: false,
+    signOut: vi.fn(),
+  }),
+}));
+
+// Mock Supabase DB calls (remove edge functions mock)
 vi.mock('../lib/supabase', () => {
   const mockQueryBuilder = {
     select: vi.fn().mockReturnThis(),
@@ -26,9 +36,6 @@ vi.mock('../lib/supabase', () => {
 
   return {
     supabase: {
-      functions: {
-        invoke: vi.fn().mockResolvedValue({ data: { alerts: [] }, error: null })
-      },
       from: vi.fn(() => mockQueryBuilder)
     }
   };
@@ -47,6 +54,20 @@ describe('FormulationEditor Profile Selector', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+
+    // Intercept fetch calls to the Spring Boot backend
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/api/v1/validate')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            alerts: [{ type: 'warning', message: 'Test alert from Java backend' }],
+            recommendations: []
+          })
+        });
+      }
+      return Promise.reject(new Error(`Unhandled fetch url: ${url}`));
+    });
   });
 
   afterEach(() => {
@@ -54,14 +75,6 @@ describe('FormulationEditor Profile Selector', () => {
   });
 
   it('fetches validation data successfully when a profile is selected', async () => {
-    const mockResponse = {
-      data: {
-        alerts: [{ type: 'warning', message: 'Test alert from database backend' }]
-      },
-      error: null
-    };
-    (supabase.functions.invoke as any).mockResolvedValue(mockResponse);
-
     render(
       <BrowserRouter>
         <FormulationEditor />
@@ -71,31 +84,40 @@ describe('FormulationEditor Profile Selector', () => {
     const profileSelect = screen.getByLabelText(/Profile:/i);
     fireEvent.change(profileSelect, { target: { value: 'ow_lotion' } });
 
-    // Fast-forward past the 500ms debounce timer
+    // Fast-forward past the 400ms debounce timer set in FormulationEditor
     vi.advanceTimersByTime(500);
 
     // Restore real time so `waitFor` can poll the DOM
     vi.useRealTimers();
 
     await waitFor(() => {
-      // Remove the toHaveBeenCalledTimes(1) line entirely, 
-      // and use toHaveBeenLastCalledWith to check the final payload after all state settles
-      expect(supabase.functions.invoke).toHaveBeenLastCalledWith(
-        'validate-formula',
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/v1/validate',
         expect.objectContaining({
-          body: expect.objectContaining({
-            profileId: 'ow_lotion',
-            totalPercentage: 70,
-            oilPhasePercentage: 0,
-            ingredients: expect.any(Array),
-            profile: expect.anything()
-          })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: expect.any(String) // We check it's a string, then parse it below to verify contents
         })
       );
     });
 
+    // Extract the body sent to fetch to verify the payload structure
+    const fetchCallArgs = (globalThis.fetch as any).mock.calls[0];
+    const requestBody = JSON.parse(fetchCallArgs[1].body);
+
+    expect(requestBody).toMatchObject({
+      profileId: 'ow_lotion',
+      // Check that the new camelCase fields are present for Java
+      targetPh: expect.any(Number),
+      totalPercentage: expect.any(Number),
+      oilPhasePercentage: expect.any(Number),
+      waterPhasePercentage: expect.any(Number),
+      ingredients: expect.any(Array)
+    });
+
+    // Verify the UI rendered the mocked Java response
     await waitFor(() => {
-      expect(screen.getByText('Test alert from database backend')).toBeInTheDocument();
+      expect(screen.getByText('Test alert from Java backend')).toBeInTheDocument();
     });
   });
 });
