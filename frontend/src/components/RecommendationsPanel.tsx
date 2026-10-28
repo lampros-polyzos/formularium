@@ -1,55 +1,76 @@
-type Recommendation = {
+import React from 'react';
+
+export interface RecommendationItem {
     type: 'conflict' | 'synergy' | 'tip';
     title: string;
     message: string;
     action?: string;
-};
+}
 
 interface RecommendationsPanelProps {
-    recommendations: Recommendation[];
+    recommendations?: RecommendationItem[];
 }
 
-export default function RecommendationsPanel({ recommendations }: RecommendationsPanelProps) {
-    if (!recommendations || recommendations.length === 0) return null;
-
-    const getTypeStyles = (type: string) => {
-        switch (type) {
-            case 'conflict': return { icon: '⚡', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800' };
-            case 'synergy': return { icon: '✨', bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800' };
-            case 'tip': return { icon: '💡', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-800' };
-            default: return { icon: '📌', bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-800' };
-        }
-    };
-
+const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ recommendations = [] }) => {
     return (
-        <div className="w-full lg:w-80 flex flex-col gap-3 mt-6">
-            <h3 className="font-semibold text-[#1f382a] text-sm uppercase tracking-wider">Formulation Insights</h3>
+        <div className="bg-white border border-[#c1d1b9] rounded-lg p-4 shadow-sm">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[#1f382a] mb-3 flex items-center justify-between">
+                <span>Ingredient Insights</span>
+                <span className="text-xs font-normal text-gray-500">
+                    {recommendations.length} {recommendations.length === 1 ? 'item' : 'items'}
+                </span>
+            </h3>
 
-            <div className="space-y-3">
-                {recommendations.map((rec, index) => {
-                    const styles = getTypeStyles(rec.type);
+            {(!recommendations || recommendations.length === 0) ? (
+                <p className="text-xs text-gray-400 italic py-2">
+                    No formulation conflicts or synergies detected for the current ingredients.
+                </p>
+            ) : (
+                <div className="space-y-3">
+                    {recommendations.map((rec, idx) => {
+                        const borderColors = {
+                            conflict: 'border-amber-300 bg-amber-50 text-amber-900',
+                            synergy: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+                            tip: 'border-blue-300 bg-blue-50 text-blue-900',
+                        };
 
-                    return (
-                        <div key={index} className={`p-4 rounded-lg border ${styles.bg} ${styles.border}`}>
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-lg leading-none">{styles.icon}</span>
-                                <h4 className={`font-semibold text-sm ${styles.text}`}>{rec.title}</h4>
-                            </div>
+                        const badgeColors = {
+                            conflict: 'bg-amber-200 text-amber-800',
+                            synergy: 'bg-emerald-200 text-emerald-800',
+                            tip: 'bg-blue-200 text-blue-800',
+                        };
 
-                            <p className="text-sm text-gray-700 leading-relaxed mb-2">
-                                {rec.message}
-                            </p>
+                        const badgeText = {
+                            conflict: 'Conflict',
+                            synergy: 'Synergy',
+                            tip: 'Formulation Tip',
+                        };
 
-                            {rec.action && (
-                                <div className="mt-2 pt-2 border-t border-black/5">
-                                    <span className="text-xs font-bold uppercase text-gray-500 mr-2">Action</span>
-                                    <span className="text-sm text-gray-800 font-medium">{rec.action}</span>
+                        return (
+                            <div
+                                key={idx}
+                                className={`p-3 rounded-md border text-xs ${borderColors[rec.type] || 'border-gray-200 bg-gray-50'}`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-semibold text-sm">{rec.title}</span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${badgeColors[rec.type]}`}>
+                                        {badgeText[rec.type] || rec.type}
+                                    </span>
                                 </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+                                <p className="text-gray-700 mt-1 leading-relaxed">{rec.message}</p>
+                                {rec.action && (
+                                    <div className="mt-2 pt-2 border-t border-black/10 font-medium">
+                                        <span className="text-gray-500 font-normal">Action: </span>
+                                        {rec.action}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
-}
+};
+
+export default RecommendationsPanel;

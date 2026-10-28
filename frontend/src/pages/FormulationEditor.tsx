@@ -22,13 +22,14 @@ type DatabaseIngredient = {
     common_uses?: string;
     min_percentage?: number | null;
     max_percentage?: number | null;
-    QS?: boolean; // Flag to indicate if this ingredient is a Q.S. (Quantity Sufficient) ingredient
+    QS?: boolean;
 };
 
 type FormulaIngredient = DatabaseIngredient & {
     phase: 'A' | 'B' | 'C';
     percentage: number;
-    isQS: boolean; // Flag to indicate if this ingredient is a Q.S. (Quantity Sufficient) ingredient
+    isQS: boolean;
+    originalIndex?: number;
 };
 
 type ProfileConfig = {
@@ -38,6 +39,10 @@ type ProfileConfig = {
     max_oil_phase_percent: number | null;
     default_ph_min: number | null;
     default_ph_max: number | null;
+    requires_water?: boolean;
+    requires_oil?: boolean;
+    requires_emulsifier?: boolean;
+    requires_preservative?: boolean;
 };
 
 const FormulationEditor = () => {
@@ -46,6 +51,7 @@ const FormulationEditor = () => {
 
     // Batch setup state
     const [targetWeight, setTargetWeight] = useState<number>(100);
+    const [targetPh, setTargetPh] = useState<number | null>(5.5);
 
     // State for inline project name editing
     const [projectName, setProjectName] = useState('New Project');
@@ -59,7 +65,7 @@ const FormulationEditor = () => {
     const [formulaId, setFormulaId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
-    // New State for Search and Ingredients
+    // Search and Ingredients State
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<DatabaseIngredient[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -75,6 +81,8 @@ const FormulationEditor = () => {
         title: '',
         message: ''
     });
+
+    const [showPrintMenu, setShowPrintMenu] = useState(false);
 
     useEffect(() => {
         const loadSavedFormulation = async () => {
@@ -93,7 +101,8 @@ const FormulationEditor = () => {
                 setFormulaId(formulation.id);
                 setProjectName(formulation.name);
                 setProfileId(formulation.profile_id);
-                setTargetWeight(formulation.target_weight_g);
+                setTargetWeight(formulation.target_weight_g || 100);
+                if (formulation.target_ph) setTargetPh(formulation.target_ph);
 
                 if (formulation.profile_id) {
                     const { data: profileData } = await supabase
@@ -102,10 +111,15 @@ const FormulationEditor = () => {
                         .eq('id', formulation.profile_id)
                         .single();
 
-                    if (profileData) setActiveProfile(profileData);
+                    if (profileData) {
+                        setActiveProfile(profileData);
+                        if (!formulation.target_ph && profileData.default_ph_min && profileData.default_ph_max) {
+                            setTargetPh(parseFloat(((profileData.default_ph_min + profileData.default_ph_max) / 2).toFixed(1)));
+                        }
+                    }
                 }
 
-                // 2. Fetch phases and associated ingredients in a joined query
+                // 2. Fetch phases and associated ingredients
                 const { data: phaseData, error: phaseError } = await supabase
                     .from('formulation_phases')
                     .select(`
@@ -121,8 +135,7 @@ const FormulationEditor = () => {
 
                 if (phaseError) throw phaseError;
 
-                // 3. Reconstruct the flat formulaIngredients array for the UI
-                const loadedIngredients: any[] = [];
+                const loadedIngredients: FormulaIngredient[] = [];
 
                 phaseData?.forEach(phase => {
                     phase.formulation_ingredients?.forEach((fi: any) => {
@@ -130,9 +143,9 @@ const FormulationEditor = () => {
                             loadedIngredients.push({
                                 ...fi.ingredients,
                                 phase: phase.phase_letter,
-                                percentage: Number(fi.percentage), // Ensure it's a number, not a string from Postgres
+                                percentage: Number(fi.percentage),
                                 isQS: fi.is_qs || false,
-                                originalIndex: loadedIngredients.length // <--- CRITICAL for your UI table mapping
+                                originalIndex: loadedIngredients.length
                             });
                         }
                     });
@@ -142,7 +155,7 @@ const FormulationEditor = () => {
 
             } catch (error) {
                 console.error("Error loading formulation:", error);
-                setModal({ isOpen: true, type: 'error', title: 'Missing Profile', message: 'Could not load the formulation data.' });
+                setModal({ isOpen: true, type: 'error', title: 'Error', message: 'Could not load the formulation data.' });
             }
         };
 
@@ -169,7 +182,6 @@ const FormulationEditor = () => {
             if (error) {
                 console.error("Ingredients search query failed:", error);
             } else if (data) {
-                // Deduplicate in memory by inci_name or id
                 const uniqueItems = Array.from(
                     new Map(data.map((item) => [item.inci_name.toLowerCase(), item])).values()
                 );
@@ -185,44 +197,32 @@ const FormulationEditor = () => {
         return () => clearTimeout(delayDebounceFn);
     }, [searchTerm]);
 
-    // Helper: Determine phase based on formulation chemistry rules
     const determinePhase = (ingredient: DatabaseIngredient): 'A' | 'B' | 'C' => {
-        // 1. Any ingredient with max heat tolerance <= 50°C MUST go into Phase C (Cool Down)
         if (ingredient.max_heating_temp_c !== null && ingredient.max_heating_temp_c <= 50) {
             return 'C';
         }
-
-        // 2. Oil-soluble ingredients that can withstand heating go to Phase B (Oil Phase)
         if (ingredient.solubility === 'oil') {
             return 'B';
         }
-
-        // 3. Water-soluble/dispersible heat-tolerant ingredients go to Phase A (Water Phase)
         return 'A';
     };
 
-    // Add Ingredient Handler
     const handleAddIngredient = (ingredient: DatabaseIngredient) => {
         const assignedPhase = determinePhase(ingredient);
 
-        // Calculate smart default percentage based on safe ranges
         let defaultPct = 0;
         const min = ingredient.min_usage_pct;
         const max = ingredient.max_usage_pct;
 
         if (min !== null && max !== null && min !== undefined && max !== undefined) {
             if (ingredient.function === "Preservative") {
-                // Always default preservatives to their maximum safe limit
                 defaultPct = max;
             } else {
-                // Default others to the mathematical median
                 defaultPct = parseFloat(((min + max) / 2).toFixed(2));
             }
         } else if (max !== null && max !== undefined) {
-            // If only max is defined
             defaultPct = ingredient.function === "Preservative" ? max : parseFloat((max / 2).toFixed(2));
         } else if (min !== null && min !== undefined) {
-            // If only min is defined
             defaultPct = min;
         }
 
@@ -230,15 +230,14 @@ const FormulationEditor = () => {
             ...ingredient,
             phase: assignedPhase,
             percentage: defaultPct,
-            isQS: false // Initialize the Q.S. flag
+            isQS: false
         };
 
         setFormulaIngredients(prev => [...prev, newIngredient]);
-        setSearchTerm(''); // Clear search bar
-        setSearchResults([]); // Close dropdown
+        setSearchTerm('');
+        setSearchResults([]);
     };
 
-    // Handler allowing formulators to manually override an ingredient's phase
     const handlePhaseChange = (index: number, newPhase: 'A' | 'B' | 'C') => {
         setFormulaIngredients(prev => {
             const updated = [...prev];
@@ -247,7 +246,6 @@ const FormulationEditor = () => {
         });
     };
 
-    // Update Ingredient Percentage Handler
     const handlePercentageChange = (index: number, newPct: string) => {
         const value = parseFloat(newPct) || 0;
         setFormulaIngredients(prev => {
@@ -260,7 +258,6 @@ const FormulationEditor = () => {
     const handleProfileChange = async (newProfileId: string) => {
         setProfileId(newProfileId);
 
-        // 1. Fetch Profile Data
         const { data: profileData, error: profileError } = await supabase
             .from('formulation_profiles')
             .select('*')
@@ -270,7 +267,10 @@ const FormulationEditor = () => {
         if (!profileError && profileData) {
             setActiveProfile(profileData);
 
-            // 2. Auto-populate or update Water if required
+            if (profileData.default_ph_min && profileData.default_ph_max) {
+                setTargetPh(parseFloat(((profileData.default_ph_min + profileData.default_ph_max) / 2).toFixed(1)));
+            }
+
             if (profileData.requires_water) {
                 const { data: aquaData } = await supabase
                     .from('ingredients')
@@ -280,24 +280,20 @@ const FormulationEditor = () => {
 
                 if (aquaData) {
                     setFormulaIngredients(prev => {
-                        const waterIndex = prev.findIndex(ing => ing.inci_name === 'Aqua');
+                        const waterIndex = prev.findIndex(ing => ing.inci_name.toLowerCase() === 'aqua');
 
                         if (waterIndex >= 0) {
-                            // Water exists: force it to be the Q.S. base
                             const updated = [...prev];
-                            updated.forEach(ing => ing.isQS = false); // Clear others
+                            updated.forEach(ing => ing.isQS = false);
                             updated[waterIndex] = { ...updated[waterIndex], isQS: true };
                             return updated;
                         } else {
-                            // Water doesn't exist: add it to Phase A as the 100% Q.S. base
                             const waterIngredient: FormulaIngredient = {
                                 ...aquaData,
                                 phase: 'A',
-                                percentage: 100, // Starts at 100, auto-balances down
-                                isQS: true       // Automatically designated as Q.S.
+                                percentage: 100,
+                                isQS: true
                             };
-
-                            // Clear any existing Q.S. flags before adding
                             const updatedPrev = prev.map(ing => ({ ...ing, isQS: false }));
                             return [...updatedPrev, waterIngredient];
                         }
@@ -311,62 +307,91 @@ const FormulationEditor = () => {
         setFormulaIngredients(prev => prev.filter((_, i) => i !== index));
     };
 
+    // Auto-balance the Q.S. ingredient
+    useEffect(() => {
+        const qsIndex = formulaIngredients.findIndex(i => i.isQS);
+
+        if (qsIndex !== -1) {
+            const currentNonQsTotal = formulaIngredients
+                .filter((_, idx) => idx !== qsIndex)
+                .reduce((sum, i) => sum + (i.percentage || 0), 0);
+
+            const newBalance = Math.max(0, parseFloat((100 - currentNonQsTotal).toFixed(2)));
+
+            if (formulaIngredients[qsIndex].percentage !== newBalance) {
+                setFormulaIngredients(prev => {
+                    const updated = [...prev];
+                    updated[qsIndex].percentage = newBalance;
+                    return updated;
+                });
+            }
+        }
+    }, [formulaIngredients]);
+
+    // Run Validation via Spring Boot Backend
     useEffect(() => {
         if (!profileId) return;
 
         const validateFormula = async () => {
-            const totalPct = formulaIngredients.reduce((sum, item) => sum + item.percentage, 0);
+            const totalPct = formulaIngredients.reduce((sum, item) => sum + (item.percentage || 0), 0);
 
-            // Calculate Oil Phase (Phase B or oil soluble)
             const oilPhasePct = formulaIngredients
                 .filter(i => i.phase === 'B' || i.solubility === 'oil')
-                .reduce((sum, item) => sum + item.percentage, 0);
+                .reduce((sum, item) => sum + (item.percentage || 0), 0);
 
-            // Add: Calculate Water Phase (Phase A or water soluble)
             const waterPhasePct = formulaIngredients
                 .filter(i => i.phase === 'A' || i.solubility === 'water')
-                .reduce((sum, item) => sum + item.percentage, 0);
+                .reduce((sum, item) => sum + (item.percentage || 0), 0);
 
             const payload = {
+                projectName: projectName || "Untitled Project",
+                targetWeight: targetWeight || 100,
                 profileId,
                 profile: activeProfile,
+                targetPh: targetPh ?? null,
                 ingredients: formulaIngredients.map(i => ({
                     id: i.id,
-                    name: i.inci_name,
-                    trade_name: i.trade_name,
-                    function: i.function,
-                    phase: i.phase, // Sends 'A', 'B', or 'C'
-                    percentage: i.percentage,
-                    solubility: i.solubility,
-                    optimal_ph_min: i.optimal_ph_min,
-                    optimal_ph_max: i.optimal_ph_max,
-                    max_heating_temp_c: i.max_heating_temp_c,
-                    min_percentage: i.min_usage_pct,
-                    max_percentage: i.max_usage_pct
+                    name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
+                    function: i.function || "None",
+                    phase: i.phase || "A",
+                    percentage: i.percentage || 0,
+                    solubility: i.solubility || "water",
+                    maxHeatingTempC: i.max_heating_temp_c ?? null,
+                    minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
+                    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null
                 })),
                 totalPercentage: totalPct,
                 oilPhasePercentage: oilPhasePct,
-                waterPhasePercentage: waterPhasePct // Send to backend
+                waterPhasePercentage: waterPhasePct
             };
 
-            const { data, error } = await supabase.functions.invoke('validate-formula', {
-                body: payload
-            });
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
 
-            if (data?.alerts) {
-                setAlerts(data.alerts);
-                setRecommendations(data.recommendations || []);
-            } else if (error) {
-                console.error("Validation error:", error);
+                if (response.ok) {
+                    const data = await response.json();
+                    setAlerts(data.alerts || []);
+                    setRecommendations(data.recommendations || []);
+                } else {
+                    console.error("Validation engine returned an error status:", response.status);
+                }
+            } catch (error) {
+                console.error("Failed to connect to Spring Boot validation engine:", error);
             }
         };
 
         const debounceTimer = setTimeout(() => {
             validateFormula();
-        }, 500);
+        }, 400);
 
         return () => clearTimeout(debounceTimer);
-    }, [profileId, activeProfile, formulaIngredients]);
+    }, [profileId, activeProfile, targetPh, targetWeight, projectName, formulaIngredients]);
 
     const handleNameKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -376,32 +401,11 @@ const FormulationEditor = () => {
 
     const currentTotalPercentage = formulaIngredients.reduce((sum, item) => sum + item.percentage, 0);
 
-    // Helper to filter ingredients by phase
     const getPhaseIngredients = (phase: 'A' | 'B' | 'C') => {
-        return formulaIngredients.map((ing, idx) => ({ ...ing, originalIndex: idx })).filter(ing => ing.phase === phase);
+        return formulaIngredients
+            .map((ing, idx) => ({ ...ing, originalIndex: idx }))
+            .filter(ing => ing.phase === phase);
     };
-
-    // Auto-balance the Q.S. ingredient
-    useEffect(() => {
-        const qsIndex = formulaIngredients.findIndex(i => i.isQS);
-
-        if (qsIndex !== -1) {
-            // Sum everything EXCEPT the Q.S. ingredient
-            const fixedTotal = formulaIngredients
-                .filter((_, idx) => idx !== qsIndex)
-                .reduce((sum, i) => sum + (i.percentage || 0), 0);
-
-            // Calculate remaining balance (prevent negative numbers)
-            const newBalance = Math.max(0, parseFloat((100 - fixedTotal).toFixed(2)));
-
-            // Only update state if the balance actually changed to prevent infinite loops
-            if (formulaIngredients[qsIndex].percentage !== newBalance) {
-                const updated = [...formulaIngredients];
-                updated[qsIndex].percentage = newBalance;
-                setFormulaIngredients(updated);
-            }
-        }
-    }, [formulaIngredients]);
 
     const handleSave = async () => {
         if (!profileId) {
@@ -416,18 +420,17 @@ const FormulationEditor = () => {
         setIsSaving(true);
 
         try {
-            // 1. Prepare top-level formulation data
             const formulationData = {
                 name: projectName,
                 profile_id: profileId,
                 target_weight_g: targetWeight,
+                target_ph: targetPh,
                 user_id: user.id,
-                status: 'Draft' // Matches your ERD status column
+                status: 'Draft'
             };
 
             let currentFormulationId = formulaId;
 
-            // 2. Insert or Update the formulations table
             if (currentFormulationId) {
                 const { error: updateError } = await supabase
                     .from('formulations')
@@ -447,7 +450,6 @@ const FormulationEditor = () => {
                 setFormulaId(currentFormulationId);
             }
 
-            // 3. Clean up old phases (cascades to delete old ingredients)
             if (formulaId) {
                 const { error: deleteError } = await supabase
                     .from('formulation_phases')
@@ -457,7 +459,6 @@ const FormulationEditor = () => {
                 if (deleteError) throw deleteError;
             }
 
-            // 4. Determine unique phases used ('A', 'B', etc.) and insert them
             const uniquePhases = Array.from(new Set(formulaIngredients.map(ing => ing.phase)));
 
             if (uniquePhases.length > 0) {
@@ -473,7 +474,6 @@ const FormulationEditor = () => {
 
                 if (phaseError) throw phaseError;
 
-                // 5. Map ingredients to their new phase IDs and insert
                 const ingredientsToInsert = formulaIngredients.map(ing => {
                     const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
                     return {
@@ -510,20 +510,19 @@ const FormulationEditor = () => {
             return;
         }
 
-        setIsSaving(true); // Re-using the saving state for the button spinner
-        const clonedProjectName = `${projectName} - Copy`;
+        setIsSaving(true);
+        const clonedProjectName = `${projectName} Copy`;
 
         try {
-            // 1. Prepare cloned formulation data as a new entity
             const formulationData = {
                 name: clonedProjectName,
                 profile_id: profileId,
                 target_weight_g: targetWeight,
+                target_ph: targetPh,
                 user_id: user.id,
                 status: 'Draft'
             };
 
-            // 2. Insert as a NEW formulation (generates a new UUID)
             const { data: newFormulation, error: insertError } = await supabase
                 .from('formulations')
                 .insert([formulationData])
@@ -533,7 +532,6 @@ const FormulationEditor = () => {
             if (insertError) throw insertError;
             const newFormulationId = newFormulation.id;
 
-            // 3. Determine unique phases and insert them tied to the NEW ID
             const uniquePhases = Array.from(new Set(formulaIngredients.map(ing => ing.phase)));
 
             if (uniquePhases.length > 0) {
@@ -549,7 +547,6 @@ const FormulationEditor = () => {
 
                 if (phaseError) throw phaseError;
 
-                // 4. Map existing ingredients to their new cloned phase IDs and insert
                 const ingredientsToInsert = formulaIngredients.map(ing => {
                     const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
                     return {
@@ -567,13 +564,9 @@ const FormulationEditor = () => {
                 if (ingredientsError) throw ingredientsError;
             }
 
-            // 5. Update local state to reflect the new project
             setProjectName(clonedProjectName);
             setFormulaId(newFormulationId);
-
-            // 6. Update the URL so a standard page refresh loads the cloned project
             navigate(`/studio/${newFormulationId}`, { replace: true });
-
             setModal({ isOpen: true, type: 'success', title: 'Clone Successful', message: 'Your project has been cloned successfully.' });
         } catch (error: any) {
             console.error("Error cloning formula:", error.message || error);
@@ -594,6 +587,59 @@ const FormulationEditor = () => {
         if (idx < 0) idx = 2;
         if (idx > 2) idx = 0;
         return phases[idx];
+    };
+
+    const handleExportPDF = async (documentType: 'pif' | 'batch' | 'shopping') => {
+        setIsSaving(true);
+        setShowPrintMenu(false);
+
+        try {
+            const payload = {
+                projectName: projectName || "Untitled Project",
+                targetWeight: targetWeight || 100,
+                profileId: profileId || "Unassigned",
+                profile: activeProfile || null,
+                targetPh: targetPh ?? null,
+                ingredients: formulaIngredients.map(i => ({
+                    id: i.id,
+                    name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
+                    function: i.function || "None",
+                    phase: i.phase || "A",
+                    percentage: i.percentage || 0,
+                    solubility: i.solubility || "water",
+                    maxHeatingTempC: i.max_heating_temp_c ?? null,
+                    minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
+                    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null
+                })),
+                totalPercentage: formulaIngredients.reduce((sum, item) => sum + (item.percentage || 0), 0),
+                oilPhasePercentage: formulaIngredients.filter(i => i.phase === 'B' || i.solubility === 'oil').reduce((sum, item) => sum + (item.percentage || 0), 0),
+                waterPhasePercentage: formulaIngredients.filter(i => i.phase === 'A' || i.solubility === 'water').reduce((sum, item) => sum + (item.percentage || 0), 0)
+            };
+
+            const res = await fetch(`http://localhost:8080/api/v1/export/${documentType}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error("Failed to generate PDF");
+
+            const blob = await res.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `${projectName.replace(/\s+/g, '_')}_${documentType.toUpperCase()}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+        } catch (error) {
+            console.error("PDF Export error:", error);
+            setModal({ isOpen: true, type: 'error', title: 'Export Failed', message: `Could not generate the ${documentType.toUpperCase()} document.` });
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -676,6 +722,20 @@ const FormulationEditor = () => {
                                 </div>
 
                                 <div className="flex items-center gap-2">
+                                    <label className="text-sm text-gray-600 font-medium">Target pH:</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        min="2"
+                                        max="12"
+                                        value={targetPh ?? ''}
+                                        onChange={(e) => setTargetPh(e.target.value === '' ? null : parseFloat(e.target.value))}
+                                        className="w-20 border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
+                                        placeholder="5.5"
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-2">
                                     <label htmlFor="profile-select" className="text-sm text-gray-600 font-medium">Profile:</label>
                                     <select
                                         id="profile-select"
@@ -704,10 +764,10 @@ const FormulationEditor = () => {
                                 </div>
 
                                 {activeProfile && (
-                                    <div className="mt-3 bg-[#e9eee7] border border-[#c1d1b9] rounded-md px-3 py-1.5 flex flex-wrap items-center gap-4 text-xs text-[#2c4c3b]">
+                                    <div className="mt-3 bg-[#e9eee7] border border-[#c1d1b9] rounded-md px-3 py-1.5 flex flex-wrap items-center gap-4 text-xs text-[#2c4c3b] w-full">
                                         <span className="font-semibold">{activeProfile.name} Specifications:</span>
                                         {activeProfile.default_ph_min && activeProfile.default_ph_max && (
-                                            <span>Target pH: <strong>{activeProfile.default_ph_min} – {activeProfile.default_ph_max}</strong></span>
+                                            <span>Target pH Range: <strong>{activeProfile.default_ph_min} – {activeProfile.default_ph_max}</strong></span>
                                         )}
                                         {activeProfile.max_oil_phase_percent !== null && (
                                             <span>Max Oil Phase: <strong>≤ {activeProfile.max_oil_phase_percent}%</strong></span>
@@ -723,7 +783,7 @@ const FormulationEditor = () => {
                                 onClick={handleSave}
                                 disabled={isSaving}
                                 className={`px-4 py-1.5 text-white rounded shadow-sm text-sm font-medium transition-colors 
-        ${isSaving ? 'bg-[#3a5a4a] cursor-not-allowed' : 'bg-[#1f382a] hover:bg-[#2c4c3b]'}`}
+                                    ${isSaving ? 'bg-[#3a5a4a] cursor-not-allowed' : 'bg-[#1f382a] hover:bg-[#2c4c3b]'}`}
                             >
                                 {isSaving ? 'Saving...' : 'Save'}
                             </button>
@@ -732,11 +792,45 @@ const FormulationEditor = () => {
                                 disabled={isSaving || !formulaId}
                                 title={!formulaId ? "Save this project first before cloning" : "Duplicate this formula"}
                                 className={`px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium transition-colors
-        ${isSaving || !formulaId ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                                    ${isSaving || !formulaId ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
                             >
                                 Clone
                             </button>
-                            <button className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50">Print</button>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowPrintMenu(!showPrintMenu)}
+                                    disabled={isSaving}
+                                    className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50 flex items-center gap-1 transition-colors"
+                                >
+                                    Print
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+
+                                {showPrintMenu && (
+                                    <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                                        <button
+                                            onClick={() => handleExportPDF('batch')}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center"
+                                        >
+                                            Lab Batch Ticket <span className="text-xs text-gray-400">🖨️</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleExportPDF('shopping')}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center"
+                                        >
+                                            Shopping List <span className="text-xs text-gray-400">🛒</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleExportPDF('pif')}
+                                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-[#2c4c3b] hover:bg-gray-50 flex justify-between items-center"
+                                        >
+                                            Download PIF (PDF) <span className="text-xs text-[#2c4c3b]">↓</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -792,7 +886,6 @@ const FormulationEditor = () => {
 
                             return (
                                 <div key={phaseLetter}>
-                                    {/* Phase Header */}
                                     <div className={`${phaseHeaderBg[phaseLetter]} px-4 py-2 font-semibold flex justify-between border-t first:border-t-0 border-[#c1d1b9]`}>
                                         <span>{phaseNames[phaseLetter]}</span>
                                         <span className="text-xs font-normal text-gray-700">
@@ -800,7 +893,6 @@ const FormulationEditor = () => {
                                         </span>
                                     </div>
 
-                                    {/* Phase Table or Empty State */}
                                     {phaseItems.length === 0 ? (
                                         <div className="p-4 text-gray-500 text-center text-xs italic bg-gray-50 border-b border-gray-100">
                                             No ingredients added to Phase {phaseLetter} yet.
@@ -808,14 +900,16 @@ const FormulationEditor = () => {
                                     ) : (
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
-                                                <tr className="border-b border-gray-200 text-xs text-gray-500">
-                                                    <th className="px-4 py-2 font-medium w-[38%]">Ingredient</th>
-                                                    <th className="px-4 py-2 font-medium w-[21%]">Function</th>
-                                                    <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
-                                                    <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
-                                                    <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
-                                                    <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
-                                                </tr>
+                                                <thead>
+                                                    <tr className="border-b border-gray-200 text-xs text-gray-500">
+                                                        <th className="px-4 py-2 font-medium w-[38%]">Ingredient</th>
+                                                        <th className="px-4 py-2 font-medium w-[21%]">Function</th>
+                                                        <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
+                                                        <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
+                                                        <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
+                                                        <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
+                                                    </tr>
+                                                </thead>
                                                 <tbody>
                                                     {phaseItems.map((item) => (
                                                         <tr key={item.originalIndex} className="border-b border-gray-100 hover:bg-gray-50">
@@ -836,14 +930,14 @@ const FormulationEditor = () => {
                                                             <td className="px-4 py-2">
                                                                 <div className="flex items-center justify-center gap-2">
                                                                     <button
-                                                                        onClick={() => handlePhaseChange(item.originalIndex, cyclePhase(item.phase, -1))}
+                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, -1))}
                                                                         className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
                                                                     >
                                                                         ◀
                                                                     </button>
                                                                     <span className="font-bold text-gray-700 w-4 text-center">{item.phase}</span>
                                                                     <button
-                                                                        onClick={() => handlePhaseChange(item.originalIndex, cyclePhase(item.phase, 1))}
+                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, 1))}
                                                                         className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
                                                                     >
                                                                         ▶
@@ -860,14 +954,14 @@ const FormulationEditor = () => {
                                                                             max="100"
                                                                             value={item.percentage === 0 ? '' : item.percentage}
                                                                             disabled={item.isQS}
-                                                                            onChange={(e) => handlePercentageChange(item.originalIndex, e.target.value)}
+                                                                            onChange={(e) => handlePercentageChange(item.originalIndex!, e.target.value)}
                                                                             className={`w-full border rounded py-0.5 pl-1.5 pr-4 text-sm outline-none focus:ring-1 
-                    [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
-                    ${item.isQS
+                                                                                [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
+                                                                                ${item.isQS
                                                                                     ? 'bg-blue-50 text-blue-700 font-bold border-blue-200 cursor-not-allowed'
                                                                                     : 'bg-white text-gray-800 border-gray-200 focus:ring-[#2c4c3b]'
                                                                                 }
-                    ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
+                                                                                ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
                                                                                     ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
                                                                                     : ''
                                                                                 }`}
@@ -876,7 +970,6 @@ const FormulationEditor = () => {
                                                                         <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
                                                                     </div>
 
-                                                                    {/* Status / Range Badge */}
                                                                     <div className="mt-1">
                                                                         {item.isQS ? (
                                                                             <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Q.S. Base</span>
@@ -908,7 +1001,7 @@ const FormulationEditor = () => {
                                                             </td>
                                                             <td
                                                                 className="px-4 py-2 text-gray-400 cursor-pointer hover:text-red-500 text-center"
-                                                                onClick={() => removeIngredient(item.originalIndex)}
+                                                                onClick={() => removeIngredient(item.originalIndex!)}
                                                                 title="Remove ingredient"
                                                             >
                                                                 🗑
@@ -939,6 +1032,7 @@ const FormulationEditor = () => {
                             )}
                         </div>
                     </div>
+
                     <div className="mt-4 p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
                         <div className="flex justify-between mb-3 text-sm font-medium">
                             <span className="text-gray-700 uppercase tracking-wide text-xs font-bold">Formula Allocation</span>
@@ -948,17 +1042,17 @@ const FormulationEditor = () => {
                         </div>
 
                         <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
-                            {/* Fixed Ingredients (Green) */}
+                            {/* Fixed Ingredients */}
                             <div
                                 className="bg-[#c1d1b9] h-full transition-all duration-300"
                                 style={{ width: `${Math.min(fixedTotal, 100)}%` }}
                             />
-                            {/* Q.S. Auto-balance (Blue) */}
+                            {/* Q.S. Auto-balance */}
                             <div
                                 className="bg-blue-300 h-full transition-all duration-300"
                                 style={{ width: `${Math.min(qsTotal, Math.max(0, 100 - fixedTotal))}%` }}
                             />
-                            {/* Over Limit (Red) - Only shows if > 100% */}
+                            {/* Over Limit */}
                             {isOverLimit && (
                                 <div
                                     className="bg-red-400 h-full transition-all duration-300"
@@ -979,7 +1073,6 @@ const FormulationEditor = () => {
                 {isModalOpen && selectedIngredient && (
                     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden">
-                            {/* Header */}
                             <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-center">
                                 <div>
                                     <h3 className="text-lg font-bold text-[#1f382a]">{selectedIngredient.trade_name}</h3>
@@ -993,7 +1086,6 @@ const FormulationEditor = () => {
                                 </button>
                             </div>
 
-                            {/* Body */}
                             <div className="p-6 text-sm text-gray-700 space-y-4">
                                 <div>
                                     <h4 className="font-semibold text-gray-900 mb-1">Summary</h4>
@@ -1042,7 +1134,6 @@ const FormulationEditor = () => {
                                 </div>
                             </div>
 
-                            {/* Footer */}
                             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
                                 <button
                                     onClick={() => setIsModalOpen(false)}
@@ -1056,8 +1147,7 @@ const FormulationEditor = () => {
                 )}
 
                 {/* Right Column: Sidebar */}
-                <div className="flex flex-col gap-0">
-                    {/* Pass alerts to the Companion */}
+                <div className="flex flex-col gap-4 w-full lg:w-80">
                     <FormulationCompanion
                         alerts={alerts}
                         hasProfile={!!activeProfile}
