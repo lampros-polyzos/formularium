@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
+import { useSettings } from '../contexts/SettingsContext';
+import { SettingsModal } from '../components/SettingsModal';
 
 // Define the formula type based on your database schema
 type SavedFormula = {
@@ -20,6 +22,9 @@ const StudioPage = () => {
 
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const { currency, formatDate, warningDays } = useSettings();
+  const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
 
   const [modal, setModal] = useState({
     isOpen: false,
@@ -135,7 +140,10 @@ const StudioPage = () => {
           <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl font-medium transition-colors mt-4 border-t border-gray-100 pt-6">
             Ingredients Library
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl font-medium transition-colors">
+          <button
+            onClick={() => setIsGlobalSettingsOpen(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl font-medium transition-colors"
+          >
             Settings
           </button>
         </nav>
@@ -262,6 +270,8 @@ const StudioPage = () => {
           onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
           onConfirm={executeDelete}
         />
+
+        <SettingsModal isOpen={isGlobalSettingsOpen} onClose={() => setIsGlobalSettingsOpen(false)} />
       </main>
     </div>
   );
