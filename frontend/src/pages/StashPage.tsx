@@ -29,7 +29,7 @@ interface StashFormData {
     supplier_name: string;
     batch_lot_number: string;
     amount_left_g: number;
-    price_per_g: number;
+    total_price: number;
     expiration_date: string;
     notes: string;
 }
@@ -68,7 +68,7 @@ const StashPage = () => {
         supplier_name: '',
         batch_lot_number: '',
         amount_left_g: 0,
-        price_per_g: 0, // Initialized safely as 0
+        total_price: 0,
         expiration_date: '',
         notes: ''
     });
@@ -143,7 +143,7 @@ const StashPage = () => {
             supplier_name: '',
             batch_lot_number: '',
             amount_left_g: 0,
-            price_per_g: 0, // Add this
+            total_price: 0,
             expiration_date: '',
             notes: ''
         });
@@ -159,7 +159,7 @@ const StashPage = () => {
             supplier_name: item.supplier_name || '',
             batch_lot_number: item.batch_lot_number || '',
             amount_left_g: item.amount_left_g || 0,
-            price_per_g: item.price_per_g || 0, // Add this
+            total_price: (item.amount_left_g || 0) * (item.price_per_g || 0),
             expiration_date: item.expiration_date || '',
             notes: item.notes || ''
         });
@@ -170,13 +170,18 @@ const StashPage = () => {
         e.preventDefault();
         if (!user || !selectedIngredient) return;
 
+        // Auto-calculate the price per gram (safeguard against dividing by zero)
+        const calculatedPricePerG = formData.amount_left_g > 0
+            ? formData.total_price / formData.amount_left_g
+            : 0;
+
         const payload = {
             user_id: user.id,
             ingredient_id: selectedIngredient.id,
             supplier_name: formData.supplier_name || null,
             batch_lot_number: formData.batch_lot_number || null,
             amount_left_g: formData.amount_left_g,
-            price_per_g: formData.price_per_g || 0, // Add this
+            price_per_g: calculatedPricePerG, // Add this
             expiration_date: formData.expiration_date || null,
             notes: formData.notes || null
         };
@@ -389,8 +394,14 @@ const StashPage = () => {
                                             Your stash is empty. Search the library above to add ingredients.
                                         </td>
                                     </tr>
+                                ) : filteredStash.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500 italic">
+                                            No ingredients found matching "{localSearchTerm}".
+                                        </td>
+                                    </tr>
                                 ) : (
-                                    stashItems.map((item) => {
+                                    filteredStash.map((item) => {
                                         // Expiration Warning Logic
                                         const today = new Date();
                                         today.setHours(0, 0, 0, 0);
@@ -426,7 +437,7 @@ const StashPage = () => {
                                                     {item.amount_left_g.toLocaleString()}g
                                                 </td>
 
-                                                {/* New Price & Total Value Column */}
+                                                {/* Price & Total Value Column */}
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="font-medium text-gray-900">${pricePerG.toFixed(3)}</div>
                                                     {pricePerG > 0 && (
@@ -502,16 +513,21 @@ const StashPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Price per gram ($/€)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Price ($)</label>
                                     <input
                                         type="number"
-                                        step="0.0001"
+                                        step="0.01"
                                         min="0"
-                                        value={formData.price_per_g === 0 ? '' : formData.price_per_g}
-                                        onChange={e => setFormData({ ...formData, price_per_g: parseFloat(e.target.value) || 0 })}
+                                        value={formData.total_price === 0 ? '' : formData.total_price}
+                                        onChange={e => setFormData({ ...formData, total_price: parseFloat(e.target.value) || 0 })}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
-                                        placeholder="0.05"
+                                        placeholder="e.g. 15.50"
                                     />
+                                    {formData.amount_left_g > 0 && formData.total_price > 0 && (
+                                        <div className="text-[10px] text-gray-500 mt-1 font-medium text-right">
+                                            = ${(formData.total_price / formData.amount_left_g).toFixed(4)} / gram
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
