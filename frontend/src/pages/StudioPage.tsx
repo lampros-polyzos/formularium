@@ -188,9 +188,6 @@ const StudioPage = () => {
 
             {/* Saved Formula Cards */}
             {formulas.map((formula) => {
-              const formattedDate = formula.created_at
-                ? new Date(formula.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                : 'Just now';
 
               const profileName = formula.profile_id
                 ? formula.profile_id.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
@@ -228,7 +225,7 @@ const StudioPage = () => {
 
                   <div className="border-t border-gray-100 pt-3 mt-4 flex items-center justify-between">
                     <span className="text-xs text-gray-400 font-medium">
-                      Created {formattedDate}
+                      Created {formula.created_at ? formatDate(formula.created_at) : 'Just now'}
                     </span>
 
                     {/* Action Buttons Container */}
