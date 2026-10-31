@@ -56,6 +56,7 @@ const StashPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<DatabaseIngredient[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [localSearchTerm, setLocalSearchTerm] = useState('');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -224,6 +225,19 @@ const StashPage = () => {
         }
     };
 
+    // Calculate total inventory value
+    const totalStashValue = stashItems.reduce((sum, item) => {
+        return sum + (item.amount_left_g * (item.price_per_g || 0));
+    }, 0);
+
+    // Filter items based on local search
+    const filteredStash = stashItems.filter(item => {
+        if (!localSearchTerm) return true;
+        const term = localSearchTerm.toLowerCase();
+        return item.ingredients.trade_name.toLowerCase().includes(term) ||
+            item.ingredients.inci_name.toLowerCase().includes(term);
+    });
+
     return (
         <div className="min-h-screen bg-[#f7f8f6] flex">
             {/* Sidebar Navigation */}
@@ -331,6 +345,23 @@ const StashPage = () => {
                         </svg>
                     </button>
                 </header>
+
+                <div className="flex justify-between items-end mb-4">
+                    <div className="bg-white px-4 py-2 rounded-xl border border-[#c1d1b9] shadow-sm flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-500">Total Inventory Value:</span>
+                        <span className="text-lg font-bold text-[#2c4c3b]">${totalStashValue.toFixed(2)}</span>
+                    </div>
+
+                    <div className="relative w-72">
+                        <input
+                            type="text"
+                            value={localSearchTerm}
+                            onChange={(e) => setLocalSearchTerm(e.target.value)}
+                            placeholder="Search my stash..."
+                            className="w-full px-4 py-2 bg-white border border-[#c1d1b9] rounded-xl text-sm outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
+                        />
+                    </div>
+                </div>
 
                 {/* Inventory Table */}
                 <div className="bg-white border border-[#c1d1b9] rounded-2xl shadow-sm flex-1 overflow-hidden flex flex-col">
