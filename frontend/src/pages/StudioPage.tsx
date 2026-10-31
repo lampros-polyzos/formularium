@@ -137,7 +137,7 @@ const StudioPage = () => {
             Containers
           </button>
 
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl font-medium transition-colors mt-4 border-t border-gray-100 pt-6">
+          <button onClick={() => navigate('/library')} className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl font-medium transition-colors mt-4 border-t border-gray-100 pt-6">
             Ingredients Library
           </button>
           <button

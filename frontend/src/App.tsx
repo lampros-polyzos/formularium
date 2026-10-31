@@ -8,6 +8,7 @@ import StudioPage from './pages/StudioPage';
 import FormulationEditor from './pages/FormulationEditor';
 import StashPage from './pages/StashPage';
 import ContainersPage from './pages/ContainersPage';
+import IngredientsLibraryPage from './pages/IngredientsLibraryPage';
 
 function App() {
 
@@ -26,6 +27,7 @@ function App() {
               <Route path="/studio/:id" element={<FormulationEditor />} />
               <Route path="/stash" element={<StashPage />} />
               <Route path="/containers" element={<ContainersPage />} />
+              <Route path="/library" element={<IngredientsLibraryPage />} />
             </Route>
           </Routes>
         </BrowserRouter>
