@@ -15,6 +15,12 @@ type IngredientItem = {
     default_max_usage?: number | null;
     notes?: string | null;
     user_id?: string | null;
+    is_vegan?: boolean;
+    is_cosmos?: boolean;
+    is_sulfate?: boolean;
+    is_silicone?: boolean;
+    is_paraben?: boolean;
+    is_fragrance?: boolean;
 };
 
 interface CustomIngredientForm {
@@ -25,6 +31,12 @@ interface CustomIngredientForm {
     default_min_usage: number;
     default_max_usage: number;
     notes: string;
+    is_vegan: boolean;
+    is_cosmos: boolean;
+    is_sulfate: boolean;
+    is_silicone: boolean;
+    is_paraben: boolean;
+    is_fragrance: boolean;
 }
 
 const FUNCTIONS = [
@@ -38,6 +50,16 @@ const FUNCTIONS = [
     'Humectant',
     'Antioxidant',
     'Other'
+];
+
+const CLAIMS_FILTER_OPTIONS = [
+    'All',
+    'Vegan',
+    'COSMOS Approved',
+    'Sulfate-Free',
+    'Silicone-Free',
+    'Paraben-Free',
+    'Fragrance-Free'
 ];
 
 const SOLUBILITIES = ['All', 'water', 'oil', 'alcohol', 'silicone', 'dispersible'];
@@ -55,6 +77,7 @@ const IngredientsLibraryPage = () => {
     // Filter states
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedFunction, setSelectedFunction] = useState('All');
+    const [selectedClaim, setSelectedClaim] = useState('All');
     const [selectedSolubility, setSelectedSolubility] = useState('All');
     const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
     const [showOnlyCustom, setShowOnlyCustom] = useState(false);
@@ -62,13 +85,10 @@ const IngredientsLibraryPage = () => {
     // Modal state for Custom Ingredient Creation
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [formData, setFormData] = useState<CustomIngredientForm>({
-        trade_name: '',
-        inci_name: '',
-        function: 'Active',
-        solubility: 'Water',
-        default_min_usage: 0,
-        default_max_usage: 5,
-        notes: ''
+        trade_name: '', inci_name: '', function: 'Active', solubility: 'water',
+        default_min_usage: 0, default_max_usage: 5, notes: '',
+        is_vegan: false, is_cosmos: false, is_sulfate: false,
+        is_silicone: false, is_paraben: false, is_fragrance: false
     });
 
     // Detail Drawer / Modal
@@ -157,7 +177,14 @@ const IngredientsLibraryPage = () => {
                 solubility: formData.solubility,
                 default_min_usage: formData.default_min_usage,
                 default_max_usage: formData.default_max_usage,
-                notes: formData.notes || null
+                notes: formData.notes || null,
+                // Add the boolean flags:
+                is_vegan: formData.is_vegan,
+                is_cosmos: formData.is_cosmos,
+                is_sulfate: formData.is_sulfate,
+                is_silicone: formData.is_silicone,
+                is_paraben: formData.is_paraben,
+                is_fragrance: formData.is_fragrance
             };
 
             const { error } = await supabase.from('ingredients').insert([payload]);
@@ -171,7 +198,13 @@ const IngredientsLibraryPage = () => {
                 solubility: 'Water',
                 default_min_usage: 0,
                 default_max_usage: 5,
-                notes: ''
+                notes: '',
+                is_vegan: false,
+                is_cosmos: false,
+                is_sulfate: false,
+                is_silicone: false,
+                is_paraben: false,
+                is_fragrance: false
             });
             fetchLibrary();
         } catch (error) {
@@ -187,6 +220,15 @@ const IngredientsLibraryPage = () => {
             if (selectedFunction !== 'All' && item.function !== selectedFunction) return false;
             if (selectedSolubility !== 'All' && item.solubility !== selectedSolubility) return false;
 
+            if (selectedClaim !== 'All') {
+                if (selectedClaim === 'Vegan' && !item.is_vegan) return false;
+                if (selectedClaim === 'COSMOS Approved' && !item.is_cosmos) return false;
+                if (selectedClaim === 'Sulfate-Free' && item.is_sulfate !== false) return false;
+                if (selectedClaim === 'Silicone-Free' && item.is_silicone !== false) return false;
+                if (selectedClaim === 'Paraben-Free' && item.is_paraben !== false) return false;
+                if (selectedClaim === 'Fragrance-Free' && item.is_fragrance !== false) return false;
+            }
+
             if (searchTerm.trim()) {
                 const term = searchTerm.toLowerCase();
                 const tradeMatch = item.trade_name.toLowerCase().includes(term);
@@ -196,7 +238,7 @@ const IngredientsLibraryPage = () => {
 
             return true;
         });
-    }, [ingredients, starredIds, showOnlyFavorites, showOnlyCustom, selectedFunction, selectedSolubility, searchTerm]);
+    }, [ingredients, starredIds, showOnlyFavorites, showOnlyCustom, selectedFunction, selectedSolubility, selectedClaim, searchTerm]);
 
     const handleSignOut = async () => {
         await supabase.auth.signOut();
@@ -247,7 +289,12 @@ const IngredientsLibraryPage = () => {
                 <header className="flex justify-between items-center mb-6 shrink-0">
                     <div>
                         <h1 className="text-3xl font-bold text-[#1f382a]">Ingredients Library</h1>
-                        <p className="text-sm text-gray-500 mt-1">Cosmetic raw materials encyclopedia and custom chemical profiles.</p>
+                        <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                            Cosmetic raw materials encyclopedia.
+                            <span className="bg-[#e8f0e5] text-[#1f382a] px-2 py-0.5 rounded-md font-semibold text-xs border border-[#c1d1b9]">
+                                {filteredIngredients.length} / {ingredients.length} items
+                            </span>
+                        </p>
                     </div>
                     <button
                         onClick={() => setIsAddModalOpen(true)}
@@ -281,6 +328,19 @@ const IngredientsLibraryPage = () => {
                     >
                         {FUNCTIONS.map(f => (
                             <option key={f} value={f}>Function: {f}</option>
+                        ))}
+                    </select>
+
+                    {/* Claims & Constraints Select */}
+                    <select
+                        value={selectedClaim}
+                        onChange={(e) => setSelectedClaim(e.target.value)}
+                        className="px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none text-gray-700"
+                    >
+                        {CLAIMS_FILTER_OPTIONS.map(c => (
+                            <option key={c} value={c}>
+                                {c === 'All' ? 'Properties: All' : c}
+                            </option>
                         ))}
                     </select>
 
@@ -469,6 +529,36 @@ const IngredientsLibraryPage = () => {
                                 </div>
                             </div>
 
+                            <div className="pb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-3">Claims & Characteristics</label>
+                                <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" checked={formData.is_vegan} onChange={e => setFormData({ ...formData, is_vegan: e.target.checked })} className="w-4 h-4 text-[#2c4c3b] rounded border-gray-300 focus:ring-[#2c4c3b]" />
+                                        Vegan
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" checked={formData.is_cosmos} onChange={e => setFormData({ ...formData, is_cosmos: e.target.checked })} className="w-4 h-4 text-[#2c4c3b] rounded border-gray-300 focus:ring-[#2c4c3b]" />
+                                        COSMOS Approved
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" checked={formData.is_sulfate} onChange={e => setFormData({ ...formData, is_sulfate: e.target.checked })} className="w-4 h-4 text-[#2c4c3b] rounded border-gray-300 focus:ring-[#2c4c3b]" />
+                                        Contains Sulfates
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" checked={formData.is_silicone} onChange={e => setFormData({ ...formData, is_silicone: e.target.checked })} className="w-4 h-4 text-[#2c4c3b] rounded border-gray-300 focus:ring-[#2c4c3b]" />
+                                        Contains Silicones
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" checked={formData.is_paraben} onChange={e => setFormData({ ...formData, is_paraben: e.target.checked })} className="w-4 h-4 text-[#2c4c3b] rounded border-gray-300 focus:ring-[#2c4c3b]" />
+                                        Contains Parabens
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" checked={formData.is_fragrance} onChange={e => setFormData({ ...formData, is_fragrance: e.target.checked })} className="w-4 h-4 text-[#2c4c3b] rounded border-gray-300 focus:ring-[#2c4c3b]" />
+                                        Contains Fragrance
+                                    </label>
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Formulator Notes & Constraints</label>
                                 <textarea
@@ -530,6 +620,34 @@ const IngredientsLibraryPage = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Claims & Constraints Display */}
+                            <div className="pb-4 border-b border-gray-100">
+                                <span className="text-xs text-gray-400 uppercase font-semibold">Properties & Claims</span>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {/* Positive Claims */}
+                                    {inspectingIngredient.is_vegan && (
+                                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md text-xs font-medium">Vegan</span>
+                                    )}
+                                    {inspectingIngredient.is_cosmos && (
+                                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md text-xs font-medium">COSMOS Approved</span>
+                                    )}
+
+                                    {/* Negative "Free-From" Claims (Inverting the booleans!) */}
+                                    {inspectingIngredient.is_sulfate === false && (
+                                        <span className="bg-gray-50 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-md text-xs font-medium">Sulfate-Free</span>
+                                    )}
+                                    {inspectingIngredient.is_silicone === false && (
+                                        <span className="bg-gray-50 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-md text-xs font-medium">Silicone-Free</span>
+                                    )}
+                                    {inspectingIngredient.is_paraben === false && (
+                                        <span className="bg-gray-50 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-md text-xs font-medium">Paraben-Free</span>
+                                    )}
+                                    {inspectingIngredient.is_fragrance === false && (
+                                        <span className="bg-gray-50 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-md text-xs font-medium">Fragrance-Free</span>
+                                    )}
+                                </div>
+                            </div>
 
                             <div>
                                 <span className="text-xs text-gray-400 uppercase font-semibold">Formulation Notes</span>
