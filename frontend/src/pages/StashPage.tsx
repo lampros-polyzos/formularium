@@ -19,10 +19,20 @@ type StashItem = {
     supplier_name: string | null;
     batch_lot_number: string | null;
     amount_left_g: number;
+    price_per_g: number | null; // Add this line
     expiration_date: string | null;
     notes: string | null;
     ingredients: DatabaseIngredient;
 };
+
+interface StashFormData {
+    supplier_name: string;
+    batch_lot_number: string;
+    amount_left_g: number;
+    price_per_g: number;
+    expiration_date: string;
+    notes: string;
+}
 
 const StashPage = () => {
     const { user } = useAuth();
@@ -31,6 +41,16 @@ const StashPage = () => {
     // Inventory State
     const [stashItems, setStashItems] = useState<StashItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    // Settings State (Persisted to localStorage)
+    const [warningDays, setWarningDays] = useState(() => {
+        return parseInt(localStorage.getItem('stash_warning_days') || '30', 10);
+    });
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+    // Sync settings to local storage when changed
+    useEffect(() => {
+        localStorage.setItem('stash_warning_days', warningDays.toString());
+    }, [warningDays]);
 
     // Global Search State
     const [searchTerm, setSearchTerm] = useState('');
@@ -43,10 +63,11 @@ const StashPage = () => {
     const [editingStashId, setEditingStashId] = useState<string | null>(null);
 
     // Form State
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<StashFormData>({
         supplier_name: '',
         batch_lot_number: '',
         amount_left_g: 0,
+        price_per_g: 0, // Initialized safely as 0
         expiration_date: '',
         notes: ''
     });
@@ -121,6 +142,7 @@ const StashPage = () => {
             supplier_name: '',
             batch_lot_number: '',
             amount_left_g: 0,
+            price_per_g: 0, // Add this
             expiration_date: '',
             notes: ''
         });
@@ -136,6 +158,7 @@ const StashPage = () => {
             supplier_name: item.supplier_name || '',
             batch_lot_number: item.batch_lot_number || '',
             amount_left_g: item.amount_left_g || 0,
+            price_per_g: item.price_per_g || 0, // Add this
             expiration_date: item.expiration_date || '',
             notes: item.notes || ''
         });
@@ -152,6 +175,7 @@ const StashPage = () => {
             supplier_name: formData.supplier_name || null,
             batch_lot_number: formData.batch_lot_number || null,
             amount_left_g: formData.amount_left_g,
+            price_per_g: formData.price_per_g || 0, // Add this
             expiration_date: formData.expiration_date || null,
             notes: formData.notes || null
         };
@@ -295,6 +319,17 @@ const StashPage = () => {
                             </ul>
                         )}
                     </div>
+                    {/* Settings Button */}
+                    <button
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="p-2.5 bg-white border border-[#c1d1b9] rounded-xl hover:bg-gray-50 text-gray-500 transition-colors shadow-sm"
+                        title="Stash Settings"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </button>
                 </header>
 
                 {/* Inventory Table */}
@@ -303,32 +338,53 @@ const StashPage = () => {
                         <table className="w-full text-left border-collapse text-sm">
                             <thead className="bg-[#f0f4ef] sticky top-0 z-10 shadow-sm">
                                 <tr className="text-gray-600 border-b border-[#c1d1b9]">
-                                    <th className="px-6 py-4 font-semibold w-[25%]">Ingredient</th>
+                                    <th className="px-6 py-4 font-semibold w-[26%]">Ingredient</th>
                                     <th className="px-6 py-4 font-semibold w-[15%]">Supplier</th>
                                     <th className="px-6 py-4 font-semibold w-[15%]">Batch / Lot</th>
-                                    <th className="px-6 py-4 font-semibold w-[15%] text-right">Amount (g)</th>
-                                    <th className="px-6 py-4 font-semibold w-[15%]">Expiration</th>
-                                    <th className="px-6 py-4 font-semibold w-[15%] text-right">Actions</th>
+                                    <th className="px-6 py-4 font-semibold w-[10%] text-right">Amount (g)</th>
+                                    <th className="px-6 py-4 font-semibold w-[12%] text-right">Price/g</th>
+                                    <th className="px-6 py-4 font-semibold w-[12%] text-center">Expiration</th>
+                                    <th className="px-6 py-4 font-semibold w-[10%] text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">Loading inventory...</td>
+                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">Loading inventory...</td>
                                     </tr>
                                 ) : stashItems.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500 italic">
+                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500 italic">
                                             Your stash is empty. Search the library above to add ingredients.
                                         </td>
                                     </tr>
                                 ) : (
                                     stashItems.map((item) => {
-                                        const isExpiringSoon = item.expiration_date && new Date(item.expiration_date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-                                        const isExpired = item.expiration_date && new Date(item.expiration_date) < new Date();
+                                        // Expiration Warning Logic
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+
+                                        const expDate = item.expiration_date ? new Date(item.expiration_date) : null;
+                                        const warningDate = new Date(today);
+                                        warningDate.setDate(today.getDate() + warningDays);
+
+                                        let rowClass = "border-b border-gray-100 hover:bg-gray-50 transition-colors";
+                                        let badgeClass = "bg-gray-100 text-gray-600";
+
+                                        if (expDate) {
+                                            if (expDate < today) {
+                                                rowClass = "bg-red-50 border-b border-red-100 hover:bg-red-100 transition-colors";
+                                                badgeClass = "bg-red-200 text-red-800 font-bold";
+                                            } else if (expDate <= warningDate) {
+                                                rowClass = "bg-orange-50 border-b border-orange-100 hover:bg-orange-100 transition-colors";
+                                                badgeClass = "bg-orange-200 text-orange-800 font-bold";
+                                            }
+                                        }
+
+                                        const pricePerG = item.price_per_g ?? 0;
 
                                         return (
-                                            <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                            <tr key={item.id} className={rowClass}>
                                                 <td className="px-6 py-4">
                                                     <div className="font-semibold text-[#1f382a]">{item.ingredients?.trade_name}</div>
                                                     <div className="text-xs text-gray-500">{item.ingredients?.inci_name}</div>
@@ -338,11 +394,21 @@ const StashPage = () => {
                                                 <td className="px-6 py-4 text-right font-medium text-gray-900">
                                                     {item.amount_left_g.toLocaleString()}g
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    {item.expiration_date ? (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isExpired ? 'bg-red-100 text-red-800' : isExpiringSoon ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
-                                                            }`}>
-                                                            {new Date(item.expiration_date).toLocaleDateString()}
+
+                                                {/* New Price & Total Value Column */}
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="font-medium text-gray-900">${pricePerG.toFixed(3)}</div>
+                                                    {pricePerG > 0 && (
+                                                        <div className="text-[10px] text-gray-500 mt-0.5 font-medium">
+                                                            Val: ${(item.amount_left_g * pricePerG).toFixed(2)}
+                                                        </div>
+                                                    )}
+                                                </td>
+
+                                                <td className="px-6 py-4 text-center">
+                                                    {expDate ? (
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${badgeClass}`}>
+                                                            {expDate.toLocaleDateString()}
                                                         </span>
                                                     ) : '—'}
                                                 </td>
@@ -390,7 +456,8 @@ const StashPage = () => {
                         </div>
 
                         <form onSubmit={handleSaveStashItem} className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            {/* Row 1: Three columns */}
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Amount Left (g)*</label>
                                     <input
@@ -404,6 +471,18 @@ const StashPage = () => {
                                     />
                                 </div>
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Price per gram ($/€)</label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        min="0"
+                                        value={formData.price_per_g === 0 ? '' : formData.price_per_g}
+                                        onChange={e => setFormData({ ...formData, price_per_g: parseFloat(e.target.value) || 0 })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                                        placeholder="0.05"
+                                    />
+                                </div>
+                                <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
                                     <input
                                         type="date"
@@ -414,6 +493,7 @@ const StashPage = () => {
                                 </div>
                             </div>
 
+                            {/* Row 2: Two columns */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
@@ -437,6 +517,7 @@ const StashPage = () => {
                                 </div>
                             </div>
 
+                            {/* Row 3: Full width */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                                 <textarea
@@ -463,6 +544,44 @@ const StashPage = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Settings Modal */}
+            {isSettingsOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1f382a]/40 backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-[#c1d1b9]">
+                        <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-[#1f382a]">Stash Settings</h3>
+                            <button onClick={() => setIsSettingsOpen(false)} className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">
+                                &times;
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Expiration Warning Window (Days)
+                            </label>
+                            <p className="text-xs text-gray-500 mb-4">
+                                Ingredients expiring within this many days will be highlighted in orange. Expired ingredients are always red.
+                            </p>
+                            <input
+                                type="number"
+                                min="1"
+                                max="365"
+                                value={warningDays}
+                                onChange={(e) => setWarningDays(parseInt(e.target.value) || 30)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                            />
+                            <div className="mt-6 flex justify-end">
+                                <button
+                                    onClick={() => setIsSettingsOpen(false)}
+                                    className="px-6 py-2 bg-[#2c4c3b] text-white rounded-lg font-medium hover:bg-[#1f382a] shadow-sm transition-colors w-full"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
