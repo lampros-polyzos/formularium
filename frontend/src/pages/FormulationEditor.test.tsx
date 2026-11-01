@@ -14,6 +14,18 @@ vi.mock('../contexts/AuthContext', () => ({
   }),
 }));
 
+// Mock the settings context
+vi.mock('../contexts/SettingsContext', () => ({
+  useSettings: () => ({
+    currency: '$',
+    dateFormat: 'en-US',
+    warningDays: 30,
+    setCurrency: vi.fn(),
+    setDateFormat: vi.fn(),
+    setWarningDays: vi.fn()
+  })
+}));
+
 // Mock Supabase DB calls (remove edge functions mock)
 vi.mock('../lib/supabase', () => {
   const mockQueryBuilder = {

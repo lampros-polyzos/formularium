@@ -9,6 +9,8 @@ import FormulationEditor from './pages/FormulationEditor';
 import StashPage from './pages/StashPage';
 import ContainersPage from './pages/ContainersPage';
 import IngredientsLibraryPage from './pages/IngredientsLibraryPage';
+import CommunityFeed from './pages/CommunityFeed';
+import PostDetail from './pages/PostDetail';
 
 function App() {
 
@@ -28,6 +30,8 @@ function App() {
               <Route path="/stash" element={<StashPage />} />
               <Route path="/containers" element={<ContainersPage />} />
               <Route path="/library" element={<IngredientsLibraryPage />} />
+              <Route path="/community" element={<CommunityFeed />} />
+              <Route path="/community/:id" element={<PostDetail />} />
             </Route>
           </Routes>
         </BrowserRouter>

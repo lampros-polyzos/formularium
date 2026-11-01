@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { 
-  Beaker, 
-  Search, 
-  ArrowRight, 
-  Star, 
-  Copy, 
-  Check, 
-  ChevronDown, 
-  BookOpen, 
+import {
+  Beaker,
+  Search,
+  ArrowRight,
+  Star,
+  Copy,
+  Check,
+  ChevronDown,
+  BookOpen,
   Code,
 } from 'lucide-react';
 import AuthModal from '../components/AuthModal';
@@ -27,37 +27,37 @@ const LandingPage = () => {
           <Beaker size={24} />
           <span className="text-xl font-bold tracking-tight">Formularium</span>
         </div>
-        
+
         {/* Search Bar */}
         <div className="hidden md:flex items-center bg-white/80 rounded-full px-4 py-2 w-1/3 border border-[#c1d1b9]">
           <Search size={16} className="text-gray-500 mr-2" />
-          <input 
-            type="text" 
-            placeholder="Search ingredients, INCI, or functions..." 
-            className="bg-transparent border-none outline-none w-full text-sm text-gray-700" 
+          <input
+            type="text"
+            placeholder="Search ingredients, INCI, or functions..."
+            className="bg-transparent border-none outline-none w-full text-sm text-gray-700"
           />
         </div>
 
         <div className="flex items-center gap-6 text-[#2c4c3b] font-medium text-sm">
           <a href="#" className="hover:text-black hidden sm:block">Library</a>
-          <a href="#" className="hover:text-black hidden sm:block">Community</a>
+          <a href="/community" className="hover:text-black hidden sm:block">Community</a>
           <div>
-          {user ? (
-            <button 
-              onClick={() => navigate('/studio')}
-              className="py-2.5 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
-            >
-              Go to Studio
-            </button>
-          ) : (
-            <button 
-              onClick={() => setIsAuthModalOpen(true)}
-              className="py-2.5 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
-            >
-              Sign In
-            </button>
-          )}
-        </div>
+            {user ? (
+              <button
+                onClick={() => navigate('/studio')}
+                className="py-2.5 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
+              >
+                Go to Studio
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="py-2.5 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
+              >
+                Sign In
+              </button>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -72,51 +72,51 @@ const LandingPage = () => {
               Combine ingredients, calculate percentages, and validate your skincare recipes with real-time safety checks.
             </p>
             <div className="flex flex-wrap gap-4">
-              <button 
-                onClick={() => setIsAuthModalOpen(true)} 
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
                 className="px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors shadow-sm"
               >
                 Start a New Formula
               </button>
-              <button 
-                onClick={() => setIsAuthModalOpen(true)} 
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
                 className="px-6 py-3 bg-transparent border border-[#2c4c3b] text-[#2c4c3b] rounded-full font-medium hover:bg-white/20 transition-colors"
               >
                 Browse Templates
               </button>
             </div>
           </div>
-          
+
           {/* Hero UI Mockup Illustration */}
           <div className="relative z-10 hidden lg:block">
             <div className="bg-[#eef2eb] rounded-2xl shadow-xl p-6 border border-[#c1d1b9] transform rotate-1 translate-y-4 ml-8">
-               <div className="flex gap-2 mb-6 border-b border-[#d8e2d3] pb-3">
-                 <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                 <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                 <div className="w-3 h-3 rounded-full bg-green-400"></div>
-               </div>
-               <div className="font-bold text-[#1f382a] mb-4 text-lg">Step 2: Phasing</div>
-               
-               <div className="space-y-3 relative">
-                 <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-green-500">
-                    <span className="font-medium text-gray-700">Water</span> 
-                    <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">73%</span>
-                 </div>
-                 <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-red-500 relative">
-                    <span className="font-medium text-gray-700">Salicylic Acid</span> 
-                    <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">15%</span>
-                    
-                    {/* Traffic Light Tooltip */}
-                    <div className="absolute right-[-10px] top-[-45px] bg-white shadow-xl rounded-lg p-3 text-xs border border-red-100 z-20 w-48">
-                       <span className="text-red-600 font-bold block mb-1">⚠️ Salicylic Acid 15%</span>
-                       <span className="text-gray-500 block">(Recommended: 1-2%)</span>
-                    </div>
-                 </div>
-                 <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-green-500">
-                    <span className="font-medium text-gray-700">Niacinamide</span> 
-                    <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">2%</span>
-                 </div>
-               </div>
+              <div className="flex gap-2 mb-6 border-b border-[#d8e2d3] pb-3">
+                <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <div className="w-3 h-3 rounded-full bg-green-400"></div>
+              </div>
+              <div className="font-bold text-[#1f382a] mb-4 text-lg">Step 2: Phasing</div>
+
+              <div className="space-y-3 relative">
+                <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-green-500">
+                  <span className="font-medium text-gray-700">Water</span>
+                  <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">73%</span>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-red-500 relative">
+                  <span className="font-medium text-gray-700">Salicylic Acid</span>
+                  <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">15%</span>
+
+                  {/* Traffic Light Tooltip */}
+                  <div className="absolute right-[-10px] top-[-45px] bg-white shadow-xl rounded-lg p-3 text-xs border border-red-100 z-20 w-48">
+                    <span className="text-red-600 font-bold block mb-1">⚠️ Salicylic Acid 15%</span>
+                    <span className="text-gray-500 block">(Recommended: 1-2%)</span>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-green-500">
+                  <span className="font-medium text-gray-700">Niacinamide</span>
+                  <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">2%</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -129,55 +129,55 @@ const LandingPage = () => {
             <h3 className="text-2xl font-bold text-[#1f382a] mb-3">The Formulation Studio</h3>
             <p className="text-[#3a5a4a] mb-8 leading-relaxed">Calculate and validate your skincare recipes with real-time feedback and smart phasing.</p>
             <div className="bg-[#eef2eb] flex-grow min-h-[250px] rounded-xl shadow-inner border border-[#c1d1b9] flex items-center justify-center text-[#8ca89b] italic text-sm">
-               [Replace with Studio Screenshot]
+              [Replace with Studio Screenshot]
             </div>
           </div>
           <div className="md:col-span-2 bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9] flex flex-col sm:flex-row gap-8">
-             <div className="flex-1">
-               <h3 className="text-2xl font-bold text-[#1f382a] mb-3">The Ingredient Library</h3>
-               <p className="text-[#3a5a4a] leading-relaxed">Combine ingredients, ensure percentage compatibility, and complete safety checks instantly.</p>
-             </div>
-             <div className="flex-1 bg-[#eef2eb] min-h-[150px] rounded-xl shadow-inner border border-[#c1d1b9] flex items-center justify-center text-[#8ca89b] italic text-sm">
-               [Replace with Library Screenshot]
+            <div className="flex-1">
+              <h3 className="text-2xl font-bold text-[#1f382a] mb-3">The Ingredient Library</h3>
+              <p className="text-[#3a5a4a] leading-relaxed">Combine ingredients, ensure percentage compatibility, and complete safety checks instantly.</p>
+            </div>
+            <div className="flex-1 bg-[#eef2eb] min-h-[150px] rounded-xl shadow-inner border border-[#c1d1b9] flex items-center justify-center text-[#8ca89b] italic text-sm">
+              [Replace with Library Screenshot]
             </div>
           </div>
           <div className="bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9]">
-             <h3 className="text-xl font-bold text-[#1f382a] mb-3">Equipment Guides</h3>
-             <p className="text-[#3a5a4a] text-sm mb-6 leading-relaxed">Complete database of equipment guides for your lab.</p>
-             <a href="#" className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
-               Learn more <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform"/>
-             </a>
+            <h3 className="text-xl font-bold text-[#1f382a] mb-3">Equipment Guides</h3>
+            <p className="text-[#3a5a4a] text-sm mb-6 leading-relaxed">Complete database of equipment guides for your lab.</p>
+            <a href="#" className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
+              Learn more <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+            </a>
           </div>
           <div className="bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9]">
-             <h3 className="text-xl font-bold text-[#1f382a] mb-3">Community Recipes</h3>
-             <p className="text-[#3a5a4a] text-sm mb-6 leading-relaxed">Copy and adapt top community recipes for your own use.</p>
-             <a href="#" className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
-               Learn more <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform"/>
-             </a>
+            <h3 className="text-xl font-bold text-[#1f382a] mb-3">Community Recipes</h3>
+            <p className="text-[#3a5a4a] text-sm mb-6 leading-relaxed">Copy and adapt top community recipes for your own use.</p>
+            <a href="#" className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
+              Learn more <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+            </a>
           </div>
         </div>
       </section>
 
       {/* How it Works Timeline */}
       <section className="px-6 md:px-12 py-12 max-w-5xl mx-auto text-center">
-         <h2 className="text-3xl font-bold text-[#1f382a] mb-16">How It Works</h2>
-         <div className="flex flex-col md:flex-row justify-between relative">
-            <div className="hidden md:block absolute top-6 left-[10%] right-[10%] h-0.5 bg-[#c1d1b9] z-0"></div>
-            {[
-              { num: '1', title: 'Research', desc: 'Find ingredients and check safety limits.' },
-              { num: '2', title: 'Formulate', desc: 'Calculate exact phase percentages.' },
-              { num: '3', title: 'Validate', desc: 'Run traffic-light safety checks.' },
-              { num: '4', title: 'Create', desc: 'Print lab sheets and begin mixing.' }
-            ].map((step, i) => (
-              <div key={i} className="relative z-10 flex flex-col items-center mb-10 md:mb-0 bg-[#f7f8f6] px-4 flex-1">
-                 <div className="w-12 h-12 rounded-full bg-[#d8e2d3] border-[6px] border-[#f7f8f6] flex items-center justify-center text-[#1f382a] font-bold text-lg mb-4 shadow-sm">
-                   {step.num}
-                 </div>
-                 <h4 className="font-bold text-[#1f382a] mb-2">{step.title}</h4>
-                 <p className="text-sm text-[#3a5a4a]">{step.desc}</p>
+        <h2 className="text-3xl font-bold text-[#1f382a] mb-16">How It Works</h2>
+        <div className="flex flex-col md:flex-row justify-between relative">
+          <div className="hidden md:block absolute top-6 left-[10%] right-[10%] h-0.5 bg-[#c1d1b9] z-0"></div>
+          {[
+            { num: '1', title: 'Research', desc: 'Find ingredients and check safety limits.' },
+            { num: '2', title: 'Formulate', desc: 'Calculate exact phase percentages.' },
+            { num: '3', title: 'Validate', desc: 'Run traffic-light safety checks.' },
+            { num: '4', title: 'Create', desc: 'Print lab sheets and begin mixing.' }
+          ].map((step, i) => (
+            <div key={i} className="relative z-10 flex flex-col items-center mb-10 md:mb-0 bg-[#f7f8f6] px-4 flex-1">
+              <div className="w-12 h-12 rounded-full bg-[#d8e2d3] border-[6px] border-[#f7f8f6] flex items-center justify-center text-[#1f382a] font-bold text-lg mb-4 shadow-sm">
+                {step.num}
               </div>
-            ))}
-         </div>
+              <h4 className="font-bold text-[#1f382a] mb-2">{step.title}</h4>
+              <p className="text-sm text-[#3a5a4a]">{step.desc}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Community Spotlights */}
@@ -192,7 +192,7 @@ const LandingPage = () => {
               View all recipes <ArrowRight size={18} className="ml-1" />
             </a>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
               { title: "Barrier Repair Ceramide Emulsion", author: "Dr. Elena", rating: 4.9, tags: ["Emulsion", "Advanced"] },
@@ -226,7 +226,7 @@ const LandingPage = () => {
             <h2 className="text-3xl font-bold text-[#1f382a] mb-4">Simple, transparent pricing</h2>
             <p className="text-[#3a5a4a]">Start for free, upgrade when you need professional validation tools.</p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {/* Free Tier */}
             <div className="bg-white border border-gray-200 rounded-[2rem] p-8 shadow-sm">
@@ -333,10 +333,10 @@ const LandingPage = () => {
               <span className="text-xl font-bold tracking-tight">Formularium</span>
             </div>
             <p className="text-sm text-gray-500 text-center md:text-left">
-              Professional skincare formulation,<br/> built for your home lab.
+              Professional skincare formulation,<br /> built for your home lab.
             </p>
           </div>
-          
+
           <div className="flex gap-12 text-sm text-center md:text-left">
             <div>
               <h4 className="font-bold text-[#1f382a] mb-4">Product</h4>
@@ -354,7 +354,7 @@ const LandingPage = () => {
               </ul>
             </div>
           </div>
-          
+
           <div className="flex gap-4">
             <a href="#" className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-[#d8e2d3] hover:text-[#1f382a] transition-colors">
               <Code size={20} />

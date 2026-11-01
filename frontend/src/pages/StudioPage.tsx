@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
 import { useSettings } from '../contexts/SettingsContext';
 import { SettingsModal } from '../components/SettingsModal';
+import Header from '../components/Header';
 
 // Define the formula type based on your database schema
 type SavedFormula = {
@@ -98,6 +99,7 @@ const StudioPage = () => {
 
   return (
     <div className="min-h-screen bg-[#f7f8f6] flex">
+      <Header title="My Studio" />
       {/* Sidebar Navigation */}
       <aside className="w-64 bg-white border-r border-[#c1d1b9] p-6 flex flex-col">
         <div className="flex items-center gap-3 text-[#1f382a] mb-10">
