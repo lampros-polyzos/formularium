@@ -1041,17 +1041,18 @@ const FormulationEditor = () => {
                                             <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
                                                 <thead>
                                                     <tr className="border-b border-gray-200 text-xs text-gray-500">
-                                                        <th className="px-4 py-2 font-medium w-[38%]">Ingredient</th>
-                                                        <th className="px-4 py-2 font-medium w-[21%]">Function</th>
-                                                        <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
+                                                        <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
+                                                        <th className="px-4 py-2 font-medium w-[23%]">Function</th>
                                                         <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
                                                         <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
+                                                        <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
                                                         <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {phaseItems.map((item) => (
                                                         <tr key={item.originalIndex} className="border-b border-gray-100 hover:bg-gray-50">
+                                                            {/* 1. Ingredient Column */}
                                                             <td className="px-4 py-2 font-medium text-[#1f382a] truncate">
                                                                 <button
                                                                     onClick={() => {
@@ -1065,26 +1066,13 @@ const FormulationEditor = () => {
                                                                     <span className="text-[10px] text-gray-500 font-normal">{item.inci_name}</span>
                                                                 </button>
                                                             </td>
+
+                                                            {/* 2. Function Column */}
                                                             <td className="px-4 py-2 text-gray-600 truncate">{item.function}</td>
+
+                                                            {/* 3. Target % Column (with tightened spacing) */}
                                                             <td className="px-4 py-2">
-                                                                <div className="flex items-center justify-center gap-2">
-                                                                    <button
-                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, -1))}
-                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
-                                                                    >
-                                                                        ◀
-                                                                    </button>
-                                                                    <span className="font-bold text-gray-700 w-4 text-center">{item.phase}</span>
-                                                                    <button
-                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, 1))}
-                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
-                                                                    >
-                                                                        ▶
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-4 py-2">
-                                                                <div className="flex flex-col justify-center">
+                                                                <div className="flex flex-col justify-center items-start">
                                                                     <div className="relative w-16">
                                                                         <input
                                                                             type="number"
@@ -1095,12 +1083,12 @@ const FormulationEditor = () => {
                                                                             disabled={item.isQS}
                                                                             onChange={(e) => handlePercentageChange(item.originalIndex!, e.target.value)}
                                                                             className={`w-full border rounded py-0.5 pl-1.5 pr-4 text-sm outline-none focus:ring-1 
-                                                                                [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
-                                                                                ${item.isQS
+                                    [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
+                                    ${item.isQS
                                                                                     ? 'bg-blue-50 text-blue-700 font-bold border-blue-200 cursor-not-allowed'
                                                                                     : 'bg-white text-gray-800 border-gray-200 focus:ring-[#2c4c3b]'
                                                                                 }
-                                                                                ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
+                                    ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
                                                                                     ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
                                                                                     : ''
                                                                                 }`}
@@ -1109,13 +1097,13 @@ const FormulationEditor = () => {
                                                                         <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
                                                                     </div>
 
-                                                                    <div className="mt-1">
+                                                                    <div className="mt-0.5 leading-none">
                                                                         {item.isQS ? (
                                                                             <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Q.S. Base</span>
                                                                         ) : (
                                                                             (item.min_usage_pct !== null || item.max_usage_pct !== null) && (
                                                                                 <span
-                                                                                    className={`text-[10px] leading-tight font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
+                                                                                    className={`text-[9px] font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
                                                                                         (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
                                                                                         ? 'text-amber-600 font-semibold'
                                                                                         : 'text-gray-400'
@@ -1133,11 +1121,34 @@ const FormulationEditor = () => {
                                                                     </div>
                                                                 </div>
                                                             </td>
+
+                                                            {/* 4. Weight Column */}
                                                             <td className="px-4 py-2 text-gray-600">
                                                                 {item.percentage
                                                                     ? `${((item.percentage / 100) * targetWeight).toFixed(2)}g`
                                                                     : '0.00g'}
                                                             </td>
+
+                                                            {/* 5. Phase Column (Moved here) */}
+                                                            <td className="px-4 py-2">
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, -1))}
+                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
+                                                                    >
+                                                                        ◀
+                                                                    </button>
+                                                                    <span className="font-bold text-gray-700 w-4 text-center">{item.phase}</span>
+                                                                    <button
+                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, 1))}
+                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
+                                                                    >
+                                                                        ▶
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+
+                                                            {/* 6. Action Column */}
                                                             <td
                                                                 className="px-4 py-2 text-gray-400 cursor-pointer hover:text-red-500 text-center"
                                                                 onClick={() => removeIngredient(item.originalIndex!)}
