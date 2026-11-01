@@ -18,6 +18,7 @@ type ContainerItem = {
     supplier_name: string | null;
     image_url: string | null;
     notes: string | null;
+    low_stock_threshold?: number;
 };
 
 interface ContainerFormData {
@@ -30,6 +31,7 @@ interface ContainerFormData {
     supplier_name: string;
     image_url: string;
     notes: string;
+    low_stock_threshold: number;
 }
 
 const CONTAINER_TYPES = ['Bottle', 'Jar', 'Tube', 'Closure / Pump', 'Tin', 'Box / Outer', 'Other'];
@@ -153,7 +155,7 @@ const ContainersPage = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState<ContainerFormData>({
         name: '', container_type: 'Bottle', material: '', volume_ml: 0,
-        quantity: 0, price_per_unit: 0, supplier_name: '', image_url: '', notes: ''
+        quantity: 0, price_per_unit: 0, supplier_name: '', image_url: '', notes: '', low_stock_threshold: 5
     });
 
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', targetId: '' });
@@ -190,7 +192,7 @@ const ContainersPage = () => {
         setEditingId(null);
         setFormData({
             name: '', container_type: 'Bottle', material: '', volume_ml: 0,
-            quantity: 0, price_per_unit: 0, supplier_name: '', image_url: '', notes: ''
+            quantity: 0, price_per_unit: 0, supplier_name: '', image_url: '', notes: '', low_stock_threshold: 5
         });
         setIsModalOpen(true);
     };
@@ -206,7 +208,8 @@ const ContainersPage = () => {
             price_per_unit: item.price_per_unit,
             supplier_name: item.supplier_name || '',
             image_url: item.image_url || '',
-            notes: item.notes || ''
+            notes: item.notes || '',
+            low_stock_threshold: item.low_stock_threshold || 5
         });
         setIsModalOpen(true);
     };
@@ -225,7 +228,8 @@ const ContainersPage = () => {
             price_per_unit: formData.price_per_unit,
             supplier_name: formData.supplier_name || null,
             image_url: formData.image_url || null,
-            notes: formData.notes || null
+            notes: formData.notes || null,
+            low_stock_threshold: formData.low_stock_threshold
         };
 
         try {
@@ -438,6 +442,16 @@ const ContainersPage = () => {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-900 mb-1">Quantity in Stock*</label>
                                         <input type="number" min="0" required value={formData.quantity === 0 ? '' : formData.quantity} onChange={e => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none bg-white" placeholder="250" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Low Stock Alert At</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={formData.low_stock_threshold}
+                                            onChange={e => setFormData({ ...formData, low_stock_threshold: parseInt(e.target.value) || 0 })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-900 mb-1">Cost per Unit ({currency})*</label>
