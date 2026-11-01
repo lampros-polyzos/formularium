@@ -6,69 +6,100 @@ interface ShareFormulaModalProps {
     isOpen: boolean;
     onClose: () => void;
     currentProjectName: string;
-    // Using any here for flexibility, but it expects your FormulaIngredient[] array
     recipeData: any[];
     activeProfileName: string | null;
+    formulaId: string | null;
+    communityPostId: string | null;
+    onShareSuccess: (postId: string) => void;
 }
 
 type DevStatus = 'concept' | 'in-testing' | 'stable';
 
-export default function ShareFormulaModal({ isOpen, onClose, currentProjectName, recipeData, activeProfileName }: ShareFormulaModalProps) {
-    const { user } = useAuth();
+export default function ShareFormulaModal({
+    isOpen, onClose, currentProjectName, recipeData, activeProfileName, formulaId, communityPostId, onShareSuccess
+}: ShareFormulaModalProps) {
+    const { user, username } = useAuth(); // Correctly extracted once
 
     const [title, setTitle] = useState('');
     const [writeUp, setWriteUp] = useState('');
-    const [tagsInput, setTagsInput] = useState('');
+    const [releaseNotes, setReleaseNotes] = useState('');
     const [devStatus, setDevStatus] = useState<DevStatus>('in-testing');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+    const [currentVersion, setCurrentVersion] = useState(0);
 
-    // Pre-fill title when modal opens
     useEffect(() => {
-        if (isOpen && currentProjectName) {
+        if (isOpen) {
             setTitle(currentProjectName);
             setSuccess(false);
             setError('');
+            setReleaseNotes('');
+
+            if (communityPostId) {
+                supabase.from('post_snapshots')
+                    .select('version')
+                    .eq('post_id', communityPostId)
+                    .order('version', { ascending: false })
+                    .limit(1)
+                    .then(({ data }) => {
+                        if (data && data.length > 0) setCurrentVersion(data[0].version);
+                    });
+            }
         }
-    }, [isOpen, currentProjectName]);
+    }, [isOpen, currentProjectName, communityPostId]);
 
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return setError("You must be logged in to share.");
+        if (!formulaId) return setError("Please save your project before sharing.");
         if (!title.trim() || !writeUp.trim()) return setError("Title and description are required.");
-        if (!recipeData || recipeData.length === 0) return setError("Your formula is empty. Add ingredients before sharing.");
 
         setIsSubmitting(true);
         setError('');
 
-        const tags = tagsInput
-            .split(',')
-            .map(t => t.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''))
-            .filter(t => t.length > 0);
-
         try {
-            // 1. Create the main community post
-            const { data: postData, error: postError } = await supabase
-                .from('community_posts')
-                .insert([{
-                    title: title.trim(),
-                    write_up: writeUp.trim(),
-                    post_type: 'formulation',
-                    development_status: devStatus,
-                    profile_name: activeProfileName,
-                    tags: tags,
-                    author_id: user.id
-                }])
-                .select('id')
-                .single();
+            let activePostId = communityPostId;
+            const nextVersion = currentVersion + 1;
 
-            if (postError) throw postError;
+            if (activePostId) {
+                const { error: updateError } = await supabase
+                    .from('community_posts')
+                    .update({
+                        write_up: writeUp.trim(),
+                        development_status: devStatus
+                    })
+                    .eq('id', activePostId);
+                if (updateError) throw updateError;
+            } else {
+                const { data: postData, error: postError } = await supabase
+                    .from('community_posts')
+                    .insert([{
+                        title: title.trim(),
+                        write_up: writeUp.trim(),
+                        post_type: 'formulation',
+                        development_status: devStatus,
+                        profile_name: activeProfileName,
+                        author_id: user.id,
+                        author_name: username || 'Anonymous Formulary' // Applied here
+                    }])
+                    .select('id')
+                    .single();
 
-            // 2. Format the recipe for the snapshot
+                if (postError) throw postError;
+                activePostId = postData.id;
+
+                await supabase.from('formulations')
+                    .update({ community_post_id: activePostId })
+                    .eq('id', formulaId);
+
+                onShareSuccess(activePostId as string);
+            }
+
             const snapshotData = recipeData.map(ing => ({
+                id: ing.id || ing.ingredient_id,
                 name: ing.trade_name || ing.inci_name || 'Unknown',
                 inci_name: ing.inci_name,
                 phase: ing.phase,
@@ -76,23 +107,21 @@ export default function ShareFormulaModal({ isOpen, onClose, currentProjectName,
                 function: ing.function
             }));
 
-            // 3. Save the immutable snapshot
             const { error: snapError } = await supabase
                 .from('post_snapshots')
                 .insert([{
-                    post_id: postData.id,
-                    formulation_data: snapshotData
+                    post_id: activePostId as string,
+                    formulation_data: snapshotData,
+                    version: nextVersion,
+                    release_notes: releaseNotes.trim() || null
                 }]);
 
             if (snapError) throw snapError;
 
             setSuccess(true);
-            setTimeout(() => {
-                onClose();
-            }, 2000);
+            setTimeout(() => onClose(), 2000);
 
         } catch (err: any) {
-            console.error("Error sharing formulation:", err);
             setError(err.message || "Failed to share formulation.");
         } finally {
             setIsSubmitting(false);
@@ -104,50 +133,37 @@ export default function ShareFormulaModal({ isOpen, onClose, currentProjectName,
             <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-[#c1d1b9] flex flex-col max-h-[90vh]">
                 <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-center shrink-0">
                     <h3 className="text-xl font-bold text-[#1f382a] flex items-center gap-2">
-                        <span>🧪</span> Share Formulation
+                        <span>🧪</span> {communityPostId ? `Publish Version ${currentVersion + 1}` : 'Share Formulation'}
                     </h3>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">
-                        &times;
-                    </button>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">&times;</button>
                 </div>
 
                 <div className="p-6 overflow-y-auto flex-1">
                     {success ? (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-3xl mb-4">✓</div>
-                            <h4 className="text-xl font-bold text-[#1f382a] mb-2">Formulation Shared!</h4>
-                            <p className="text-gray-600">Your recipe is now live in the Community Hub.</p>
+                        <div className="text-center py-10">
+                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">✓</div>
+                            <h4 className="text-xl font-bold text-[#1f382a]">Version {currentVersion + 1} Published!</h4>
                         </div>
                     ) : (
                         <form id="share-formula-form" onSubmit={handleSubmit} className="space-y-5">
-                            {error && (
-                                <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-medium">
-                                    {error}
+                            {error && <div className="p-3 bg-red-50 text-red-700 border rounded-lg text-sm">{error}</div>}
+
+                            {communityPostId && (
+                                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-sm text-blue-800">
+                                    <strong>Updating Post:</strong> You are adding a new version to an existing post. Community members will be able to see the differences between v{currentVersion} and v{currentVersion + 1}.
                                 </div>
                             )}
 
-                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-sm text-blue-800 mb-6">
-                                <strong>Note:</strong> Sharing will create a permanent, public snapshot of your formula's phases and percentages as they are right now. Future edits to your private draft will not affect this public post.
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Recipe Title</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm"
-                                />
-                            </div>
+                            {!communityPostId && (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Recipe Title</label>
+                                    <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm" />
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-1">Development Status</label>
-                                <select
-                                    value={devStatus}
-                                    onChange={(e) => setDevStatus(e.target.value as DevStatus)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm bg-white"
-                                >
+                                <select value={devStatus} onChange={(e) => setDevStatus(e.target.value as DevStatus)} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm bg-white">
                                     <option value="concept">💡 Concept (Untested idea)</option>
                                     <option value="in-testing">⏳ In Testing (Currently evaluating)</option>
                                     <option value="stable">✓ Stable (Passed stability/micro testing)</option>
@@ -155,46 +171,25 @@ export default function ShareFormulaModal({ isOpen, onClose, currentProjectName,
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Description & Notes</label>
-                                <textarea
-                                    required
-                                    value={writeUp}
-                                    onChange={(e) => setWriteUp(e.target.value)}
-                                    placeholder="Describe the texture, performance, and process for making this formulation..."
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm min-h-[120px] resize-y"
-                                />
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Main Description (Overwrites previous)</label>
+                                <textarea required value={writeUp} onChange={(e) => setWriteUp(e.target.value)} placeholder="Describe the overall formulation..." className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm min-h-[100px]" />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Tags (Optional)</label>
-                                <input
-                                    type="text"
-                                    value={tagsInput}
-                                    onChange={(e) => setTagsInput(e.target.value)}
-                                    placeholder="skincare, emulsion, vegan (comma separated)"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none text-sm"
-                                />
-                            </div>
+                            {communityPostId && (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Release Notes (v{currentVersion + 1})</label>
+                                    <textarea value={releaseNotes} onChange={(e) => setReleaseNotes(e.target.value)} placeholder="What changed in this version? (e.g., Increased emulsifier to fix separation)" className="w-full px-4 py-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm min-h-[80px]" />
+                                </div>
+                            )}
                         </form>
                     )}
                 </div>
 
                 {!success && (
-                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            form="share-formula-form"
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="px-6 py-2.5 bg-[#2c4c3b] text-white text-sm font-bold rounded-lg hover:bg-[#1f382a] disabled:opacity-50 transition-colors shadow-sm"
-                        >
-                            {isSubmitting ? 'Publishing...' : 'Publish to Community'}
+                    <div className="bg-gray-50 px-6 py-4 border-t flex justify-end gap-3 shrink-0">
+                        <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-gray-600">Cancel</button>
+                        <button form="share-formula-form" type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-[#2c4c3b] text-white text-sm font-bold rounded-lg hover:bg-[#1f382a] disabled:opacity-50">
+                            {isSubmitting ? 'Publishing...' : 'Publish'}
                         </button>
                     </div>
                 )}

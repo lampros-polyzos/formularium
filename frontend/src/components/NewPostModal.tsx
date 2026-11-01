@@ -11,18 +11,30 @@ interface NewPostModalProps {
     onSuccess: () => void;
 }
 
+const AVAILABLE_TAGS = [
+    'skincare', 'haircare', 'bodycare', 'color-cosmetics',
+    'o/w-emulsion', 'w/o-emulsion', 'anhydrous', 'surfactant',
+    'beginner-friendly', 'advanced', 'troubleshooting', 'vegan', 'cosmos-compliant'
+];
+
 export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModalProps) {
-    const { user } = useAuth();
+    const { user, username } = useAuth(); // Correctly extracts both exactly once
     const navigate = useNavigate();
 
     const [postType, setPostType] = useState<PostType>('discussion');
     const [title, setTitle] = useState('');
     const [writeUp, setWriteUp] = useState('');
-    const [tagsInput, setTagsInput] = useState('');
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
     if (!isOpen) return null;
+
+    const toggleTag = (tag: string) => {
+        setSelectedTags(prev =>
+            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,12 +44,6 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
         setIsSubmitting(true);
         setError('');
 
-        // Clean and format tags
-        const tags = tagsInput
-            .split(',')
-            .map(t => t.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''))
-            .filter(t => t.length > 0);
-
         try {
             const { error: insertError } = await supabase
                 .from('community_posts')
@@ -45,15 +51,16 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
                     title: title.trim(),
                     write_up: writeUp.trim(),
                     post_type: postType,
-                    tags: tags,
-                    author_id: user.id
+                    tags: selectedTags,
+                    author_id: user.id,
+                    author_name: username || 'Anonymous Formulary' // Applies the global display name
                 }]);
 
             if (insertError) throw insertError;
 
             setTitle('');
             setWriteUp('');
-            setTagsInput('');
+            setSelectedTags([]);
             onSuccess();
             onClose();
         } catch (err: any) {
@@ -152,14 +159,22 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Tags (Optional)</label>
-                                    <input
-                                        type="text"
-                                        value={tagsInput}
-                                        onChange={(e) => setTagsInput(e.target.value)}
-                                        placeholder="skincare, emulsifiers, beginner-friendly (comma separated)"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none text-sm"
-                                    />
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Tags (Select all that apply)</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {AVAILABLE_TAGS.map(tag => (
+                                            <button
+                                                key={tag}
+                                                type="button"
+                                                onClick={() => toggleTag(tag)}
+                                                className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap border ${selectedTags.includes(tag)
+                                                        ? 'bg-[#2c4c3b] text-white border-[#2c4c3b]'
+                                                        : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                #{tag}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </>
                         )}

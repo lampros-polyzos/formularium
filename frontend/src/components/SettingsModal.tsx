@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -8,19 +10,69 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const { currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays } = useSettings();
+    const { user, username } = useAuth();
+
+    const [displayName, setDisplayName] = useState(username || '');
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Sync input if the username loads after the modal is opened
+    useEffect(() => {
+        if (username) setDisplayName(username);
+    }, [username]);
 
     if (!isOpen) return null;
 
+    const handleSaveAndClose = async () => {
+        // Save profile name to database if it was changed
+        if (user && displayName.trim() !== (username || '')) {
+            setIsSaving(true);
+            const { error } = await supabase
+                .from('profiles')
+                .upsert({ id: user.id, username: displayName.trim() });
+
+            if (error) {
+                console.error("Error saving profile:", error);
+                alert("Failed to save display name.");
+            }
+            setIsSaving(false);
+
+            // Force a page reload to refresh the AuthContext username across the app
+            window.location.reload();
+            return;
+        }
+
+        onClose();
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1f382a]/40 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-[#c1d1b9]">
-                <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-center">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-[#c1d1b9] flex flex-col max-h-[90vh]">
+                <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-center shrink-0">
                     <h3 className="text-lg font-bold text-[#1f382a]">Global Settings</h3>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">
                         &times;
                     </button>
                 </div>
-                <div className="p-6 space-y-6">
+
+                <div className="p-6 space-y-6 overflow-y-auto">
+
+                    {/* Account Profile */}
+                    {user && (
+                        <div>
+                            <h4 className="font-semibold text-[#1f382a] border-b border-gray-100 pb-2 mb-3">Community Profile</h4>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                                <p className="text-xs text-gray-500 mb-2">How your name will appear on shared recipes and comments.</p>
+                                <input
+                                    type="text"
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    placeholder="e.g., OrganicChemist99"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {/* Display Preferences */}
                     <div>
@@ -31,7 +83,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                 <select
                                     value={currency}
                                     onChange={(e) => setCurrency(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none bg-white"
                                 >
                                     <option value="$">USD ($)</option>
                                     <option value="€">EUR (€)</option>
@@ -46,7 +98,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                 <select
                                     value={dateFormat}
                                     onChange={(e) => setDateFormat(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none bg-white"
                                 >
                                     <option value="en-US">MM/DD/YYYY (US)</option>
                                     <option value="en-GB">DD/MM/YYYY (EU/UK)</option>
@@ -76,15 +128,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                             />
                         </div>
                     </div>
+                </div>
 
-                    <div className="mt-6 flex justify-end pt-2 border-t border-gray-100">
-                        <button
-                            onClick={onClose}
-                            className="px-6 py-2 bg-[#2c4c3b] text-white rounded-lg font-medium hover:bg-[#1f382a] shadow-sm transition-colors w-full"
-                        >
-                            Save & Close
-                        </button>
-                    </div>
+                <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end">
+                    <button
+                        onClick={handleSaveAndClose}
+                        disabled={isSaving}
+                        className="px-6 py-2.5 bg-[#2c4c3b] text-white rounded-lg font-bold hover:bg-[#1f382a] shadow-sm transition-colors w-full disabled:opacity-50"
+                    >
+                        {isSaving ? 'Saving...' : 'Save & Close'}
+                    </button>
                 </div>
             </div>
         </div>

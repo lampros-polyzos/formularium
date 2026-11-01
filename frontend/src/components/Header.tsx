@@ -33,6 +33,9 @@ export default function Header({ title, backPath, backLabel, children }: HeaderP
                 {children}
 
                 {/* Global Links (Always visible) */}
+                <Link to="/" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
+                    Home
+                </Link>
                 <Link to="/studio" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
                     Studio
                 </Link>

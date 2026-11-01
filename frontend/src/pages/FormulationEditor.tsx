@@ -79,6 +79,7 @@ const FormulationEditor = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [targetClaims, setTargetClaims] = useState<MarketingClaim[]>([]);
     const [claimViolations, setClaimViolations] = useState<ClaimViolation[]>([]);
+    const [communityPostId, setCommunityPostId] = useState<string | null>(null);
 
     // Search and Ingredients State
     const [searchTerm, setSearchTerm] = useState('');
@@ -88,6 +89,8 @@ const FormulationEditor = () => {
     const [selectedIngredient, setSelectedIngredient] = useState<DatabaseIngredient | null>(null);
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+    const isHealthCheckPassed = formulaIngredients.length > 0 && alerts.length === 0;
 
     const { id } = useParams();
 
@@ -117,6 +120,7 @@ const FormulationEditor = () => {
                 setFormulaId(formulation.id);
                 setProjectName(formulation.name);
                 setProfileId(formulation.profile_id);
+                setCommunityPostId(formulation.community_post_id);
                 setTargetWeight(formulation.target_weight_g || 100);
                 if (formulation.target_ph) setTargetPh(formulation.target_ph);
 
@@ -193,7 +197,6 @@ const FormulationEditor = () => {
                 .eq('user_id', user.id);
 
             if (!error && data) {
-                // Supabase joins return the nested object under the table name
                 const validFavorites = data.map((item: any) => item.ingredients).filter(Boolean);
                 setFavorites(validFavorites);
             }
@@ -209,14 +212,12 @@ const FormulationEditor = () => {
         const isFav = favorites.some(f => f.id === ingredient.id);
 
         if (isFav) {
-            // Optimistic UI update
             setFavorites(prev => prev.filter(f => f.id !== ingredient.id));
             await supabase
                 .from('favorite_ingredients')
                 .delete()
                 .match({ user_id: user.id, ingredient_id: ingredient.id });
         } else {
-            // Optimistic UI update
             setFavorites(prev => [...prev, ingredient]);
             await supabase
                 .from('favorite_ingredients')
@@ -411,7 +412,7 @@ const FormulationEditor = () => {
                 profileId,
                 profile: activeProfile,
                 targetPh: targetPh ?? null,
-                targetClaims: targetClaims, // Added target claims array
+                targetClaims: targetClaims,
                 ingredients: formulaIngredients.map(i => ({
                     id: i.id,
                     name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
@@ -422,7 +423,6 @@ const FormulationEditor = () => {
                     maxHeatingTempC: i.max_heating_temp_c ?? null,
                     minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
                     maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null,
-                    // Map the new compliance fields from Supabase to your Java DTO
                     isVegan: i.is_vegan ?? null,
                     isSulfate: i.is_sulfate ?? null,
                     isSilicone: i.is_silicone ?? null,
@@ -449,7 +449,7 @@ const FormulationEditor = () => {
                     const data = await response.json();
                     setAlerts(data.alerts || []);
                     setRecommendations(data.recommendations || []);
-                    setClaimViolations(data.claimViolations || []); // Capture claim violations
+                    setClaimViolations(data.claimViolations || []);
                 } else {
                     console.error("Validation engine returned an error status:", response.status);
                 }
@@ -463,7 +463,7 @@ const FormulationEditor = () => {
         }, 400);
 
         return () => clearTimeout(debounceTimer);
-    }, [profileId, activeProfile, targetPh, targetWeight, projectName, formulaIngredients, targetClaims]); // Added targetClaims to dependencies
+    }, [profileId, activeProfile, targetPh, targetWeight, projectName, formulaIngredients, targetClaims]);
 
     const handleNameKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -546,11 +546,10 @@ const FormulationEditor = () => {
 
                 if (phaseError) throw phaseError;
 
-                // SORTING LOGIC: Sort by Phase (A-Z), then by Percentage (Highest to Lowest)
                 const sortedIngredients = [...formulaIngredients].sort((a, b) => {
                     if (a.phase < b.phase) return -1;
                     if (a.phase > b.phase) return 1;
-                    return (b.percentage || 0) - (a.percentage || 0); // Highest to lowest
+                    return (b.percentage || 0) - (a.percentage || 0);
                 });
 
                 const ingredientsToInsert = sortedIngredients.map(ing => {
@@ -569,7 +568,6 @@ const FormulationEditor = () => {
 
                 if (ingredientsError) throw ingredientsError;
 
-                // Optional: Update the UI to reflect the newly sorted order immediately!
                 setFormulaIngredients(sortedIngredients);
             }
 
@@ -629,11 +627,10 @@ const FormulationEditor = () => {
 
                 if (phaseError) throw phaseError;
 
-                // SORTING LOGIC: Sort by Phase (A-Z), then by Percentage (Highest to Lowest)
                 const sortedIngredients = [...formulaIngredients].sort((a, b) => {
                     if (a.phase < b.phase) return -1;
                     if (a.phase > b.phase) return 1;
-                    return (b.percentage || 0) - (a.percentage || 0); // Highest to lowest
+                    return (b.percentage || 0) - (a.percentage || 0);
                 });
 
                 const ingredientsToInsert = sortedIngredients.map(ing => {
@@ -652,7 +649,6 @@ const FormulationEditor = () => {
 
                 if (ingredientsError) throw ingredientsError;
 
-                // Ensure the local state holds the nicely sorted version before navigating
                 setFormulaIngredients(sortedIngredients);
             }
 
@@ -729,7 +725,6 @@ const FormulationEditor = () => {
         }
     };
 
-    // Map the editor's formulaIngredients to match the calculator's expected prop interface
     const calculatorIngredients = formulaIngredients.map(ing => ({
         ingredient_id: ing.id,
         name: ing.trade_name || ing.inci_name,
@@ -803,117 +798,41 @@ const FormulationEditor = () => {
                 {/* Left Column: Formulation Panel */}
                 <div className="flex-1 flex flex-col gap-5">
 
-                    {/* Header Actions & Compact Setup */}
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                        <div>
-                            {/* Editable Project Name */}
-                            <h2 className="text-2xl font-bold flex items-center gap-2">
-                                Formulation Studio:
-                                {isEditingName ? (
-                                    <input
-                                        type="text"
-                                        value={projectName}
-                                        onChange={(e) => setProjectName(e.target.value)}
-                                        onBlur={() => setIsEditingName(false)}
-                                        onKeyDown={handleNameKeyDown}
-                                        autoFocus
-                                        className="font-normal text-gray-800 bg-white border border-[#c1d1b9] rounded px-2 py-0.5 text-xl outline-none focus:ring-1 focus:ring-[#2c4c3b] w-64 shadow-sm"
-                                    />
-                                ) : (
-                                    <span
-                                        className="font-normal text-gray-600 flex items-center gap-2 group cursor-pointer"
-                                        onClick={() => setIsEditingName(true)}
+                    {/* NEW ROW 1: Header Actions (Title + Buttons) */}
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start md:items-center gap-4 w-full">
+                        {/* Editable Project Name */}
+                        <h2 className="text-2xl font-bold flex items-center gap-2">
+                            Formulation Studio:
+                            {isEditingName ? (
+                                <input
+                                    type="text"
+                                    value={projectName}
+                                    onChange={(e) => setProjectName(e.target.value)}
+                                    onBlur={() => setIsEditingName(false)}
+                                    onKeyDown={handleNameKeyDown}
+                                    autoFocus
+                                    className="font-normal text-gray-800 bg-white border border-[#c1d1b9] rounded px-2 py-0.5 text-xl outline-none focus:ring-1 focus:ring-[#2c4c3b] w-64 shadow-sm"
+                                />
+                            ) : (
+                                <span
+                                    className="font-normal text-gray-600 flex items-center gap-2 group cursor-pointer"
+                                    onClick={() => setIsEditingName(true)}
+                                >
+                                    {projectName}
+                                    <button
+                                        className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-[#2c4c3b]"
+                                        aria-label="Edit project name"
                                     >
-                                        {projectName}
-                                        <button
-                                            className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-[#2c4c3b]"
-                                            aria-label="Edit project name"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                            </svg>
-                                        </button>
-                                    </span>
-                                )}
-                            </h2>
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                    </button>
+                                </span>
+                            )}
+                        </h2>
 
-                            {/* Compact Setup Inputs */}
-                            <div className="flex flex-wrap items-center gap-6 mt-3">
-
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm text-gray-600 font-medium">Target Weight:</label>
-                                    <div className="relative flex items-center">
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            step="any"
-                                            value={targetWeight || ''}
-                                            onChange={(e) => setTargetWeight(parseFloat(e.target.value) || 0)}
-                                            className="w-24 border border-[#c1d1b9] rounded px-2 py-1 pr-6 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
-                                            placeholder="100"
-                                        />
-                                        <span className="absolute right-2 text-xs text-gray-500 pointer-events-none">g</span>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm text-gray-600 font-medium">Target pH:</label>
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        min="2"
-                                        max="12"
-                                        value={targetPh ?? ''}
-                                        onChange={(e) => setTargetPh(e.target.value === '' ? null : parseFloat(e.target.value))}
-                                        className="w-20 border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
-                                        placeholder="5.5"
-                                    />
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <label htmlFor="profile-select" className="text-sm text-gray-600 font-medium">Profile:</label>
-                                    <select
-                                        id="profile-select"
-                                        value={profileId}
-                                        onChange={(e) => handleProfileChange(e.target.value)}
-                                        className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48"
-                                    >
-                                        <option value="" disabled>Select product type...</option>
-                                        <optgroup label="Emulsions">
-                                            <option value="ow_lotion">O/W Lotion or Cream</option>
-                                            <option value="wo_cream">W/O Rich Cream or Salve</option>
-                                        </optgroup>
-                                        <optgroup label="Anhydrous (Waterless)">
-                                            <option value="body_butter">Body Butter or Balm</option>
-                                            <option value="facial_oil">Facial or Body Oil</option>
-                                        </optgroup>
-                                        <optgroup label="Aqueous & Gels">
-                                            <option value="toner_mist">Toner or Face Mist</option>
-                                            <option value="water_serum">Water-based Serum or Gel</option>
-                                        </optgroup>
-                                        <optgroup label="Surfactants (Wash-off)">
-                                            <option value="body_wash">Body Wash or Gel Cleanser</option>
-                                            <option value="shampoo">Shampoo</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
-
-                                {activeProfile && (
-                                    <div className="mt-3 bg-[#e9eee7] border border-[#c1d1b9] rounded-md px-3 py-1.5 flex flex-wrap items-center gap-4 text-xs text-[#2c4c3b] w-full">
-                                        <span className="font-semibold">{activeProfile.name} Specifications:</span>
-                                        {activeProfile.default_ph_min && activeProfile.default_ph_max && (
-                                            <span>Target pH Range: <strong>{activeProfile.default_ph_min} – {activeProfile.default_ph_max}</strong></span>
-                                        )}
-                                        {activeProfile.max_oil_phase_percent !== null && (
-                                            <span>Max Oil Phase: <strong>≤ {activeProfile.max_oil_phase_percent}%</strong></span>
-                                        )}
-                                    </div>
-                                )}
-
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2">
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap items-center gap-2">
                             <button
                                 onClick={handleSave}
                                 disabled={isSaving}
@@ -933,10 +852,12 @@ const FormulationEditor = () => {
                             </button>
                             <button
                                 onClick={() => setIsShareModalOpen(true)}
-                                disabled={isSaving || formulaIngredients.length === 0}
-                                title="Publish this recipe to the Community Hub"
-                                className={`px-4 py-1.5 bg-[#e9eee7] text-[#2c4c3b] border border-[#c1d1b9] rounded shadow-sm text-sm font-bold transition-colors flex items-center gap-1
-        ${(isSaving || formulaIngredients.length === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#dbe3da]'}`}
+                                disabled={isSaving || !isHealthCheckPassed}
+                                title={!isHealthCheckPassed ? "Resolve all companion warnings to share this formula" : "Publish this recipe to the Community Hub"}
+                                className={`px-4 py-1.5 border rounded shadow-sm text-sm font-bold transition-colors flex items-center gap-1
+                                    ${(isSaving || !isHealthCheckPassed)
+                                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                                        : 'bg-[#e9eee7] text-[#2c4c3b] border-[#c1d1b9] hover:bg-[#dbe3da]'}`}
                             >
                                 <span>🌎</span> Share
                             </button>
@@ -975,6 +896,70 @@ const FormulationEditor = () => {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 md:gap-8 w-full bg-transparent overflow-x-auto pb-2 -mt-1">
+
+                        {/* Profile Selector */}
+                        <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
+                            <label htmlFor="profile-select" className="text-sm text-gray-600 font-medium">Profile:</label>
+                            <select
+                                id="profile-select"
+                                value={profileId}
+                                onChange={(e) => handleProfileChange(e.target.value)}
+                                className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48"
+                            >
+                                <option value="" disabled>Select product type...</option>
+                                <optgroup label="Emulsions">
+                                    <option value="ow_lotion">O/W Lotion or Cream</option>
+                                    <option value="wo_cream">W/O Rich Cream or Salve</option>
+                                </optgroup>
+                                <optgroup label="Anhydrous (Waterless)">
+                                    <option value="body_butter">Body Butter or Balm</option>
+                                    <option value="facial_oil">Facial or Body Oil</option>
+                                </optgroup>
+                                <optgroup label="Aqueous & Gels">
+                                    <option value="toner_mist">Toner or Face Mist</option>
+                                    <option value="water_serum">Water-based Serum or Gel</option>
+                                </optgroup>
+                                <optgroup label="Surfactants (Wash-off)">
+                                    <option value="body_wash">Body Wash or Gel Cleanser</option>
+                                    <option value="shampoo">Shampoo</option>
+                                </optgroup>
+                            </select>
+                        </div>
+
+                        {/* Target Weight */}
+                        <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
+                            <label className="text-sm text-gray-600 font-medium">Target Weight:</label>
+                            <div className="relative flex items-center">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    step="any"
+                                    value={targetWeight || ''}
+                                    onChange={(e) => setTargetWeight(parseFloat(e.target.value) || 0)}
+                                    className="w-24 border border-[#c1d1b9] rounded px-2 py-1 pr-6 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
+                                    placeholder="100"
+                                />
+                                <span className="absolute right-2 text-xs text-gray-500 pointer-events-none">g</span>
+                            </div>
+                        </div>
+
+                        {/* Target pH */}
+                        <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
+                            <label className="text-sm text-gray-600 font-medium">Target pH:</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                min="2"
+                                max="12"
+                                value={targetPh ?? ''}
+                                onChange={(e) => setTargetPh(e.target.value === '' ? null : parseFloat(e.target.value))}
+                                className="w-20 border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
+                                placeholder="5.5"
+                            />
                         </div>
                     </div>
 
@@ -1088,12 +1073,12 @@ const FormulationEditor = () => {
                                                                             disabled={item.isQS}
                                                                             onChange={(e) => handlePercentageChange(item.originalIndex!, e.target.value)}
                                                                             className={`w-full border rounded py-0.5 pl-1.5 pr-4 text-sm outline-none focus:ring-1 
-                                    [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
-                                    ${item.isQS
+                                                                    [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
+                                                                    ${item.isQS
                                                                                     ? 'bg-blue-50 text-blue-700 font-bold border-blue-200 cursor-not-allowed'
                                                                                     : 'bg-white text-gray-800 border-gray-200 focus:ring-[#2c4c3b]'
                                                                                 }
-                                    ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
+                                                                    ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
                                                                                     ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
                                                                                     : ''
                                                                                 }`}
@@ -1312,6 +1297,9 @@ const FormulationEditor = () => {
                 currentProjectName={projectName}
                 recipeData={formulaIngredients}
                 activeProfileName={activeProfile?.name || null}
+                formulaId={formulaId}
+                communityPostId={communityPostId}
+                onShareSuccess={(newPostId) => setCommunityPostId(newPostId)}
             />
         </div>
     );

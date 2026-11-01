@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import NewPostModal from '../components/NewPostModal';
+import Header from '../components/Header';
 
 type PostType = 'formulation' | 'discussion' | 'request' | 'education';
 type DevStatus = 'concept' | 'in-testing' | 'stable' | null;
@@ -103,7 +104,8 @@ export default function CommunityFeed() {
 
     return (
         <div className="min-h-screen bg-[#f3f5f2] text-[#1f382a] font-sans p-6">
-            <div className="max-w-6xl mx-auto">
+            <Header title="Community Hub" backPath="/studio" backLabel="Back to Studio" />
+            <div className="max-w-6xl mx-auto mt-4">
                 <div className="flex justify-between items-end mb-8">
                     <div>
                         <h1 className="text-3xl font-bold">Community Hub</h1>
