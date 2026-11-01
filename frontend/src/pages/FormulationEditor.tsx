@@ -7,6 +7,8 @@ import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
 import { ClaimsPanel } from '../components/ClaimsPanel';
 import type { MarketingClaim, ClaimViolation } from '../types/claims';
+import FormulationCostCalculator from '../components/FormulationCostCalculator';
+import { useSettings } from '../contexts/SettingsContext';
 
 // 1. Define Types for the Database and Formula state
 type DatabaseIngredient = {
@@ -724,6 +726,14 @@ const FormulationEditor = () => {
         }
     };
 
+    // Map the editor's formulaIngredients to match the calculator's expected prop interface
+    const calculatorIngredients = formulaIngredients.map(ing => ({
+        ingredient_id: ing.id,
+        name: ing.trade_name || ing.inci_name,
+        percentage: ing.percentage || 0
+    }));
+    const { currency } = useSettings();
+
     return (
         <div className="min-h-screen bg-[#f3f5f2] text-[#1f382a] font-sans flex flex-col">
             {/* Top Navigation Bar */}
@@ -1161,6 +1171,7 @@ const FormulationEditor = () => {
                             )}
                         </div>
                     </div>
+                    <FormulationCostCalculator formulaIngredients={calculatorIngredients} currencySymbol={currency} initialBatchSize={targetWeight} />
                 </div>
 
                 {/* Ingredient Details Modal */}
