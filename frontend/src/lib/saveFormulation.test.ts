@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSaveStateForTests, saveFormulation, type SaveInput } from './saveFormulation';
 
+// The tests pass their own fake client, so the real one (which needs the .env.local keys) must never load
+vi.mock('./supabase', () => ({ supabase: {} }));
+
 type Call = { table?: string; op: string; payload?: unknown };
 
 /** A fake Supabase client that records writes. `rpcResult` controls what the database function returns. */
