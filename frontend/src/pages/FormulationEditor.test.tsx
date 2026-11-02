@@ -32,6 +32,7 @@ vi.mock('../lib/supabase', () => {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(), // 1. Added order method
     limit: vi.fn().mockResolvedValue({ data: [], error: null }),
     single: vi.fn().mockResolvedValue({
       data: {
@@ -43,12 +44,22 @@ vi.mock('../lib/supabase', () => {
         default_ph_max: 6.0
       },
       error: null
-    })
+    }),
+    // 2. Add 'then' so the builder itself can be awaited directly
+    // This allows `const { data } = await supabase.from()...order();` to work!
+    then: function (resolve: any) {
+      resolve({ data: [], error: null });
+    }
   };
 
   return {
     supabase: {
-      from: vi.fn(() => mockQueryBuilder)
+      from: vi.fn(() => mockQueryBuilder),
+      channel: vi.fn(() => ({
+        on: vi.fn().mockReturnThis(),
+        subscribe: vi.fn(),
+      })),
+      removeChannel: vi.fn(),
     }
   };
 });

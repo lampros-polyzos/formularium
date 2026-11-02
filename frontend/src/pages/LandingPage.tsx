@@ -1,26 +1,138 @@
-import { useState } from 'react';
+import { useEffect, useState, type SyntheticEvent } from 'react';
 import {
   Beaker,
   Search,
   ArrowRight,
-  Star,
   Copy,
   Check,
   ChevronDown,
   BookOpen,
   Code,
+  Plus,
 } from 'lucide-react';
 import AuthModal from '../components/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+
+interface PreviewPost {
+  id: string;
+  title: string;
+  write_up: string | null;
+  tags: string[] | string | null;
+  development_status?: string | null;
+  created_at: string;
+}
+
+// Where to send the user once they finish signing in (survives the OAuth redirect)
+const REDIRECT_KEY = 'formularium:postAuthRedirect';
+
+const STATUS_LABELS: Record<string, string> = {
+  concept: 'Concept',
+  'in-testing': 'In Testing',
+  stable: 'Stable',
+};
+
+const FAQS = [
+  { q: "Who owns the rights to my private formulas?", a: "You retain 100% ownership of any formulas kept in your private studio. We never share or analyze your private data." },
+  { q: "How often are ingredient safety limits updated?", a: "We sync our database monthly with global cosmetic regulatory boards to ensure your traffic-light alerts are always accurate." },
+  { q: "Can I export my shopping lists?", a: "Yes, you can export them as PDFs or generate clean, ink-friendly printouts directly to your local printer." }
+];
+
+const normalizeTags = (tags: PreviewPost['tags']) =>
+  Array.isArray(tags) ? tags : (tags ? [tags] : []);
 
 const LandingPage = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [recipes, setRecipes] = useState<PreviewPost[]>([]);
+  const [labNotes, setLabNotes] = useState<PreviewPost[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Resume the navigation the visitor asked for before they were prompted to sign in
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const pending = sessionStorage.getItem(REDIRECT_KEY);
+      if (pending) {
+        sessionStorage.removeItem(REDIRECT_KEY);
+        navigate(pending);
+      }
+    } catch {
+      // sessionStorage unavailable; nothing to resume
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    const fetchPreviews = async () => {
+      setIsLoadingPosts(true);
+      try {
+        const [recipeRes, notesRes] = await Promise.all([
+          supabase
+            .from('community_posts')
+            .select('id, title, write_up, tags, development_status, created_at')
+            .eq('post_type', 'formulation')
+            .order('created_at', { ascending: false })
+            .limit(3),
+          supabase
+            .from('community_posts')
+            .select('id, title, write_up, tags, created_at')
+            .eq('post_type', 'education')
+            .order('created_at', { ascending: false })
+            .limit(3),
+        ]);
+        if (recipeRes.error) throw recipeRes.error;
+        if (notesRes.error) throw notesRes.error;
+        setRecipes(recipeRes.data || []);
+        setLabNotes(notesRes.data || []);
+      } catch (error) {
+        console.error("Error fetching landing page previews:", error);
+      } finally {
+        setIsLoadingPosts(false);
+      }
+    };
+
+    fetchPreviews();
+  }, [user]);
+
+  const openAuth = (mode: 'signin' | 'signup' = 'signin', redirectTo?: string) => {
+    try {
+      if (redirectTo) sessionStorage.setItem(REDIRECT_KEY, redirectTo);
+      else sessionStorage.removeItem(REDIRECT_KEY);
+    } catch {
+      // ignore storage errors; the user just lands back here after sign-in
+    }
+    setAuthMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  // Navigate to an app page, prompting for sign-in first if needed
+  const goTo = (path: string, mode: 'signin' | 'signup' = 'signin') => {
+    if (user) navigate(path);
+    else openAuth(mode, path);
+  };
+
+  const handleSearch = (e: SyntheticEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    goTo(q ? `/library?q=${encodeURIComponent(q)}` : '/library');
+  };
+
+  const handleGetStarted = () => {
+    if (user) navigate('/studio');
+    else openAuth('signup', '/studio');
+  };
+
   return (
     <div className="min-h-screen bg-[#f7f8f6] font-sans text-gray-900 selection:bg-[#d8e2d3]">
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      {/* Mounted only while open so each open starts in the requested mode */}
+      {isAuthModalOpen && (
+        <AuthModal isOpen onClose={() => setIsAuthModalOpen(false)} initialMode={authMode} />
+      )}
       {/* Navigation */}
       <nav className="flex items-center justify-between px-6 py-4 md:px-12 bg-[#d8e2d3]">
         <div className="flex items-center gap-2 text-[#1f382a]">
@@ -29,18 +141,25 @@ const LandingPage = () => {
         </div>
 
         {/* Search Bar */}
-        <div className="hidden md:flex items-center bg-white/80 rounded-full px-4 py-2 w-1/3 border border-[#c1d1b9]">
-          <Search size={16} className="text-gray-500 mr-2" />
+        <form
+          onSubmit={handleSearch}
+          className="hidden md:flex items-center bg-white/80 rounded-full px-4 py-2 w-1/3 border border-[#c1d1b9] focus-within:ring-2 focus-within:ring-[#2c4c3b]"
+        >
+          <button type="submit" aria-label="Search the ingredient library" className="text-gray-500 hover:text-[#1f382a] mr-2">
+            <Search size={16} />
+          </button>
           <input
-            type="text"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search ingredients, INCI, or functions..."
             className="bg-transparent border-none outline-none w-full text-sm text-gray-700"
           />
-        </div>
+        </form>
 
         <div className="flex items-center gap-6 text-[#2c4c3b] font-medium text-sm">
-          <a href="#" className="hover:text-black hidden sm:block">Library</a>
-          <a href="/community" className="hover:text-black hidden sm:block">Community</a>
+          <button onClick={() => goTo('/library')} className="hover:text-black hidden sm:block">Library</button>
+          <button onClick={() => goTo('/community')} className="hover:text-black hidden sm:block">Community</button>
           <div>
             {user ? (
               <button
@@ -51,7 +170,7 @@ const LandingPage = () => {
               </button>
             ) : (
               <button
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={() => openAuth('signin')}
                 className="py-2.5 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
               >
                 Sign In
@@ -73,16 +192,16 @@ const LandingPage = () => {
             </p>
             <div className="flex flex-wrap gap-4">
               <button
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={() => goTo('/studio/new', 'signup')}
                 className="px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors shadow-sm"
               >
                 Start a New Formula
               </button>
               <button
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={() => goTo('/community')}
                 className="px-6 py-3 bg-transparent border border-[#2c4c3b] text-[#2c4c3b] rounded-full font-medium hover:bg-white/20 transition-colors"
               >
-                Browse Templates
+                Browse Community Recipes
               </button>
             </div>
           </div>
@@ -127,33 +246,74 @@ const LandingPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1 md:row-span-2 bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9] flex flex-col">
             <h3 className="text-2xl font-bold text-[#1f382a] mb-3">The Formulation Studio</h3>
-            <p className="text-[#3a5a4a] mb-8 leading-relaxed">Calculate and validate your skincare recipes with real-time feedback and smart phasing.</p>
-            <div className="bg-[#eef2eb] flex-grow min-h-[250px] rounded-xl shadow-inner border border-[#c1d1b9] flex items-center justify-center text-[#8ca89b] italic text-sm">
-              [Replace with Studio Screenshot]
+            <p className="text-[#3a5a4a] mb-6 leading-relaxed">Calculate and validate your skincare recipes with real-time feedback and smart phasing.</p>
+            <div className="bg-[#eef2eb] flex-grow min-h-[250px] rounded-xl shadow-inner border border-[#c1d1b9] p-4 space-y-3 mb-6" aria-hidden="true">
+              <div className="flex items-center justify-between text-xs font-bold text-[#1f382a] uppercase tracking-wide">
+                <span>My Formulas</span>
+                <span className="flex items-center gap-1 bg-[#2c4c3b] text-white px-2 py-1 rounded-full normal-case tracking-normal">
+                  <Plus size={12} /> New
+                </span>
+              </div>
+              {[
+                { name: 'Gentle Gel Cleanser', meta: '3 phases · 100 g', dot: 'bg-green-500' },
+                { name: 'Ceramide Night Cream', meta: '4 phases · 50 g', dot: 'bg-yellow-400' },
+                { name: 'Vitamin C Serum', meta: '2 phases · 30 ml', dot: 'bg-green-500' },
+              ].map((f) => (
+                <div key={f.name} className="bg-white rounded-lg p-3 shadow-sm flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-gray-700">{f.name}</div>
+                    <div className="text-xs text-gray-400">{f.meta}</div>
+                  </div>
+                  <span className={`w-2.5 h-2.5 rounded-full ${f.dot}`}></span>
+                </div>
+              ))}
             </div>
+            <button onClick={() => goTo('/studio')} className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group self-start">
+              Open the Studio <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
           <div className="md:col-span-2 bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9] flex flex-col sm:flex-row gap-8">
-            <div className="flex-1">
+            <div className="flex-1 flex flex-col">
               <h3 className="text-2xl font-bold text-[#1f382a] mb-3">The Ingredient Library</h3>
-              <p className="text-[#3a5a4a] leading-relaxed">Combine ingredients, ensure percentage compatibility, and complete safety checks instantly.</p>
+              <p className="text-[#3a5a4a] leading-relaxed mb-6">Combine ingredients, ensure percentage compatibility, and complete safety checks instantly.</p>
+              <button onClick={() => goTo('/library')} className="mt-auto text-[#1f382a] font-semibold flex items-center text-sm hover:underline group self-start">
+                Explore the Library <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+              </button>
             </div>
-            <div className="flex-1 bg-[#eef2eb] min-h-[150px] rounded-xl shadow-inner border border-[#c1d1b9] flex items-center justify-center text-[#8ca89b] italic text-sm">
-              [Replace with Library Screenshot]
+            <div className="flex-1 bg-[#eef2eb] min-h-[150px] rounded-xl shadow-inner border border-[#c1d1b9] p-4 space-y-2" aria-hidden="true">
+              {[
+                { name: 'Niacinamide', inci: 'Niacinamide', fn: 'Active' },
+                { name: 'Squalane', inci: 'Squalane', fn: 'Emollient' },
+                { name: 'Olivem 1000', inci: 'Cetearyl Olivate, Sorbitan Olivate', fn: 'Emulsifier' },
+              ].map((ing) => (
+                <div key={ing.name} className="bg-white rounded-lg px-3 py-2 shadow-sm flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-700">{ing.name}</div>
+                    <div className="text-xs text-gray-400 truncate">{ing.inci}</div>
+                  </div>
+                  <span className="text-xs font-semibold text-[#2c4c3b] bg-[#eef2eb] px-2 py-1 rounded-full flex-shrink-0">{ing.fn}</span>
+                </div>
+              ))}
             </div>
           </div>
           <div className="bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9]">
-            <h3 className="text-xl font-bold text-[#1f382a] mb-3">Equipment Guides</h3>
-            <p className="text-[#3a5a4a] text-sm mb-6 leading-relaxed">Complete database of equipment guides for your lab.</p>
-            <a href="#" className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
-              Learn more <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
-            </a>
+            <h3 className="text-xl font-bold text-[#1f382a] mb-3">Stash &amp; Packaging</h3>
+            <p className="text-[#3a5a4a] text-sm mb-6 leading-relaxed">Track the ingredients and containers you own, so you always know what you can make.</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <button onClick={() => goTo('/stash')} className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
+                My Stash <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+              </button>
+              <button onClick={() => goTo('/containers')} className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
+                Packaging <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
           </div>
           <div className="bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9]">
             <h3 className="text-xl font-bold text-[#1f382a] mb-3">Community Recipes</h3>
             <p className="text-[#3a5a4a] text-sm mb-6 leading-relaxed">Copy and adapt top community recipes for your own use.</p>
-            <a href="#" className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
-              Learn more <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
-            </a>
+            <button onClick={() => goTo('/community')} className="text-[#1f382a] font-semibold flex items-center text-sm hover:underline group">
+              Browse recipes <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
         </div>
       </section>
@@ -185,42 +345,69 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-end mb-12">
             <div>
-              <h2 className="text-3xl font-bold text-[#1f382a] mb-3">Trending in the Community</h2>
-              <p className="text-[#3a5a4a]">Discover top-rated recipes from other formulators.</p>
+              <h2 className="text-3xl font-bold text-[#1f382a] mb-3">Fresh from the Community</h2>
+              <p className="text-[#3a5a4a]">Discover the latest recipes shared by other formulators.</p>
             </div>
-            <a href="#" className="hidden md:flex text-[#2c4c3b] font-semibold items-center hover:underline">
+            <button onClick={() => goTo('/community')} className="hidden md:flex text-[#2c4c3b] font-semibold items-center hover:underline">
               View all recipes <ArrowRight size={18} className="ml-1" />
-            </a>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { title: "Barrier Repair Ceramide Emulsion", author: "Dr. Elena", rating: 4.9, tags: ["Emulsion", "Advanced"] },
-              { title: "10% Niacinamide + Zinc Serum", author: "DIYChemist", rating: 4.8, tags: ["Serum", "Beginner"] },
-              { title: "Squalane Cleansing Balm", author: "AuraSkincare", rating: 5.0, tags: ["Cleanser", "Waterless"] }
-            ].map((recipe, i) => (
-              <div key={i} className="border border-gray-200 rounded-[2rem] p-6 hover:shadow-lg transition-shadow bg-[#fcfcfc]">
-                <div className="flex justify-between items-start mb-4">
-                  <span className="px-3 py-1 bg-[#eef2eb] text-[#2c4c3b] text-xs font-semibold rounded-full">
-                    {recipe.tags[0]}
-                  </span>
-                  <div className="flex items-center text-yellow-500 text-sm font-bold">
-                    <Star size={16} className="fill-current mr-1" /> {recipe.rating}
+          {isLoadingPosts ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="border border-gray-200 rounded-[2rem] p-6 bg-[#fcfcfc] animate-pulse h-56"></div>
+              ))}
+            </div>
+          ) : recipes.length === 0 ? (
+            <div className="border border-dashed border-[#c1d1b9] rounded-[2rem] p-10 text-center bg-[#fcfcfc]">
+              <p className="text-[#3a5a4a] mb-4">No recipes have been shared yet. Be the first to publish one!</p>
+              <button
+                onClick={() => goTo('/community')}
+                className="px-6 py-2.5 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors text-sm"
+              >
+                Visit the Community
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {recipes.map((recipe) => {
+                const tags = normalizeTags(recipe.tags);
+                const status = recipe.development_status ? STATUS_LABELS[recipe.development_status] : null;
+                return (
+                  <div key={recipe.id} className="border border-gray-200 rounded-[2rem] p-6 hover:shadow-lg transition-shadow bg-[#fcfcfc] flex flex-col">
+                    <div className="flex justify-between items-start mb-4 gap-2">
+                      <span className="px-3 py-1 bg-[#eef2eb] text-[#2c4c3b] text-xs font-semibold rounded-full truncate">
+                        {tags[0] ?? 'Formulation'}
+                      </span>
+                      {status && (
+                        <span className="text-xs font-semibold text-gray-500 flex-shrink-0">{status}</span>
+                      )}
+                    </div>
+                    <h4 className="text-xl font-bold text-[#1f382a] mb-2 line-clamp-2">{recipe.title}</h4>
+                    <p className="text-sm text-gray-500 mb-6 line-clamp-2 flex-grow">
+                      {recipe.write_up || `Shared ${new Date(recipe.created_at).toLocaleDateString()}`}
+                    </p>
+                    <button
+                      onClick={() => goTo(`/community/${recipe.id}`)}
+                      className="w-full py-2.5 flex items-center justify-center gap-2 border border-[#c1d1b9] text-[#2c4c3b] rounded-xl hover:bg-[#d8e2d3] transition-colors font-medium text-sm"
+                    >
+                      <Copy size={16} /> View &amp; Clone
+                    </button>
                   </div>
-                </div>
-                <h4 className="text-xl font-bold text-[#1f382a] mb-2">{recipe.title}</h4>
-                <p className="text-sm text-gray-500 mb-6">By {recipe.author}</p>
-                <button className="w-full py-2.5 flex items-center justify-center gap-2 border border-[#c1d1b9] text-[#2c4c3b] rounded-xl hover:bg-[#d8e2d3] transition-colors font-medium text-sm">
-                  <Copy size={16} /> Clone to Studio
-                </button>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
+
+          <button onClick={() => goTo('/community')} className="md:hidden mt-8 mx-auto flex text-[#2c4c3b] font-semibold items-center hover:underline">
+            View all recipes <ArrowRight size={18} className="ml-1" />
+          </button>
         </div>
       </section>
 
       {/* Pricing Tiers */}
-      <section className="px-6 md:px-12 py-20 bg-[#f7f8f6]">
+      <section id="pricing" className="px-6 md:px-12 py-20 bg-[#f7f8f6] scroll-mt-4">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-[#1f382a] mb-4">Simple, transparent pricing</h2>
@@ -239,8 +426,11 @@ const LandingPage = () => {
                   </li>
                 ))}
               </ul>
-              <button className="w-full py-3 bg-white border-2 border-[#2c4c3b] text-[#2c4c3b] rounded-full font-medium hover:bg-gray-50 transition-colors">
-                Sign Up Free
+              <button
+                onClick={handleGetStarted}
+                className="w-full py-3 bg-white border-2 border-[#2c4c3b] text-[#2c4c3b] rounded-full font-medium hover:bg-gray-50 transition-colors"
+              >
+                {user ? 'Go to Studio' : 'Sign Up Free'}
               </button>
             </div>
 
@@ -258,57 +448,67 @@ const LandingPage = () => {
                   </li>
                 ))}
               </ul>
-              <button className="w-full py-3 bg-[#d8e2d3] text-[#1f382a] rounded-full font-bold hover:bg-white transition-colors">
-                Start Pro Trial
+              <button
+                disabled
+                className="w-full py-3 bg-[#d8e2d3] text-[#1f382a] rounded-full font-bold opacity-70 cursor-not-allowed"
+              >
+                Coming Soon
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Latest From The Blog */}
-      <section className="px-6 md:px-12 py-20 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-[#1f382a] mb-12 text-center">Latest from the Lab Notes</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { title: "Understanding INCI Naming Rules", desc: "A beginner's guide to decoding ingredient labels." },
-              { title: "Safe Preservative Thresholds", desc: "How to properly calculate broad-spectrum protection." },
-              { title: "The Science of Emulsions", desc: "Why HLB values matter in your creams and lotions." }
-            ].map((post, i) => (
-              <div key={i} className="group cursor-pointer">
-                <div className="bg-[#eef2eb] h-48 rounded-2xl mb-4 flex items-center justify-center text-[#8ca89b] border border-[#c1d1b9] group-hover:shadow-md transition-shadow">
-                  <BookOpen size={32} />
-                </div>
-                <h4 className="text-lg font-bold text-[#1f382a] mb-2 group-hover:text-[#2c4c3b] transition-colors">{post.title}</h4>
-                <p className="text-sm text-gray-600">{post.desc}</p>
-              </div>
-            ))}
+      {/* Latest Lab Notes (education posts from the community) */}
+      {labNotes.length > 0 && (
+        <section className="px-6 md:px-12 py-20 bg-white">
+          <div className="max-w-7xl mx-auto">
+            <h2 className="text-3xl font-bold text-[#1f382a] mb-12 text-center">Latest from the Lab Notes</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {labNotes.map((post) => (
+                <button
+                  key={post.id}
+                  onClick={() => goTo(`/community/${post.id}`)}
+                  className="group text-left"
+                >
+                  <div className="bg-[#eef2eb] h-48 rounded-2xl mb-4 flex items-center justify-center text-[#8ca89b] border border-[#c1d1b9] group-hover:shadow-md transition-shadow">
+                    <BookOpen size={32} />
+                  </div>
+                  <h4 className="text-lg font-bold text-[#1f382a] mb-2 group-hover:text-[#2c4c3b] group-hover:underline transition-colors">{post.title}</h4>
+                  <p className="text-sm text-gray-600 line-clamp-2">{post.write_up}</p>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* FAQ Section */}
       <section className="px-6 md:px-12 py-20 bg-[#f7f8f6]">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold text-[#1f382a] mb-10 text-center">Frequently Asked Questions</h2>
           <div className="space-y-4">
-            {[
-              { q: "Who owns the rights to my private formulas?", a: "You retain 100% ownership of any formulas kept in your private studio. We never share or analyze your private data." },
-              { q: "How often are ingredient safety limits updated?", a: "We sync our database monthly with global cosmetic regulatory boards to ensure your traffic-light alerts are always accurate." },
-              { q: "Can I export my shopping lists?", a: "Yes, you can export them as PDFs or generate clean, ink-friendly printouts directly to your local printer." }
-            ].map((faq, i) => (
-              <div key={i} className="bg-white border border-gray-200 rounded-2xl p-6">
-                <div className="flex justify-between items-center cursor-pointer">
-                  <h4 className="font-bold text-[#1f382a]">{faq.q}</h4>
-                  <ChevronDown size={20} className="text-gray-400" />
+            {FAQS.map((faq, i) => {
+              const isOpen = openFaq === i;
+              return (
+                <div key={i} className="bg-white border border-gray-200 rounded-2xl p-6">
+                  <button
+                    onClick={() => setOpenFaq(isOpen ? null : i)}
+                    aria-expanded={isOpen}
+                    aria-controls={`faq-answer-${i}`}
+                    className="w-full flex justify-between items-center text-left gap-4"
+                  >
+                    <h4 className="font-bold text-[#1f382a]">{faq.q}</h4>
+                    <ChevronDown size={20} className={`text-gray-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isOpen && (
+                    <p id={`faq-answer-${i}`} className="mt-4 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
+                      {faq.a}
+                    </p>
+                  )}
                 </div>
-                {/* Note: In a real app, this text would be conditionally hidden behind a state toggle */}
-                <p className="mt-4 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
-                  {faq.a}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -318,8 +518,11 @@ const LandingPage = () => {
         <div className="max-w-3xl mx-auto">
           <h2 className="text-4xl font-bold text-white mb-6">Ready to build your first formulation?</h2>
           <p className="text-[#c1d1b9] text-lg mb-10">Join thousands of formulators building safer, smarter skincare.</p>
-          <button className="px-8 py-4 bg-[#d8e2d3] text-[#1f382a] rounded-full font-bold text-lg hover:bg-white transition-colors shadow-lg">
-            Create Free Account
+          <button
+            onClick={handleGetStarted}
+            className="px-8 py-4 bg-[#d8e2d3] text-[#1f382a] rounded-full font-bold text-lg hover:bg-white transition-colors shadow-lg"
+          >
+            {user ? 'Go to Studio' : 'Create Free Account'}
           </button>
         </div>
       </section>
@@ -341,22 +544,29 @@ const LandingPage = () => {
             <div>
               <h4 className="font-bold text-[#1f382a] mb-4">Product</h4>
               <ul className="space-y-2 text-gray-500">
-                <li><a href="#" className="hover:text-[#1f382a]">Studio</a></li>
-                <li><a href="#" className="hover:text-[#1f382a]">Library</a></li>
-                <li><a href="#" className="hover:text-[#1f382a]">Pricing</a></li>
+                <li><button onClick={() => goTo('/studio')} className="hover:text-[#1f382a]">Studio</button></li>
+                <li><button onClick={() => goTo('/library')} className="hover:text-[#1f382a]">Library</button></li>
+                <li><a href="#pricing" className="hover:text-[#1f382a]">Pricing</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-bold text-[#1f382a] mb-4">Legal</h4>
+              <h4 className="font-bold text-[#1f382a] mb-4">Your Lab</h4>
               <ul className="space-y-2 text-gray-500">
-                <li><a href="#" className="hover:text-[#1f382a]">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-[#1f382a]">Terms of Service</a></li>
+                <li><button onClick={() => goTo('/stash')} className="hover:text-[#1f382a]">Stash</button></li>
+                <li><button onClick={() => goTo('/containers')} className="hover:text-[#1f382a]">Packaging</button></li>
+                <li><button onClick={() => goTo('/community')} className="hover:text-[#1f382a]">Community</button></li>
               </ul>
             </div>
           </div>
 
           <div className="flex gap-4">
-            <a href="#" className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-[#d8e2d3] hover:text-[#1f382a] transition-colors">
+            <a
+              href="https://github.com/lampros-polyzos/formularium"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Source code on GitHub"
+              className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-[#d8e2d3] hover:text-[#1f382a] transition-colors"
+            >
               <Code size={20} />
             </a>
           </div>

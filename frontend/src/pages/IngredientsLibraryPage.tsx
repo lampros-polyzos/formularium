@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -75,7 +75,8 @@ const IngredientsLibraryPage = () => {
     const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
 
     // Filter states
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchParams] = useSearchParams();
+    const [searchTerm, setSearchTerm] = useState(searchParams.get('q') ?? '');
     const [selectedFunction, setSelectedFunction] = useState('All');
     const [selectedClaim, setSelectedClaim] = useState('All');
     const [selectedSolubility, setSelectedSolubility] = useState('All');
