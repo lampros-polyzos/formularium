@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import NewPostModal from '../components/NewPostModal';
 import Header from '../components/Header';
+import RatingSummary from '../components/RatingSummary';
+import { sortPosts, summarizeRatings, type RatingRow, type RatingStats, type SortMode } from '../lib/ratingStats';
 
 type PostType = 'formulation' | 'discussion' | 'request' | 'education';
 type DevStatus = 'concept' | 'in-testing' | 'stable' | null;
@@ -30,6 +32,27 @@ export default function CommunityFeed() {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTags, setActiveTags] = useState<string[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [sortMode, setSortMode] = useState<SortMode>('newest');
+    const [ratingStats, setRatingStats] = useState<Map<string, RatingStats>>(new Map());
+
+    // Ratings are a bonus: if they can't be loaded, the feed still works without them
+    const loadRatings = async (recipeIds: string[]) => {
+        try {
+            const rows: RatingRow[] = [];
+            for (let i = 0; i < recipeIds.length; i += 100) { // keep each request's address short
+                const { data, error } = await supabase
+                    .from('recipe_ratings')
+                    .select('post_id, overall, made_it')
+                    .in('post_id', recipeIds.slice(i, i + 100));
+                if (error) throw error;
+                rows.push(...((data ?? []) as RatingRow[]));
+            }
+            setRatingStats(summarizeRatings(rows));
+        } catch (error) {
+            console.error("Error fetching recipe ratings:", error);
+            setRatingStats(new Map());
+        }
+    };
 
     useEffect(() => {
         const fetchPosts = async () => {
@@ -54,6 +77,7 @@ export default function CommunityFeed() {
                 }));
 
                 setPosts(formattedData);
+                await loadRatings(formattedData.filter(p => p.post_type === 'formulation').map(p => p.id));
             } catch (error) {
                 console.error("Error fetching community posts:", error);
             } finally {
@@ -82,6 +106,8 @@ export default function CommunityFeed() {
 
         return matchesSearch && matchesTags;
     });
+
+    const visiblePosts = sortPosts(filteredPosts, ratingStats, sortMode);
 
     const getTypeLabel = (type: PostType) => {
         switch (type) {
@@ -137,6 +163,21 @@ export default function CommunityFeed() {
                             ))}
                         </div>
 
+                        <div className="flex w-full md:w-auto items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                            Sort
+                            <select
+                                value={sortMode}
+                                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                                aria-label="Sort posts"
+                                title="Top rated weighs how many people rated a recipe, so one 5-star rating doesn't beat many 4.8s"
+                                className="normal-case tracking-normal text-sm font-medium text-gray-700 border border-gray-300 rounded-lg px-2 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2c4c3b]"
+                            >
+                                <option value="newest">Newest</option>
+                                <option value="top">Top rated</option>
+                                <option value="made">Most made</option>
+                            </select>
+                        </label>
                         <div className="relative w-full md:w-72">
                             <input
                                 type="text"
@@ -146,6 +187,7 @@ export default function CommunityFeed() {
                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm"
                             />
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                        </div>
                         </div>
                     </div>
 
@@ -177,13 +219,13 @@ export default function CommunityFeed() {
 
                 {isLoading ? (
                     <div className="flex justify-center py-20 text-gray-500 animate-pulse">Loading community posts...</div>
-                ) : filteredPosts.length === 0 ? (
+                ) : visiblePosts.length === 0 ? (
                     <div className="text-center py-20 bg-white rounded-xl border border-dashed border-[#c1d1b9] text-gray-500">
                         No posts found matching your criteria. Be the first to start a conversation!
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredPosts.map(post => {
+                        {visiblePosts.map(post => {
                             const typeMeta = getTypeLabel(post.post_type);
 
                             return (
@@ -204,6 +246,8 @@ export default function CommunityFeed() {
                                         <h3 className="text-lg font-bold text-[#1f382a] mb-2 group-hover:text-[#2c4c3b] line-clamp-2 pr-12">
                                             {post.title}
                                         </h3>
+
+                                        {post.post_type === 'formulation' && <RatingSummary stats={ratingStats.get(post.id)} />}
 
                                         <p className="text-sm text-gray-600 line-clamp-3 mb-4 flex-1">
                                             {post.write_up.replace(/<[^>]+>/g, '') || "No description provided."}
