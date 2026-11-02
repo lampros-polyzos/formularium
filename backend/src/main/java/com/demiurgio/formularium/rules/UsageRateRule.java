@@ -32,7 +32,9 @@ public class UsageRateRule implements ValidationRule {
             }
 
             if (i.minPercentage() != null && i.percentage() < i.minPercentage()) {
-                String type = ("Preservative".equals(i.function()) || "Emulsifier".equals(i.function())) ? "error" : "warning";
+                String fn = i.function() == null ? "" : i.function();
+                boolean critical = (fn.startsWith("Preservative") && !fn.contains("Booster")) || fn.equals("Emulsifier");
+                String type = critical ? "error" : "warning";
                 response.addAlert(type, String.format("%s is at %.2f%%, below minimum effective rate of %.2f%%.", i.displayName(), i.percentage(), i.minPercentage()));
             }
         }

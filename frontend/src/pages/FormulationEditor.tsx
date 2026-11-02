@@ -36,6 +36,7 @@ type DatabaseIngredient = {
     max_heating_temp_c: number | null;
     optimal_ph_min: number | null;
     optimal_ph_max: number | null;
+    ionic_charge?: string | null;
     min_usage_pct: number | null;
     max_usage_pct: number | null;
     description?: string;
@@ -94,7 +95,10 @@ const toApiIngredient = (i: FormulaIngredient) => ({
     isParaben: i.is_paraben ?? null,
     isFragrance: i.is_fragrance ?? null,
     cosmosCompliant: i.cosmos_compliant ?? null,
-    comedogenicRating: i.comedogenic_rating ?? null
+    comedogenicRating: i.comedogenic_rating ?? null,
+    ionicCharge: i.ionic_charge ?? null,
+    optimalPhMin: i.optimal_ph_min ?? null,
+    optimalPhMax: i.optimal_ph_max ?? null
 });
 
 const FormulationEditor = () => {

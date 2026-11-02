@@ -17,7 +17,7 @@ public class ProfileConstraintRule implements ValidationRule {
         boolean hasEmulsifier = request.ingredients().stream().anyMatch(i -> 
             i.percentage() > 0 && i.function() != null && i.function().contains("Emulsifier"));
         boolean hasPreservative = request.ingredients().stream().anyMatch(i -> 
-            i.percentage() > 0 && "Preservative".equals(i.function()));
+            i.percentage() > 0 && i.function() != null && i.function().startsWith("Preservative") && !i.function().contains("Booster"));
 
         if (request.profile().requiresWater() && !hasWater) {
             response.addAlert("error", "Profile requires a water phase.");
