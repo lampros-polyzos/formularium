@@ -2,6 +2,7 @@ package com.demiurgio.formularium.rules.interactions;
 
 import com.demiurgio.formularium.dto.FormulaIngredient;
 
+import com.demiurgio.formularium.dto.Fix;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -45,7 +46,8 @@ public final class StabilityChecks {
                         .map(i -> i.displayName() + " " + range(i)).toList());
                 c.conflict("Outside the pH Window",
                         "At your target pH of " + num(ph) + " these ingredients won't work properly or may break down: " + detail + ".",
-                        "Adjust the target pH, or replace the ingredients whose window doesn't fit.");
+                        "Adjust the target pH, or replace the ingredients whose window doesn't fit.",
+                phFix(windowed));
             }
         } else if (windowed.size() >= 2) {
             FormulaIngredient highestMin = windowed.stream().max(Comparator.comparingDouble(FormulaIngredient::optimalPhMin)).orElseThrow();
@@ -63,12 +65,14 @@ public final class StabilityChecks {
             String acetateNote = c.has(TOCOPHERYL_ACETATE) ? " Tocopheryl acetate doesn't protect oils; only free tocopherol does." : "";
             c.tip("Protect Fragile Oils",
                     c.names(FRAGILE_OIL) + " is rich in polyunsaturated fats and goes rancid quickly." + acetateNote,
-                    "Add 0.5% tocopherol (vitamin E) or 0.1-0.2% rosemary CO2 extract to the oil phase.");
+                    "Add 0.5% tocopherol (vitamin E) or 0.1-0.2% rosemary CO2 extract to the oil phase.",
+                Fix.add("antioxidant", "Add an antioxidant"));
         }
         if (c.has(OXIDATION_PRONE) && !c.has(OIL_ANTIOXIDANT)) {
             c.tip("Shield Sensitive Actives",
                     c.names(OXIDATION_PRONE) + " degrades with air and light.",
-                    "Add 0.5% tocopherol, add it during cool-down and use opaque, airless packaging.");
+                    "Add 0.5% tocopherol, add it during cool-down and use opaque, airless packaging.",
+                Fix.add("antioxidant", "Add an antioxidant"));
         }
         if (c.has(L_ASCORBIC_ACID) && c.hasWater()) {
             c.tip("L-Ascorbic Acid Oxidizes in Water",
@@ -78,7 +82,8 @@ public final class StabilityChecks {
         if (c.has(KOJIC_ACID) && !c.has(CHELATOR)) {
             c.tip("Kojic Acid Browning",
                     "Kojic acid reacts with trace metals and turns products yellow-brown.",
-                    "Add 0.1-0.2% chelator plus an antioxidant, or switch to kojic dipalmitate, which doesn't discolor.");
+                    "Add 0.1-0.2% chelator plus an antioxidant, or switch to kojic dipalmitate, which doesn't discolor.",
+                Fix.add("chelator", "Add a chelator"));
         }
     }
 
@@ -106,7 +111,8 @@ public final class StabilityChecks {
             if (!c.has(PHOTOSTABILIZER)) {
                 c.conflict("Unstable Avobenzone",
                         "Avobenzone loses most of its UVA protection within an hour of sun exposure unless it is stabilized.",
-                        "Add octocrylene or bemotrizinol (Tinosorb S).");
+                        "Add octocrylene or bemotrizinol (Tinosorb S).",
+                Fix.add("photostabilizer", "Add a stabilizer"));
             }
             if (c.has(MINERAL_UV)) {
                 c.conflict("Avobenzone + Mineral Filters",
@@ -145,6 +151,15 @@ public final class StabilityChecks {
                     "More than 10% alcohol in a leave-on product can dry and irritate the skin.",
                     "Balance it with glycerin or reduce the alcohol.");
         }
+    }
+
+    /** A pH inside every ingredient's window, when one exists. */
+    private static Fix phFix(List<FormulaIngredient> windowed) {
+        double low = windowed.stream().mapToDouble(FormulaIngredient::optimalPhMin).max().orElse(0);
+        double high = windowed.stream().mapToDouble(FormulaIngredient::optimalPhMax).min().orElse(14);
+        if (low > high) return null;
+        double middle = Math.min(Math.max(Math.round((low + high) / 2 * 10) / 10.0, low), high);
+        return Fix.setPh(middle, "Set pH to " + num(middle));
     }
 
     private static String range(FormulaIngredient i) {

@@ -1,5 +1,7 @@
 package com.demiurgio.formularium.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,11 +13,20 @@ public class ValidationResponse {
     public ValidationResponse() {}
 
     public void addAlert(String type, String message) {
-        alerts.add(new Alert(type, message));
+        alerts.add(new Alert(type, message, null));
+    }
+
+    /** {@code fix} may be null when there is no one-click remedy. */
+    public void addAlert(String type, String message, Fix fix) {
+        alerts.add(new Alert(type, message, fix));
     }
 
     public void addRecommendation(String type, String title, String message, String action) {
-        recommendations.add(new Recommendation(type, title, message, action));
+        recommendations.add(new Recommendation(type, title, message, action, null));
+    }
+
+    public void addRecommendation(String type, String title, String message, String action, Fix fix) {
+        recommendations.add(new Recommendation(type, title, message, action, fix));
     }
 
     // Helper method to add a single violation
@@ -47,12 +58,23 @@ public class ValidationResponse {
         this.claimViolations = claimViolations;
     }
 
-    public record Alert(String type, String message) {}
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Alert(String type, String message, Fix fix) {
+        public Alert(String type, String message) {
+            this(type, message, null);
+        }
+    }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Recommendation(
         String type,
         String title,
         String message,
-        String action
-    ) {}
+        String action,
+        Fix fix
+    ) {
+        public Recommendation(String type, String title, String message, String action) {
+            this(type, title, message, action, null);
+        }
+    }
 }

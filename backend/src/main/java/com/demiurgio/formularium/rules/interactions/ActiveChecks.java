@@ -1,5 +1,7 @@
 package com.demiurgio.formularium.rules.interactions;
 
+import com.demiurgio.formularium.dto.Fix;
+import com.demiurgio.formularium.dto.FormulaIngredient;
 import java.util.Locale;
 
 import static com.demiurgio.formularium.rules.interactions.Tag.*;
@@ -42,7 +44,8 @@ public final class ActiveChecks {
             if (c.has(CHELATOR)) {
                 c.conflict("Copper Peptides + Chelator",
                         c.names(CHELATOR) + " binds metal ions and will pull the copper out of " + c.names(COPPER_PEPTIDE) + ".",
-                        "Leave the chelator out of copper peptide formulas.");
+                        "Leave the chelator out of copper peptide formulas.",
+                Fix.remove(c.with(CHELATOR).stream().map(FormulaIngredient::id).toList(), "Remove the chelator"));
             }
         }
         if (c.has(PEPTIDE) && (c.hasAny(AHA, BHA) || c.phBelow(4))) {
@@ -103,7 +106,8 @@ public final class ActiveChecks {
         } else if (c.has(L_ASCORBIC_ACID) && (c.has(VITAMIN_E) || c.has(FERULIC_ACID))) {
             c.tip("Complete the C + E + Ferulic Trio",
                     "You have " + c.names(L_ASCORBIC_ACID, VITAMIN_E, FERULIC_ACID) + ". Adding the missing partner makes vitamin C much more stable and effective.",
-                    c.has(FERULIC_ACID) ? "Add 0.5-1% tocopherol." : "Add 0.5% ferulic acid, pre-dissolved in propanediol or alcohol.");
+                    c.has(FERULIC_ACID) ? "Add 0.5-1% tocopherol." : "Add 0.5% ferulic acid, pre-dissolved in propanediol or alcohol.",
+                c.has(FERULIC_ACID) ? Fix.add("antioxidant", "Add vitamin E") : Fix.add("ferulic", "Add ferulic acid"));
         }
         if (c.has(NIACINAMIDE) && c.hasAny(ACETYL_GLUCOSAMINE, VITAMIN_C_DERIVATIVE, TRANEXAMIC_ACID, ARBUTIN, LICORICE)) {
             c.synergy("Brightening Team",
@@ -155,7 +159,8 @@ public final class ActiveChecks {
             } else {
                 c.tip("Add a Soothing Ingredient",
                         c.names(AHA, BHA, STRONG_RETINOID, L_ASCORBIC_ACID, BENZOYL_PEROXIDE) + " can irritate, and nothing in the formula calms the skin.",
-                        "Add 1-5% panthenol, 0.1-0.5% allantoin or 0.2-0.5% bisabolol.");
+                        "Add 1-5% panthenol, 0.1-0.5% allantoin or 0.2-0.5% bisabolol.",
+                Fix.add("soother", "Add a soother"));
             }
         }
     }

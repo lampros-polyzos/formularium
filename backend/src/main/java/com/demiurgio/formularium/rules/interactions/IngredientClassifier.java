@@ -124,7 +124,9 @@ public final class IngredientClassifier {
         if (fn.startsWith("preservative") && !fn.contains("booster")) {
             t.add(PRESERVATIVE);
             // Narrow-spectrum systems; everything else is treated as broad-spectrum
-            boolean sorbateAlone = (inci.contains("sorbate") || inci.contains("sorbic")) && !inci.contains("benzo") && !inci.contains("phenoxy");
+            // Sorbates only cover mold and yeast, unless blended with something antibacterial (benzoate, benzyl alcohol, phenoxyethanol)
+            boolean antibacterialPartner = inci.contains("benzo") || inci.contains("benzyl alcohol") || inci.contains("phenoxy") || inci.contains("hydroxamic");
+            boolean sorbateAlone = (inci.contains("sorbate") || inci.contains("sorbic")) && !antibacterialPartner;
             boolean dehydroacetateAlone = inci.contains("dehydroacet") && !inci.contains("benzyl alcohol");
             if (sorbateAlone || dehydroacetateAlone || inci.contains("anisate") || inci.contains("levulinate")) t.add(ANTIFUNGAL_ONLY);
             if (inci.contains("leuconostoc")) t.add(ANTIBACTERIAL_ONLY);

@@ -29,6 +29,6 @@ public class IngredientInteractionRule implements ValidationRule {
     public void evaluate(ValidationRequest request, ValidationResponse response) {
         FormulaContext context = new FormulaContext(request);
         CHECKS.forEach(check -> check.accept(context));
-        context.results().forEach(r -> response.addRecommendation(r.type(), r.title(), r.message(), r.action()));
+        context.results().forEach(r -> response.addRecommendation(r.type(), r.title(), r.message(), r.action(), r.fix()));
     }
 }

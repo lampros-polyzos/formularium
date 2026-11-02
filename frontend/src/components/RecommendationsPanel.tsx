@@ -1,17 +1,24 @@
 import React from 'react';
+import FixButton from './FixButton';
+import type { Fix } from '../types/fixes';
 
 export interface RecommendationItem {
     type: 'conflict' | 'synergy' | 'tip';
     title: string;
     message: string;
     action?: string;
+    fix?: Fix;
 }
 
 interface RecommendationsPanelProps {
     recommendations?: RecommendationItem[];
+    /** Carries out a fix. Without it, no fix buttons are shown. */
+    onFix?: (fix: Fix) => void;
+    /** Hides fixes that no longer apply. */
+    canFix?: (fix: Fix) => boolean;
 }
 
-const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ recommendations = [] }) => {
+const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ recommendations = [], onFix, canFix }) => {
     return (
         <div className="bg-white border border-[#c1d1b9] rounded-lg p-4 shadow-sm">
             <h3 className="text-sm font-bold uppercase tracking-wider text-[#1f382a] mb-3 flex items-center justify-between">
@@ -63,6 +70,9 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ recommendat
                                         <span className="text-gray-500 font-normal">Action: </span>
                                         {rec.action}
                                     </div>
+                                )}
+                                {rec.fix && onFix && (canFix ? canFix(rec.fix) : true) && (
+                                    <div className="mt-2"><FixButton fix={rec.fix} onFix={onFix} /></div>
                                 )}
                             </div>
                         );

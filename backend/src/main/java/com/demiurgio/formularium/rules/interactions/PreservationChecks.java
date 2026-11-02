@@ -2,6 +2,7 @@ package com.demiurgio.formularium.rules.interactions;
 
 import com.demiurgio.formularium.dto.FormulaIngredient;
 
+import com.demiurgio.formularium.dto.Fix;
 import java.util.List;
 
 import static com.demiurgio.formularium.rules.interactions.Tag.*;
@@ -19,12 +20,14 @@ public final class PreservationChecks {
             if (c.has(PRESERVATIVE_BOOSTER)) {
                 c.conflict("Booster Is Not a Preservative",
                         c.names(PRESERVATIVE_BOOSTER) + " strengthens preservatives but can't protect a water-based product on its own.",
-                        "Add a broad-spectrum preservative and keep the booster alongside it.");
+                        "Add a broad-spectrum preservative and keep the booster alongside it.",
+                Fix.add("preservative", "Add a preservative"));
             } else if (!c.profileRequiresPreservative()) {
                 // Profiles that require one already raise an error
                 c.conflict("No Preservative",
                         "This formula contains water but no preservative, so bacteria, yeast and mold can grow in it within days.",
-                        "Add a broad-spectrum preservative at the supplier's recommended rate.");
+                        "Add a broad-spectrum preservative at the supplier's recommended rate.",
+                Fix.add("preservative", "Add a preservative"));
             }
         } else {
             spectrum(c);
@@ -40,7 +43,8 @@ public final class PreservationChecks {
             } else if (c.hasAny(CLAY, BOTANICAL)) {
                 c.tip("Add a Chelator",
                         c.names(CLAY, BOTANICAL) + " brings in trace metals that weaken preservatives and cause discoloration.",
-                        "Add 0.1-0.2% disodium EDTA, sodium phytate or GLDA.");
+                        "Add 0.1-0.2% disodium EDTA, sodium phytate or GLDA.",
+                Fix.add("chelator", "Add a chelator"));
             }
         }
 
@@ -58,12 +62,14 @@ public final class PreservationChecks {
         if (!bacteria) {
             c.conflict("No Protection Against Bacteria",
                     c.names(PRESERVATIVE) + " mainly protects against yeast and mold.",
-                    "Pair it with an antibacterial preservative such as phenoxyethanol, benzyl alcohol or a glyceryl caprylate system.");
+                    "Pair it with an antibacterial preservative such as phenoxyethanol, benzyl alcohol or a glyceryl caprylate system.",
+                Fix.add("preservative", "Add a preservative"));
         }
         if (!fungi) {
             c.conflict("No Protection Against Mold",
                     c.names(PRESERVATIVE) + " is weak against mold and yeast.",
-                    "Pair it with an antifungal such as potassium sorbate or sodium dehydroacetate (check the pH range).");
+                    "Pair it with an antifungal such as potassium sorbate or sodium dehydroacetate (check the pH range).",
+                Fix.add("preservative", "Add a preservative"));
         }
     }
 }

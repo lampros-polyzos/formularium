@@ -1,5 +1,6 @@
 package com.demiurgio.formularium.rules.interactions;
 
+import com.demiurgio.formularium.dto.Fix;
 import com.demiurgio.formularium.dto.FormulaIngredient;
 import com.demiurgio.formularium.dto.ValidationRequest;
 import com.demiurgio.formularium.dto.ValidationResponse.Recommendation;
@@ -103,19 +104,27 @@ public final class FormulaContext {
     // ---------- Findings ----------
 
     public void conflict(String title, String message, String action) {
-        add("conflict", title, message, action);
+        add("conflict", title, message, action, null);
+    }
+
+    public void conflict(String title, String message, String action, Fix fix) {
+        add("conflict", title, message, action, fix);
     }
 
     public void synergy(String title, String message, String action) {
-        add("synergy", title, message, action);
+        add("synergy", title, message, action, null);
     }
 
     public void tip(String title, String message, String action) {
-        add("tip", title, message, action);
+        add("tip", title, message, action, null);
     }
 
-    private void add(String type, String title, String message, String action) {
-        findings.putIfAbsent(title, new Recommendation(type, title, message, action));
+    public void tip(String title, String message, String action, Fix fix) {
+        add("tip", title, message, action, fix);
+    }
+
+    private void add(String type, String title, String message, String action, Fix fix) {
+        findings.putIfAbsent(title, new Recommendation(type, title, message, action, fix));
     }
 
     /** Conflicts first, then synergies, then tips, each in the order they were found. */

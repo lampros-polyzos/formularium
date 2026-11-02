@@ -208,6 +208,15 @@ class IngredientInteractionRuleTest {
     }
 
     @Test
+    void sorbicAcidBlendedWithBenzylAlcoholIsABroadPreservative() {
+        // Geogard ECT: benzyl alcohol covers bacteria, so there must be no "No Protection Against Bacteria" warning
+        FormulaIngredient geogardEct = ing("Benzyl Alcohol, Salicylic Acid, Glycerin, Sorbic Acid", "Geogard ECT", "Preservative", 0.8, "dispersible", "non-ionic", 3.0, 8.0);
+        List<Recommendation> recs = run(5.0, WATER, GLYCERIN, geogardEct);
+        assertFalse(has(recs, "conflict", "No Protection Against Bacteria"));
+        assertFalse(has(recs, "conflict", "No Protection Against Mold"));
+    }
+
+    @Test
     void preservativeWithBoosterAndChelatorAreSynergies() {
         List<Recommendation> recs = run(null, WATER, PE9010, PENTYLENE, EDTA);
         assertTrue(has(recs, "synergy", "Boosted Preservation"));

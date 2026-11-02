@@ -1,14 +1,22 @@
+import FixButton from './FixButton';
+import type { Fix } from '../types/fixes';
+
 type Alert = {
   type: 'error' | 'warning' | 'success';
   message: string;
+  fix?: Fix;
 };
 
 interface CompanionProps {
   alerts: Alert[];
   hasProfile: boolean;
+  /** Carries out a fix. Without it, no fix buttons are shown. */
+  onFix?: (fix: Fix) => void;
+  /** Hides fixes that no longer apply (already done, or nothing to change). */
+  canFix?: (fix: Fix) => boolean;
 }
 
-const FormulationCompanion = ({ alerts, hasProfile }: CompanionProps) => {
+const FormulationCompanion = ({ alerts, hasProfile, onFix, canFix }: CompanionProps) => {
   return (
     <div className="w-full lg:w-80 flex flex-col gap-6">
       <div className="bg-[#e4ebd3] rounded-lg border border-[#c1d1b9] overflow-hidden shadow-sm">
@@ -34,7 +42,12 @@ const FormulationCompanion = ({ alerts, hasProfile }: CompanionProps) => {
                   <span className={alert.type === 'error' ? 'text-red-500' : 'text-yellow-600'}>
                     {alert.type === 'error' ? '✖' : '⚠'}
                   </span>
-                  <span className="text-gray-700 leading-tight">{alert.message}</span>
+                  <div className="min-w-0">
+                    <span className="text-gray-700 leading-tight">{alert.message}</span>
+                    {alert.fix && onFix && (canFix ? canFix(alert.fix) : true) && (
+                      <div className="mt-1.5"><FixButton fix={alert.fix} onFix={onFix} /></div>
+                    )}
+                  </div>
                 </li>
               ))
             )}

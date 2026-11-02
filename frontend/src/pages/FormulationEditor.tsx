@@ -5,6 +5,12 @@ import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
 import { apiUrl } from '../lib/api';
 import { saveFormulation } from '../lib/saveFormulation';
+import { settleQS } from '../lib/qs';
+import { applyImmediateFix, isFixApplicable } from '../lib/fixes';
+import { CATEGORY_INFO, suggestIngredients } from '../lib/fixSuggestions';
+import type { Fix, FixCategory } from '../types/fixes';
+import FixSuggestionModal from '../components/FixSuggestionModal';
+import FixToast from '../components/FixToast';
 import { clearDraft, formulaSnapshot, loadDraft, saveDraft, type FormulaDraft } from '../lib/draftStore';
 import { useAutosave } from '../hooks/useAutosave';
 import AutosaveIndicator from '../components/AutosaveIndicator';
@@ -127,7 +133,7 @@ const FormulationEditor = () => {
 
     // Validation state
     const [profileId, setProfileId] = useState('');
-    const [alerts, setAlerts] = useState<{ type: 'error' | 'warning' | 'success', message: string }[]>([]);
+    const [alerts, setAlerts] = useState<{ type: 'error' | 'warning' | 'success', message: string, fix?: Fix }[]>([]);
     const [recommendations, setRecommendations] = useState<any[]>([]);
     const [activeProfile, setActiveProfile] = useState<ProfileConfig | null>(null);
     const [formulaId, setFormulaId] = useState<string | null>(null);
@@ -412,6 +418,52 @@ const FormulationEditor = () => {
         setSearchResults([]);
     };
 
+    // ---------- One-click fixes for alerts and insights ----------
+    const [fixPicker, setFixPicker] = useState<FixCategory | null>(null);
+    const [fixToast, setFixToast] = useState<{ message: string; afterSnapshot: string; undo: () => void } | null>(null);
+
+    const fixState = { ingredients: formulaIngredients, targetPh };
+    const canFix = (fix: Fix) => isFixApplicable(fix, fixState);
+
+    const handleFix = (fix: Fix) => {
+        // These two need a decision from the user, so they open a window instead of changing anything
+        if (fix.kind === 'balance') { setIsBalanceOpen(true); return; }
+        if (fix.kind === 'add-ingredient') { if (fix.category) setFixPicker(fix.category); return; }
+
+        // Values set by a fix are locked while Auto is on, so the next rebalance doesn't undo them
+        const result = applyImmediateFix(fix, fixState, { lockEdited: isAutoBalance });
+        if (!result) return;
+        const before = fixState;
+        // Settle the Q.S. ingredient now, so the formula is in its final state when the confirmation appears
+        const next = settleQS(fix.kind === 'remove-ingredient' ? withAutoBalance(result.state.ingredients) : result.state.ingredients);
+        setFormulaIngredients(next);
+        setTargetPh(result.state.targetPh);
+        setFixToast({
+            message: result.message,
+            afterSnapshot: formulaSnapshot({ name: projectName, profileId, targetWeight, targetPh: result.state.targetPh, ingredients: next }),
+            undo: () => {
+                setFormulaIngredients(before.ingredients);
+                setTargetPh(before.targetPh);
+                setFixToast(null);
+            },
+        });
+    };
+
+    const fixSuggestions = useMemo(() => (fixPicker
+        ? suggestIngredients(fixPicker, catalog, {
+            targetPh,
+            claims: targetClaims as string[],
+            inFormulaIds: new Set(formulaIngredients.map(i => i.id)),
+            stashIds: new Set(stashEntries.map(entry => entry.ingredient_id)),
+        })
+        : []), [fixPicker, catalog, targetPh, targetClaims, formulaIngredients, stashEntries]);
+
+    useEffect(() => {
+        if (!fixToast) return;
+        const timer = setTimeout(() => setFixToast(null), 10000);
+        return () => clearTimeout(timer);
+    }, [fixToast]);
+
     const handlePhaseChange = (index: number, newPhase: 'A' | 'B' | 'C') => {
         setFormulaIngredients(prev => {
             const updated = [...prev];
@@ -500,23 +552,8 @@ const FormulationEditor = () => {
 
     // Auto-balance the Q.S. ingredient
     useEffect(() => {
-        const qsIndex = formulaIngredients.findIndex(i => i.isQS);
-
-        if (qsIndex !== -1) {
-            const currentNonQsTotal = formulaIngredients
-                .filter((_, idx) => idx !== qsIndex)
-                .reduce((sum, i) => sum + (i.percentage || 0), 0);
-
-            const newBalance = Math.max(0, parseFloat((100 - currentNonQsTotal).toFixed(2)));
-
-            if (formulaIngredients[qsIndex].percentage !== newBalance) {
-                setFormulaIngredients(prev => {
-                    const updated = [...prev];
-                    updated[qsIndex].percentage = newBalance;
-                    return updated;
-                });
-            }
-        }
+        const settled = settleQS(formulaIngredients);
+        if (settled !== formulaIngredients) setFormulaIngredients(settled);
     }, [formulaIngredients]);
 
     // Run Validation via Spring Boot Backend
@@ -1567,6 +1604,8 @@ const FormulationEditor = () => {
                         <FormulationCompanion
                             alerts={alerts}
                             hasProfile={!!activeProfile}
+                            onFix={handleFix}
+                            canFix={canFix}
                         />
                     </div>
                     {/* Render the new Claims Panel */}
@@ -1580,7 +1619,7 @@ const FormulationEditor = () => {
                         />
                     </div>
                     <div data-tour="recommendations">
-                        <RecommendationsPanel recommendations={recommendations} />
+                        <RecommendationsPanel recommendations={recommendations} onFix={handleFix} canFix={canFix} />
                     </div>
                 </div>
 
@@ -1593,6 +1632,26 @@ const FormulationEditor = () => {
                 message={modal.message}
                 onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {fixPicker && (
+                <FixSuggestionModal
+                    category={fixPicker}
+                    suggestions={fixSuggestions}
+                    onPick={({ ingredient }) => {
+                        handleAddIngredient(ingredient as unknown as DatabaseIngredient);
+                        setFixPicker(null);
+                    }}
+                    onBrowse={() => {
+                        setSearchTerm(CATEGORY_INFO[fixPicker].search);
+                        setFixPicker(null);
+                    }}
+                    onClose={() => setFixPicker(null)}
+                />
+            )}
+
+            {fixToast && fixToast.afterSnapshot === snapshot && (
+                <FixToast message={fixToast.message} onUndo={fixToast.undo} onDismiss={() => setFixToast(null)} />
+            )}
 
             {balancePreview && (
                 <BalancePreviewModal

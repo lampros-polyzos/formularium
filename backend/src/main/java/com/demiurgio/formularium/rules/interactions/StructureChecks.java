@@ -2,6 +2,7 @@ package com.demiurgio.formularium.rules.interactions;
 
 import com.demiurgio.formularium.dto.FormulaIngredient;
 
+import com.demiurgio.formularium.dto.Fix;
 import java.util.List;
 import java.util.Locale;
 
@@ -48,7 +49,8 @@ public final class StructureChecks {
         if (c.has(CARBOMER) && !c.has(NEUTRALIZER)) {
             c.tip("Carbomer Needs Neutralizing",
                     c.names(CARBOMER) + " stays thin and cloudy until the pH is raised to about 6-7.",
-                    "Add sodium hydroxide (10-20% solution), triethanolamine or L-arginine drop by drop until it thickens.");
+                    "Add sodium hydroxide (10-20% solution), triethanolamine or L-arginine drop by drop until it thickens.",
+                Fix.add("neutralizer", "Add a neutralizer"));
         }
         if (c.has(POWDER_THICKENER)) {
             if (c.has(LIQUID_HUMECTANT)) {
@@ -97,7 +99,8 @@ public final class StructureChecks {
         if (c.hasWater() && !oils.isEmpty() && !c.hasAny(EMULSIFIER, SOLUBILIZER)) {
             c.conflict("Oil Will Separate",
                     FormulaContext.list(oils) + " won't mix into the water phase without an emulsifier or solubilizer.",
-                    "For a clear product add a solubilizer (about 3-5x the oil weight); for a lotion add an emulsifier.");
+                    "For a clear product add a solubilizer (about 3-5x the oil weight); for a lotion add an emulsifier.",
+                Fix.add("emulsifier", "Add an emulsifier"));
         }
         double fragranceInWater = c.percent(FRAGRANCE);
         double solubilizer = c.with(SOLUBILIZER).stream().filter(i -> !String.valueOf(i.function()).toLowerCase(Locale.ROOT).contains("surfactant")).mapToDouble(FormulaIngredient::percentage).sum();
