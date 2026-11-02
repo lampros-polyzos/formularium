@@ -11,6 +11,10 @@ import FormulationCostCalculator from '../components/FormulationCostCalculator';
 import { useSettings } from '../contexts/SettingsContext';
 import ShareFormulaModal from '../components/ShareFormulaModal';
 import Header from '../components/Header';
+import GuidedTour from '../components/GuidedTour';
+import { EDITOR_TOUR_STEPS } from '../components/editorTourSteps';
+
+const TOUR_SEEN_KEY = 'formularium.editorTourSeen';
 
 // 1. Define Types for the Database and Formula state
 type DatabaseIngredient = {
@@ -102,6 +106,23 @@ const FormulationEditor = () => {
     });
 
     const [showPrintMenu, setShowPrintMenu] = useState(false);
+    const [isTourOpen, setIsTourOpen] = useState(false);
+
+    // Show the guided tour automatically on a user's first visit
+    useEffect(() => {
+        try {
+            if (localStorage.getItem(TOUR_SEEN_KEY)) return;
+        } catch {
+            return; // storage blocked; don't nag on every visit
+        }
+        const timer = setTimeout(() => setIsTourOpen(true), 600); // let the layout settle first
+        return () => clearTimeout(timer);
+    }, []);
+
+    const closeTour = () => {
+        setIsTourOpen(false);
+        try { localStorage.setItem(TOUR_SEEN_KEY, '1'); } catch { /* ignore */ }
+    };
 
     useEffect(() => {
         const loadSavedFormulation = async () => {
@@ -740,8 +761,18 @@ const FormulationEditor = () => {
                 backPath="/studio"
                 backLabel="Back to Studio"
             >
+                {/* Page-Specific Action: Replay the guided tour */}
+                <button
+                    onClick={() => setIsTourOpen(true)}
+                    className="flex items-center gap-1.5 hover:text-[#2c4c3b] transition-colors"
+                    title="Take a guided tour of the editor"
+                >
+                    <span className="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-[11px] font-bold leading-none">?</span>
+                    Guide
+                </button>
+
                 {/* Page-Specific Action: Favorites Dropdown */}
-                <div className="relative">
+                <div className="relative" data-tour="favorites">
                     <button
                         onClick={() => setShowFavoritesMenu(!showFavoritesMenu)}
                         className="flex items-center gap-1.5 hover:text-[#2c4c3b] transition-colors"
@@ -832,7 +863,7 @@ const FormulationEditor = () => {
                         </h2>
 
                         {/* Action Buttons */}
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2" data-tour="actions">
                             <button
                                 onClick={handleSave}
                                 disabled={isSaving}
@@ -899,7 +930,7 @@ const FormulationEditor = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4 md:gap-8 w-full bg-transparent overflow-x-auto pb-2 -mt-1">
+                    <div className="flex items-center gap-4 md:gap-8 w-full bg-transparent overflow-x-auto pb-2 -mt-1" data-tour="settings">
 
                         {/* Profile Selector */}
                         <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
@@ -964,7 +995,7 @@ const FormulationEditor = () => {
                     </div>
 
                     {/* Search Ingredients Bar with Dropdown Container */}
-                    <div className="relative">
+                    <div className="relative" data-tour="search">
                         <div className="bg-white p-3 rounded-lg border border-[#c1d1b9] shadow-sm flex items-center gap-3">
                             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -997,7 +1028,7 @@ const FormulationEditor = () => {
                     </div>
 
                     {/* Phases Container */}
-                    <div className="bg-white border border-[#c1d1b9] rounded-lg shadow-sm overflow-hidden text-sm">
+                    <div className="bg-white border border-[#c1d1b9] rounded-lg shadow-sm overflow-hidden text-sm" data-tour="phases">
 
                         {(['A', 'B', 'C'] as const).map((phaseLetter) => {
                             const phaseNames = {
@@ -1157,7 +1188,7 @@ const FormulationEditor = () => {
                         })}
 
                         {/* Total Footer */}
-                        <div className="bg-[#f0f4ef] px-4 py-3 text-right font-medium flex justify-end gap-2 items-center border-t border-[#c1d1b9]">
+                        <div className="bg-[#f0f4ef] px-4 py-3 text-right font-medium flex justify-end gap-2 items-center border-t border-[#c1d1b9]" data-tour="total">
                             <span>
                                 Total: {currentTotalPercentage.toFixed(2)}% | {((currentTotalPercentage / 100) * targetWeight).toFixed(2)}g
                                 {targetWeight > 0 && ` (of ${targetWeight.toFixed(2)}g target)`}
@@ -1172,7 +1203,9 @@ const FormulationEditor = () => {
                             )}
                         </div>
                     </div>
-                    <FormulationCostCalculator formulaIngredients={calculatorIngredients} currencySymbol={currency} initialBatchSize={targetWeight} />
+                    <div data-tour="cost">
+                        <FormulationCostCalculator formulaIngredients={calculatorIngredients} currencySymbol={currency} initialBatchSize={targetWeight} />
+                    </div>
                 </div>
 
                 {/* Ingredient Details Modal */}
@@ -1266,19 +1299,25 @@ const FormulationEditor = () => {
 
                 {/* Right Column: Sidebar */}
                 <div className="flex flex-col gap-4 w-full lg:w-80">
-                    <FormulationCompanion
-                        alerts={alerts}
-                        hasProfile={!!activeProfile}
-                    />
+                    <div data-tour="companion">
+                        <FormulationCompanion
+                            alerts={alerts}
+                            hasProfile={!!activeProfile}
+                        />
+                    </div>
                     {/* Render the new Claims Panel */}
-                    <ClaimsPanel
-                        selectedClaims={targetClaims}
-                        violations={claimViolations}
-                        onChangeClaims={(newClaims) => {
-                            setTargetClaims(newClaims);
-                        }}
-                    />
-                    <RecommendationsPanel recommendations={recommendations} />
+                    <div data-tour="claims">
+                        <ClaimsPanel
+                            selectedClaims={targetClaims}
+                            violations={claimViolations}
+                            onChangeClaims={(newClaims) => {
+                                setTargetClaims(newClaims);
+                            }}
+                        />
+                    </div>
+                    <div data-tour="recommendations">
+                        <RecommendationsPanel recommendations={recommendations} />
+                    </div>
                 </div>
 
             </div>
@@ -1290,6 +1329,8 @@ const FormulationEditor = () => {
                 message={modal.message}
                 onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {isTourOpen && <GuidedTour steps={EDITOR_TOUR_STEPS} onClose={closeTour} />}
 
             <ShareFormulaModal
                 isOpen={isShareModalOpen}

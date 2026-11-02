@@ -80,7 +80,7 @@ export default function NotificationBell() {
                                         className="w-full text-left p-3 hover:bg-gray-50 transition-colors"
                                     >
                                         <p className="text-sm text-gray-800">
-                                            <strong>{notif.actor_name}</strong> commented on your post.
+                                            <strong>{notif.actor_name}</strong> {notif.type === 'rating' ? 'rated your recipe.' : 'commented on your post.'}
                                         </p>
                                         <p className="text-[10px] text-gray-400 mt-1">
                                             {new Date(notif.created_at).toLocaleDateString()}

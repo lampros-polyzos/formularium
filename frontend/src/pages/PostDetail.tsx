@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
+import RecipeRatings from '../components/RecipeRatings';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -312,7 +313,8 @@ export default function PostDetail() {
                 <div className="bg-white rounded-2xl shadow-sm border border-[#c1d1b9] overflow-hidden">
                     <div className="p-8 flex gap-6">
 
-                        {/* Rating Widget */}
+                        {/* Vote Widget (recipes use the star ratings section instead) */}
+                        {post.post_type !== 'formulation' && (
                         <div className="flex flex-col items-center gap-1 shrink-0 mt-2">
                             <button
                                 onClick={() => handleVote(1)}
@@ -332,6 +334,7 @@ export default function PostDetail() {
                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                             </button>
                         </div>
+                        )}
 
                         {/* Content Area */}
                         <div className="flex-1">
@@ -423,6 +426,16 @@ export default function PostDetail() {
                         </div>
                     )}
                 </div>
+
+                {/* Recipe Ratings */}
+                {post.post_type === 'formulation' && (
+                    <RecipeRatings
+                        postId={post.id}
+                        authorId={post.author_id}
+                        versions={snapshots.map(s => s.version)}
+                        activeVersion={activeVersion}
+                    />
+                )}
 
                 {/* Comments Section */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#c1d1b9] overflow-hidden">
