@@ -6,7 +6,6 @@ import {
   Copy,
   Check,
   ChevronDown,
-  BookOpen,
   Code,
   Plus,
 } from 'lucide-react';
@@ -14,6 +13,11 @@ import AuthModal from '../components/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { ARTICLES } from '../content/articles';
+import ArticleCard from '../components/content/ArticleCard';
+import CommunityCard from '../components/content/CommunityCard';
+import HeroIllustration from '../components/HeroIllustration';
+import { toCommunityArticle } from '../content/community';
 
 interface PreviewPost {
   id: string;
@@ -116,6 +120,13 @@ const LandingPage = () => {
     else openAuth(mode, path);
   };
 
+  // Two newest guides plus the newest community article, falling back to a third guide
+  const communityLatest = labNotes[0] ? toCommunityArticle({ ...labNotes[0], tags: labNotes[0].tags ?? null, write_up: labNotes[0].write_up ?? null }) : null;
+  const blogPreview = [
+    ...ARTICLES.slice(0, communityLatest ? 2 : 3).map((article) => ({ kind: 'guide' as const, article })),
+    ...(communityLatest ? [{ kind: 'community' as const, post: communityLatest }] : []),
+  ];
+
   const handleSearch = (e: SyntheticEvent) => {
     e.preventDefault();
     const q = searchQuery.trim();
@@ -160,6 +171,8 @@ const LandingPage = () => {
         <div className="flex items-center gap-6 text-[#2c4c3b] font-medium text-sm">
           <button onClick={() => goTo('/library')} className="hover:text-black hidden sm:block">Library</button>
           <button onClick={() => goTo('/community')} className="hover:text-black hidden sm:block">Community</button>
+          <button onClick={() => navigate('/learn')} className="hover:text-black hidden sm:block">Learn</button>
+          <button onClick={() => navigate('/blog')} className="hover:text-black hidden sm:block">Blog</button>
           <div>
             {user ? (
               <button
@@ -206,38 +219,8 @@ const LandingPage = () => {
             </div>
           </div>
 
-          {/* Hero UI Mockup Illustration */}
-          <div className="relative z-10 hidden lg:block">
-            <div className="bg-[#eef2eb] rounded-2xl shadow-xl p-6 border border-[#c1d1b9] transform rotate-1 translate-y-4 ml-8">
-              <div className="flex gap-2 mb-6 border-b border-[#d8e2d3] pb-3">
-                <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                <div className="w-3 h-3 rounded-full bg-green-400"></div>
-              </div>
-              <div className="font-bold text-[#1f382a] mb-4 text-lg">Step 2: Phasing</div>
-
-              <div className="space-y-3 relative">
-                <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-green-500">
-                  <span className="font-medium text-gray-700">Water</span>
-                  <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">73%</span>
-                </div>
-                <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-red-500 relative">
-                  <span className="font-medium text-gray-700">Salicylic Acid</span>
-                  <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">15%</span>
-
-                  {/* Traffic Light Tooltip */}
-                  <div className="absolute right-[-10px] top-[-45px] bg-white shadow-xl rounded-lg p-3 text-xs border border-red-100 z-20 w-48">
-                    <span className="text-red-600 font-bold block mb-1">⚠️ Salicylic Acid 15%</span>
-                    <span className="text-gray-500 block">(Recommended: 1-2%)</span>
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg p-3 text-sm shadow-sm flex justify-between items-center border-l-4 border-green-500">
-                  <span className="font-medium text-gray-700">Niacinamide</span>
-                  <span className="text-gray-500 bg-gray-100 px-2 py-1 rounded">2%</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Hero artwork */}
+          <HeroIllustration className="relative z-10 hidden lg:block w-full max-w-[560px] ml-auto drop-shadow-sm" />
         </div>
       </section>
 
@@ -459,29 +442,35 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Latest Lab Notes (education posts from the community) */}
-      {labNotes.length > 0 && (
-        <section className="px-6 md:px-12 py-20 bg-white">
-          <div className="max-w-7xl mx-auto">
-            <h2 className="text-3xl font-bold text-[#1f382a] mb-12 text-center">Latest from the Lab Notes</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {labNotes.map((post) => (
-                <button
-                  key={post.id}
-                  onClick={() => goTo(`/community/${post.id}`)}
-                  className="group text-left"
-                >
-                  <div className="bg-[#eef2eb] h-48 rounded-2xl mb-4 flex items-center justify-center text-[#8ca89b] border border-[#c1d1b9] group-hover:shadow-md transition-shadow">
-                    <BookOpen size={32} />
-                  </div>
-                  <h4 className="text-lg font-bold text-[#1f382a] mb-2 group-hover:text-[#2c4c3b] group-hover:underline transition-colors">{post.title}</h4>
-                  <p className="text-sm text-gray-600 line-clamp-2">{post.write_up}</p>
-                </button>
-              ))}
-            </div>
+      {/* From the blog: beginner guides plus the newest community article */}
+      <section className="px-6 md:px-12 py-20 bg-[#f7f8f6]">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-[#1f382a] mb-3">New to formulating? Start here</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">Plain-language guides and articles from the community, free for everyone.</p>
           </div>
-        </section>
-      )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {blogPreview.map((item) => item.kind === 'guide'
+              ? <ArticleCard key={item.article.slug} article={item.article} />
+              : (
+                <CommunityCard
+                  key={item.post.id}
+                  post={item.post}
+                  onOpen={() => goTo(`/community/${item.post.id}`)}
+                  membersOnly={!user}
+                />
+              ))}
+          </div>
+          <div className="flex flex-wrap justify-center gap-4 mt-10">
+            <button onClick={() => navigate('/blog')} className="px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors shadow-sm">
+              Read the blog
+            </button>
+            <button onClick={() => navigate('/learn')} className="px-6 py-3 border border-[#2c4c3b] text-[#2c4c3b] rounded-full font-medium hover:bg-white transition-colors">
+              Open the Learn hub
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* FAQ Section */}
       <section className="px-6 md:px-12 py-20 bg-[#f7f8f6]">
@@ -546,6 +535,8 @@ const LandingPage = () => {
               <ul className="space-y-2 text-gray-500">
                 <li><button onClick={() => goTo('/studio')} className="hover:text-[#1f382a]">Studio</button></li>
                 <li><button onClick={() => goTo('/library')} className="hover:text-[#1f382a]">Library</button></li>
+                <li><button onClick={() => navigate('/learn')} className="hover:text-[#1f382a]">Learn</button></li>
+                <li><button onClick={() => navigate('/blog')} className="hover:text-[#1f382a]">Blog</button></li>
                 <li><a href="#pricing" className="hover:text-[#1f382a]">Pricing</a></li>
               </ul>
             </div>

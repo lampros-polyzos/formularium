@@ -69,6 +69,12 @@ export default function Header({ title, backPath, backLabel, children }: HeaderP
                     <Link to="/community" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
                         Community
                     </Link>
+                    <Link to="/learn" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
+                        Learn
+                    </Link>
+                    <Link to="/blog" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
+                        Blog
+                    </Link>
 
                     {/* User Profile Dropdown */}
                     {user && (

@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import ScrollManager from './components/ScrollManager';
 import './App.css'
 import LandingPage from './pages/LandingPage';
 import StudioPage from './pages/StudioPage';
@@ -11,6 +12,9 @@ import ContainersPage from './pages/ContainersPage';
 import IngredientsLibraryPage from './pages/IngredientsLibraryPage';
 import CommunityFeed from './pages/CommunityFeed';
 import PostDetail from './pages/PostDetail';
+import BlogPage from './pages/BlogPage';
+import BlogArticlePage from './pages/BlogArticlePage';
+import LearnHubPage from './pages/LearnHubPage';
 
 function App() {
 
@@ -18,9 +22,13 @@ function App() {
     <AuthProvider>
       <SettingsProvider>
         <BrowserRouter>
+          <ScrollManager />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/blog" element={<BlogPage />} />
+            <Route path="/blog/:slug" element={<BlogArticlePage />} />
+            <Route path="/learn" element={<LearnHubPage />} />
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
