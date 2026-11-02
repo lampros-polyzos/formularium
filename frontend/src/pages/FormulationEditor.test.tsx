@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import FormulationEditor from './FormulationEditor';
+import { apiUrl } from '../lib/api';
 
 // Mock Auth Context
 vi.mock('../contexts/AuthContext', () => ({
@@ -115,7 +116,7 @@ describe('FormulationEditor Profile Selector', () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/validate',
+        apiUrl('/api/v1/validate'),
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -99,7 +99,7 @@ export const EDITOR_TOUR_STEPS: TourStep[] = [
         title: '9. Save, print & share',
         body: (
             <ul className="list-disc pl-4 space-y-1">
-                <li><strong>Save</strong> often. Click the project name to rename it.</li>
+                <li><strong>Save</strong> happens automatically a moment after you stop typing (watch the status next to the button). Click the project name to rename it.</li>
                 <li><strong>Clone</strong> makes a copy to try variations.</li>
                 <li><strong>Print</strong> a lab batch ticket, a shopping list or a PIF.</li>
                 <li><strong>Share</strong> publishes your recipe to the Community Hub.</li>

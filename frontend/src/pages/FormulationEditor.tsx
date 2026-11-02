@@ -1,8 +1,13 @@
-import { Fragment, useState, useEffect, useMemo } from 'react';
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
+import { apiUrl } from '../lib/api';
+import { saveFormulation } from '../lib/saveFormulation';
+import { clearDraft, formulaSnapshot, loadDraft, saveDraft, type FormulaDraft } from '../lib/draftStore';
+import { useAutosave } from '../hooks/useAutosave';
+import AutosaveIndicator from '../components/AutosaveIndicator';
 import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
 import { ClaimsPanel } from '../components/ClaimsPanel';
@@ -154,6 +159,12 @@ const FormulationEditor = () => {
     const [showPrintMenu, setShowPrintMenu] = useState(false);
     const [isTourOpen, setIsTourOpen] = useState(false);
 
+    // Autosave: which formula's data is loaded, and any unsaved work found from a previous session
+    const routeKey = !id || id === 'new' ? 'new' : id;
+    const [hydratedFor, setHydratedFor] = useState<string | null>(routeKey === 'new' ? 'new' : null);
+    const [pendingDraft, setPendingDraft] = useState<FormulaDraft | null>(() => (routeKey === 'new' ? loadDraft(null) : null));
+    const createdIdRef = useRef<string | null>(null);
+
     // Percentage balancing
     const [isBalanceOpen, setIsBalanceOpen] = useState(false);
     const [keepLipidLoad, setKeepLipidLoad] = useState(false);
@@ -254,6 +265,9 @@ const FormulationEditor = () => {
                 });
 
                 setFormulaIngredients(loadedIngredients);
+                // Autosave stays off until the whole formula has loaded, so a half-loaded state is never written back
+                setPendingDraft(loadDraft(id));
+                setHydratedFor(id);
 
             } catch (error) {
                 console.error("Error loading formulation:", error);
@@ -534,7 +548,7 @@ const FormulationEditor = () => {
             };
 
             try {
-                const response = await fetch('http://localhost:8080/api/v1/validate', {
+                const response = await fetch(apiUrl('/api/v1/validate'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -614,6 +628,75 @@ const FormulationEditor = () => {
             .filter(ing => ing.phase === phase);
     };
 
+    // ---------- Saving ----------
+    const snapshot = useMemo(
+        () => formulaSnapshot({ name: projectName, profileId, targetWeight, targetPh, ingredients: formulaIngredients }),
+        [projectName, profileId, targetWeight, targetPh, formulaIngredients]
+    );
+    const isReady = hydratedFor === routeKey;
+    const canAutosave = isReady && !!user && !!profileId && (!!formulaId || formulaIngredients.length > 0);
+
+    const persist = async () => {
+        if (!user) throw new Error('You must be logged in to save.');
+        const existingId = formulaId ?? createdIdRef.current;
+        const savedId = await saveFormulation({
+            formulaId: existingId,
+            userId: user.id,
+            name: projectName,
+            profileId,
+            targetWeight,
+            targetPh,
+            ingredients: formulaIngredients.map(i => ({ id: i.id, phase: i.phase, percentage: i.percentage || 0, isQS: i.isQS || false })),
+        });
+        if (!existingId) {
+            createdIdRef.current = savedId;
+            setFormulaId(savedId);
+            clearDraft(null);
+            // From now on a reload opens this formula instead of a blank one
+            window.history.replaceState(window.history.state, '', `/studio/${savedId}`);
+        }
+    };
+
+    const autosave = useAutosave({ snapshot, ready: isReady, enabled: canAutosave, save: persist });
+
+    // Keep a local copy of unsaved work; remove it once everything is saved
+    const visibleDraft = pendingDraft && formulaSnapshot(pendingDraft) !== snapshot ? pendingDraft : null;
+    useEffect(() => {
+        if (!isReady || visibleDraft) return;
+        if (!autosave.dirty) {
+            clearDraft(formulaId);
+            return;
+        }
+        const timer = setTimeout(() => saveDraft(formulaId, {
+            name: projectName,
+            profileId,
+            targetWeight,
+            targetPh,
+            ingredients: formulaIngredients.map(i => ({ ...i, substitutedFor: undefined })),
+        }), 400);
+        return () => clearTimeout(timer);
+    }, [isReady, visibleDraft, autosave.dirty, formulaId, projectName, profileId, targetWeight, targetPh, formulaIngredients]);
+
+    const restoreDraft = async () => {
+        const draft = pendingDraft;
+        if (!draft) return;
+        setPendingDraft(null);
+        setProjectName(draft.name);
+        setTargetWeight(draft.targetWeight);
+        setTargetPh(draft.targetPh);
+        setProfileId(draft.profileId);
+        setFormulaIngredients(draft.ingredients as unknown as FormulaIngredient[]);
+        if (draft.profileId) {
+            const { data } = await supabase.from('formulation_profiles').select('*').eq('id', draft.profileId).single();
+            if (data) setActiveProfile(data);
+        }
+    };
+
+    const discardDraft = () => {
+        clearDraft(formulaId);
+        setPendingDraft(null);
+    };
+
     const handleSave = async () => {
         if (!profileId) {
             setModal({ isOpen: true, type: 'error', title: 'Missing Profile', message: 'Please select a product profile before saving.' });
@@ -625,94 +708,17 @@ const FormulationEditor = () => {
         }
 
         setIsSaving(true);
-
-        try {
-            const formulationData = {
-                name: projectName,
-                profile_id: profileId,
-                target_weight_g: targetWeight,
-                target_ph: targetPh,
-                user_id: user.id,
-                status: 'Draft'
-            };
-
-            let currentFormulationId = formulaId;
-
-            if (currentFormulationId) {
-                const { error: updateError } = await supabase
-                    .from('formulations')
-                    .update(formulationData)
-                    .eq('id', currentFormulationId);
-
-                if (updateError) throw updateError;
-            } else {
-                const { data: newFormulation, error: insertError } = await supabase
-                    .from('formulations')
-                    .insert([formulationData])
-                    .select('id')
-                    .single();
-
-                if (insertError) throw insertError;
-                currentFormulationId = newFormulation.id;
-                setFormulaId(currentFormulationId);
-            }
-
-            if (formulaId) {
-                const { error: deleteError } = await supabase
-                    .from('formulation_phases')
-                    .delete()
-                    .eq('formulation_id', currentFormulationId);
-
-                if (deleteError) throw deleteError;
-            }
-
-            const uniquePhases = Array.from(new Set(formulaIngredients.map(ing => ing.phase)));
-
-            if (uniquePhases.length > 0) {
-                const phasesToInsert = uniquePhases.map(phaseLetter => ({
-                    formulation_id: currentFormulationId,
-                    phase_letter: phaseLetter
-                }));
-
-                const { data: insertedPhases, error: phaseError } = await supabase
-                    .from('formulation_phases')
-                    .insert(phasesToInsert)
-                    .select('id, phase_letter');
-
-                if (phaseError) throw phaseError;
-
-                const sortedIngredients = [...formulaIngredients].sort((a, b) => {
-                    if (a.phase < b.phase) return -1;
-                    if (a.phase > b.phase) return 1;
-                    return (b.percentage || 0) - (a.percentage || 0);
-                });
-
-                const ingredientsToInsert = sortedIngredients.map(ing => {
-                    const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
-                    return {
-                        phase_id: matchedPhase!.id,
-                        ingredient_id: ing.id,
-                        percentage: ing.percentage,
-                        is_qs: ing.isQS || false
-                    };
-                });
-
-                const { error: ingredientsError } = await supabase
-                    .from('formulation_ingredients')
-                    .insert(ingredientsToInsert);
-
-                if (ingredientsError) throw ingredientsError;
-
-                setFormulaIngredients(sortedIngredients);
-            }
-
+        const failure = await autosave.saveNow();
+        if (failure) {
+            console.error("Error saving formula:", failure);
+            setModal({ isOpen: true, type: 'error', title: 'Save Failed', message: `Failed to save project: ${failure}` });
+        } else {
+            // Show the rows the way they are stored: by phase, largest first
+            setFormulaIngredients(prev => [...prev].sort((a, b) =>
+                a.phase < b.phase ? -1 : a.phase > b.phase ? 1 : (b.percentage || 0) - (a.percentage || 0)));
             setModal({ isOpen: true, type: 'success', title: 'Save Successful', message: 'Your project has been saved successfully.' });
-        } catch (error: any) {
-            console.error("Error saving formula:", error.message || error);
-            setModal({ isOpen: true, type: 'error', title: 'Save Failed', message: `Failed to save project: ${error.message || "Check the console for details."}` });
-        } finally {
-            setIsSaving(false);
         }
+        setIsSaving(false);
     };
 
     const handleClone = async () => {
@@ -825,7 +831,7 @@ const FormulationEditor = () => {
                 waterPhasePercentage: formulaIngredients.filter(i => i.phase === 'A' || i.solubility === 'water').reduce((sum, item) => sum + (item.percentage || 0), 0)
             };
 
-            const res = await fetch(`http://localhost:8080/api/v1/export/${documentType}`, {
+            const res = await fetch(apiUrl(`/api/v1/export/${documentType}`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -857,7 +863,7 @@ const FormulationEditor = () => {
 
         try {
             const payload = buildSourcingPayload(projectName || "Untitled Project", targetWeight || 100, targetPh, sourcing);
-            const res = await fetch(`http://localhost:8080/api/v1/export/sourcing`, {
+            const res = await fetch(apiUrl('/api/v1/export/sourcing'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -1001,6 +1007,15 @@ const FormulationEditor = () => {
 
                         {/* Action Buttons */}
                         <div className="flex flex-wrap items-center gap-2" data-tour="actions">
+                            <AutosaveIndicator
+                                status={autosave.status}
+                                error={autosave.error}
+                                lastSavedAt={autosave.lastSavedAt}
+                                isSavedFormula={!!formulaId}
+                                canAutosave={canAutosave}
+                                hasProfile={!!profileId}
+                                onRetry={() => { void autosave.saveNow(); }}
+                            />
                             <button
                                 onClick={handleSave}
                                 disabled={isSaving}
@@ -1074,6 +1089,19 @@ const FormulationEditor = () => {
                             </div>
                         </div>
                     </div>
+
+                    {visibleDraft && (
+                        <div role="alert" className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
+                            <span className="text-amber-900">
+                                We found unsaved changes from <strong>{new Date(visibleDraft.savedAt).toLocaleString()}</strong>
+                                {' '}({visibleDraft.ingredients.length} ingredient{visibleDraft.ingredients.length !== 1 && 's'}).
+                            </span>
+                            <span className="flex gap-2">
+                                <button onClick={restoreDraft} className="px-3 py-1 bg-[#1f382a] text-white rounded text-xs font-bold hover:bg-[#2c4c3b]">Restore</button>
+                                <button onClick={discardDraft} className="px-3 py-1 bg-white border border-amber-300 rounded text-xs font-bold text-amber-900 hover:bg-amber-100">Discard</button>
+                            </span>
+                        </div>
+                    )}
 
                     <div className="flex items-center gap-4 md:gap-8 w-full bg-transparent overflow-x-auto pb-2 -mt-1" data-tour="settings">
 
