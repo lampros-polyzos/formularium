@@ -11,8 +11,10 @@ import { CATEGORY_INFO, suggestIngredients } from '../lib/fixSuggestions';
 import type { Fix, FixCategory } from '../types/fixes';
 import FixSuggestionModal from '../components/FixSuggestionModal';
 import FixToast from '../components/FixToast';
+import MakeBatchModal from '../components/MakeBatchModal';
 import { clearDraft, formulaSnapshot, loadDraft, saveDraft, type FormulaDraft } from '../lib/draftStore';
 import { useAutosave } from '../hooks/useAutosave';
+import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import AutosaveIndicator from '../components/AutosaveIndicator';
 import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
@@ -26,7 +28,7 @@ import GuidedTour from '../components/GuidedTour';
 import { EDITOR_TOUR_STEPS } from '../components/editorTourSteps';
 import SubstitutionHint from '../components/SubstitutionHint';
 import BalancePreviewModal from '../components/BalancePreviewModal';
-import { Lock, LockOpen, Scale } from 'lucide-react';
+import { Lock, LockOpen, PackageCheck, Scale } from 'lucide-react';
 import { balanceFormula, inferKind, startingPercentage, type BalanceResult } from '../lib/autoBalance';
 import {
     analyzeFormula,
@@ -164,6 +166,7 @@ const FormulationEditor = () => {
 
     const [showPrintMenu, setShowPrintMenu] = useState(false);
     const [isTourOpen, setIsTourOpen] = useState(false);
+    const [isMakeBatchOpen, setIsMakeBatchOpen] = useState(false);
 
     // Autosave: which formula's data is loaded, and any unsaved work found from a previous session
     const routeKey = !id || id === 'new' ? 'new' : id;
@@ -1009,11 +1012,9 @@ const FormulationEditor = () => {
                 {/* Left Column: Formulation Panel */}
                 <div className="flex-1 flex flex-col gap-5">
 
-                    {/* NEW ROW 1: Header Actions (Title + Buttons) */}
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start md:items-center gap-4 w-full">
-                        {/* Editable Project Name */}
-                        <h2 className="text-2xl font-bold flex items-center gap-2">
-                            Formulation Studio:
+                    {/* Title and actions share one compact row */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 w-full">
+                        <div className="min-w-0 flex-1">
                             {isEditingName ? (
                                 <input
                                     type="text"
@@ -1022,104 +1023,123 @@ const FormulationEditor = () => {
                                     onBlur={() => setIsEditingName(false)}
                                     onKeyDown={handleNameKeyDown}
                                     autoFocus
-                                    className="font-normal text-gray-800 bg-white border border-[#c1d1b9] rounded px-2 py-0.5 text-xl outline-none focus:ring-1 focus:ring-[#2c4c3b] w-64 shadow-sm"
+                                    aria-label="Project name"
+                                    className="w-full max-w-md text-2xl font-bold text-[#1f382a] bg-white border border-[#c1d1b9] rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
                                 />
                             ) : (
-                                <span
-                                    className="font-normal text-gray-600 flex items-center gap-2 group cursor-pointer"
-                                    onClick={() => setIsEditingName(true)}
-                                >
-                                    {projectName}
+                                <h2 className="text-2xl font-bold text-[#1f382a] min-w-0">
                                     <button
-                                        className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-[#2c4c3b]"
+                                        type="button"
+                                        onClick={() => setIsEditingName(true)}
                                         aria-label="Edit project name"
+                                        title="Click to rename"
+                                        className="group flex items-center gap-2 max-w-full text-left"
                                     >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <span className="truncate">{projectName}</span>
+                                        <svg className="w-4 h-4 shrink-0 text-gray-400 group-hover:text-[#2c4c3b] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
                                     </button>
-                                </span>
+                                </h2>
                             )}
-                        </h2>
+                            <div className="mt-0.5 min-h-[1rem]">
+                                <AutosaveIndicator
+                                    status={autosave.status}
+                                    error={autosave.error}
+                                    lastSavedAt={autosave.lastSavedAt}
+                                    isSavedFormula={!!formulaId}
+                                    canAutosave={canAutosave}
+                                    hasProfile={!!profileId}
+                                    onRetry={() => { void autosave.saveNow(); }}
+                                />
+                            </div>
+                        </div>
 
                         {/* Action Buttons */}
-                        <div className="flex flex-wrap items-center gap-2" data-tour="actions">
-                            <AutosaveIndicator
-                                status={autosave.status}
-                                error={autosave.error}
-                                lastSavedAt={autosave.lastSavedAt}
-                                isSavedFormula={!!formulaId}
-                                canAutosave={canAutosave}
-                                hasProfile={!!profileId}
-                                onRetry={() => { void autosave.saveNow(); }}
-                            />
+                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0" data-tour="actions">
                             <button
                                 onClick={handleSave}
                                 disabled={isSaving}
-                                className={`px-4 py-1.5 text-white rounded shadow-sm text-sm font-medium transition-colors 
+                                className={`px-4 py-1.5 text-white rounded shadow-sm text-sm font-medium transition-colors
                                     ${isSaving ? 'bg-[#3a5a4a] cursor-not-allowed' : 'bg-[#1f382a] hover:bg-[#2c4c3b]'}`}
                             >
                                 {isSaving ? 'Saving...' : 'Save'}
                             </button>
                             <button
-                                onClick={handleClone}
-                                disabled={isSaving || !formulaId}
-                                title={!formulaId ? "Save this project first before cloning" : "Duplicate this formula"}
-                                className={`px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium transition-colors
-                                    ${isSaving || !formulaId ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                                onClick={() => setIsMakeBatchOpen(true)}
+                                disabled={isSaving || formulaIngredients.length === 0}
+                                title={formulaIngredients.length === 0 ? "Add ingredients first" : "Log a real batch of this formula, optionally using up your stash"}
+                                className={`px-3 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap
+                                    ${isSaving || formulaIngredients.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
                             >
-                                Clone
+                                <PackageCheck size={14} aria-hidden /> Make batch
                             </button>
                             <button
                                 onClick={() => setIsShareModalOpen(true)}
                                 disabled={isSaving || !isHealthCheckPassed}
                                 title={!isHealthCheckPassed ? "Resolve all companion warnings to share this formula" : "Publish this recipe to the Community Hub"}
-                                className={`px-4 py-1.5 border rounded shadow-sm text-sm font-bold transition-colors flex items-center gap-1
+                                className={`px-3 py-1.5 border rounded shadow-sm text-sm font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap
                                     ${(isSaving || !isHealthCheckPassed)
                                         ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
                                         : 'bg-[#e9eee7] text-[#2c4c3b] border-[#c1d1b9] hover:bg-[#dbe3da]'}`}
                             >
-                                <span>🌎</span> Share
+                                <span aria-hidden>🌎</span> Share
                             </button>
                             <div className="relative">
                                 <button
                                     onClick={() => setShowPrintMenu(!showPrintMenu)}
                                     disabled={isSaving}
-                                    className="px-4 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50 flex items-center gap-1 transition-colors"
+                                    aria-haspopup="menu"
+                                    aria-expanded={showPrintMenu}
+                                    className="px-3 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50 flex items-center gap-1 transition-colors"
                                 >
-                                    Print
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    More
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </button>
 
                                 {showPrintMenu && (
-                                    <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                                    <div role="menu" className="absolute right-0 mt-1 w-60 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
                                         <button
+                                            role="menuitem"
+                                            onClick={() => { setShowPrintMenu(false); void handleClone(); }}
+                                            disabled={!formulaId}
+                                            title={!formulaId ? "Save this project first before cloning" : "Duplicate this formula"}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Clone this formula <span className="text-xs text-gray-400" aria-hidden>⎘</span>
+                                        </button>
+                                        <div className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Print &amp; export</div>
+                                        <button
+                                            role="menuitem"
                                             onClick={() => handleExportPDF('batch')}
                                             className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center"
                                         >
-                                            Lab Batch Ticket <span className="text-xs text-gray-400">🖨️</span>
+                                            Lab Batch Ticket <span className="text-xs text-gray-400" aria-hidden>🖨️</span>
                                         </button>
                                         <button
+                                            role="menuitem"
                                             onClick={() => handleExportPDF('shopping')}
                                             className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center"
                                         >
-                                            Shopping List <span className="text-xs text-gray-400">🛒</span>
+                                            Shopping List <span className="text-xs text-gray-400" aria-hidden>🛒</span>
                                         </button>
                                         <button
+                                            role="menuitem"
                                             onClick={handleExportSourcing}
                                             disabled={sourcing.length === 0}
                                             title={sourcing.length === 0 ? "Add ingredients first" : "Stash check, substitutions and shopping options"}
                                             className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            Substitutions & Sourcing <span className="text-xs text-gray-400">⇄</span>
+                                            Substitutions &amp; Sourcing <span className="text-xs text-gray-400" aria-hidden>⇄</span>
                                         </button>
                                         <button
+                                            role="menuitem"
                                             onClick={() => handleExportPDF('pif')}
                                             className="w-full text-left px-4 py-2.5 text-sm font-medium text-[#2c4c3b] hover:bg-gray-50 flex justify-between items-center"
                                         >
-                                            Download PIF (PDF) <span className="text-xs text-[#2c4c3b]">↓</span>
+                                            Download PIF (PDF) <span className="text-xs text-[#2c4c3b]" aria-hidden>↓</span>
                                         </button>
                                     </div>
                                 )}
@@ -1632,6 +1652,29 @@ const FormulationEditor = () => {
                 message={modal.message}
                 onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {isMakeBatchOpen && user && (
+                <MakeBatchModal
+                    userId={user.id}
+                    formulationId={formulaId}
+                    formulaName={projectName}
+                    targetPh={targetPh}
+                    defaultBatchSizeG={targetWeight || 100}
+                    rows={formulaIngredients.map(i => ({
+                        ingredient_id: i.id,
+                        name: i.trade_name || i.inci_name,
+                        inci_name: i.inci_name || null,
+                        phase: i.phase,
+                        percentage: i.percentage || 0,
+                    }))}
+                    onClose={() => setIsMakeBatchOpen(false)}
+                    onCreated={(batchId) => {
+                        setIsMakeBatchOpen(false);
+                        notifyBatchesChanged();
+                        navigate(`/batches/${batchId}`);
+                    }}
+                />
+            )}
 
             {fixPicker && (
                 <FixSuggestionModal

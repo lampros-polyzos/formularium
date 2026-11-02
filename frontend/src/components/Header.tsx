@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
+import BatchesNavLink from './BatchesNavLink';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { SettingsModal } from './SettingsModal';
@@ -69,6 +70,7 @@ export default function Header({ title, backPath, backLabel, children }: HeaderP
                     <Link to="/community" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
                         Community
                     </Link>
+                    {user && <BatchesNavLink className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors" />}
                     <Link to="/learn" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
                         Learn
                     </Link>

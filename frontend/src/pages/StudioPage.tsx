@@ -6,6 +6,7 @@ import CustomModal from '../components/CustomModal';
 import { useSettings } from '../contexts/SettingsContext';
 import { SettingsModal } from '../components/SettingsModal';
 import Header from '../components/Header';
+import DueBadge from '../components/DueBadge';
 
 // Define the formula type based on your database schema
 type SavedFormula = {
@@ -114,6 +115,15 @@ const StudioPage = () => {
             className="w-full flex items-center gap-3 px-4 py-3 bg-[#e8f0e5] text-[#1f382a] rounded-xl font-medium transition-colors"
           >
             My Formulations
+          </button>
+
+          {/* Batches: what you've made and how it's aging */}
+          <button
+            onClick={() => navigate('/batches')}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl font-medium transition-colors"
+          >
+            Batches
+            <DueBadge />
           </button>
 
           {/* Personal Stash / Ingredients Inventory Button */}

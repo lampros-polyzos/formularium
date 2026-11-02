@@ -35,7 +35,7 @@ export const EDITOR_TOUR_STEPS: TourStep[] = [
         body: (
             <>
                 <p>Your formula is checked against your <strong>Stash</strong>. Anything you don't have, or don't have enough of, is marked in the table with <strong>swap suggestions</strong> from your own shelf or to buy.</p>
-                <p><strong>Print → Substitutions &amp; Sourcing</strong> gives you a shopping list with alternatives in case your shop doesn't carry an ingredient.</p>
+                <p><strong>More → Substitutions &amp; Sourcing</strong> gives you a shopping list with alternatives in case your shop doesn't carry an ingredient.</p>
             </>
         ),
     },
@@ -100,8 +100,8 @@ export const EDITOR_TOUR_STEPS: TourStep[] = [
         body: (
             <ul className="list-disc pl-4 space-y-1">
                 <li><strong>Save</strong> happens automatically a moment after you stop typing (watch the status next to the button). Click the project name to rename it.</li>
-                <li><strong>Clone</strong> makes a copy to try variations.</li>
-                <li><strong>Print</strong> a lab batch ticket, a shopping list or a PIF.</li>
+                <li><strong>More</strong> holds <strong>Clone</strong> (a copy to try variations) and everything you can print or export.</li>
+                <li><strong>Make batch</strong> logs a real batch. You see exactly what it would take from your stash and confirm before anything changes.</li>
                 <li><strong>Share</strong> publishes your recipe to the Community Hub.</li>
             </ul>
         ),

@@ -64,6 +64,7 @@ export const PRIVACY_POLICY: LegalDocument = {
             items: [
                 "Formulas, phases, percentages, batch sizes, target pH and marketing claims you save in the Studio.",
                 "Your stash (ingredients you own, amounts, prices), containers, favorites and starred ingredients.",
+                "Batch records: lot numbers, the ingredients and weights of batches you make, your notes, and stability check-ins.",
                 "Community posts, recipe versions, comments, ratings and reviews (including skin type, if you choose to give it), votes and notifications.",
             ],
         },

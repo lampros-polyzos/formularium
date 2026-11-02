@@ -16,6 +16,8 @@ import BlogPage from './pages/BlogPage';
 import BlogArticlePage from './pages/BlogArticlePage';
 import LearnHubPage from './pages/LearnHubPage';
 import LegalPage from './pages/LegalPage';
+import BatchesPage from './pages/BatchesPage';
+import BatchDetailPage from './pages/BatchDetailPage';
 import { PRIVACY_POLICY, TERMS_OF_USE } from './content/legal';
 
 function App() {
@@ -40,6 +42,8 @@ function App() {
               <Route path="/studio/new" element={<FormulationEditor />} />
               <Route path="/studio/:id" element={<FormulationEditor />} />
               <Route path="/stash" element={<StashPage />} />
+              <Route path="/batches" element={<BatchesPage />} />
+              <Route path="/batches/:id" element={<BatchDetailPage />} />
               <Route path="/containers" element={<ContainersPage />} />
               <Route path="/library" element={<IngredientsLibraryPage />} />
               <Route path="/community" element={<CommunityFeed />} />
