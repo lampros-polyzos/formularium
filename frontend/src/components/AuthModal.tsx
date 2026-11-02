@@ -160,6 +160,14 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
               {isLoading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
             </button>
           </form>
+
+          {/* Applies to email and Google sign-in alike */}
+          <p className="mt-5 text-center text-xs text-gray-500 leading-relaxed">
+            By continuing, you agree to our{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-[#2c4c3b] underline">Terms of Use</a>
+            {' '}and acknowledge our{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-[#2c4c3b] underline">Privacy Policy</a>.
+          </p>
         </div>
 
         <div className="px-8 py-5 bg-[#f7f8f6] border-t border-gray-100 text-center">

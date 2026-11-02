@@ -548,6 +548,13 @@ const LandingPage = () => {
                 <li><button onClick={() => goTo('/community')} className="hover:text-[#1f382a]">Community</button></li>
               </ul>
             </div>
+            <div>
+              <h4 className="font-bold text-[#1f382a] mb-4">Legal</h4>
+              <ul className="space-y-2 text-gray-500">
+                <li><button onClick={() => navigate('/privacy')} className="hover:text-[#1f382a]">Privacy Policy</button></li>
+                <li><button onClick={() => navigate('/terms')} className="hover:text-[#1f382a]">Terms of Use</button></li>
+              </ul>
+            </div>
           </div>
 
           <div className="flex gap-4">
@@ -564,6 +571,10 @@ const LandingPage = () => {
         </div>
         <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-gray-100 text-center text-sm text-gray-400">
           © {new Date().getFullYear()} Formularium. All rights reserved.
+          <span className="mx-2" aria-hidden>·</span>
+          <button onClick={() => navigate('/privacy')} className="hover:text-[#1f382a]">Privacy</button>
+          <span className="mx-2" aria-hidden>·</span>
+          <button onClick={() => navigate('/terms')} className="hover:text-[#1f382a]">Terms</button>
         </div>
       </footer>
     </div>

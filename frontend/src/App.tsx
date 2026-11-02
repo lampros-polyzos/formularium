@@ -15,6 +15,8 @@ import PostDetail from './pages/PostDetail';
 import BlogPage from './pages/BlogPage';
 import BlogArticlePage from './pages/BlogArticlePage';
 import LearnHubPage from './pages/LearnHubPage';
+import LegalPage from './pages/LegalPage';
+import { PRIVACY_POLICY, TERMS_OF_USE } from './content/legal';
 
 function App() {
 
@@ -29,6 +31,8 @@ function App() {
             <Route path="/blog" element={<BlogPage />} />
             <Route path="/blog/:slug" element={<BlogArticlePage />} />
             <Route path="/learn" element={<LearnHubPage />} />
+            <Route path="/privacy" element={<LegalPage document={PRIVACY_POLICY} />} />
+            <Route path="/terms" element={<LegalPage document={TERMS_OF_USE} />} />
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
