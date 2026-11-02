@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import NotificationBell from './NotificationBell';
 
 interface HeaderProps {
     title: string;
@@ -31,6 +32,7 @@ export default function Header({ title, backPath, backLabel, children }: HeaderP
             <div className="flex gap-6 text-sm font-medium items-center relative">
                 {/* Custom page-specific buttons injected here */}
                 {children}
+                <NotificationBell />
 
                 {/* Global Links (Always visible) */}
                 <Link to="/" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">

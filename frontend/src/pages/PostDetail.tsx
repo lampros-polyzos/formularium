@@ -14,7 +14,7 @@ interface Snapshot {
 
 interface Comment {
     id: string;
-    content: string;
+    body: string;
     author_name: string;
     created_at: string;
 }
@@ -175,7 +175,7 @@ export default function PostDetail() {
                     post_id: id as string,
                     author_id: user.id,
                     author_name: username || 'Anonymous Formulary',
-                    content: newComment.trim()
+                    body: newComment.trim()
                 }])
                 .select('*')
                 .single();
@@ -183,6 +183,17 @@ export default function PostDetail() {
             if (error) throw error;
             if (data) setComments(prev => [...prev, data]);
             setNewComment('');
+
+            // NEW: Send a notification to the post author (if it's not their own post)
+            if (post.author_id !== user.id) {
+                await supabase.from('notifications').insert([{
+                    recipient_id: post.author_id,
+                    actor_name: username || 'Someone',
+                    post_id: id as string,
+                    type: 'comment'
+                }]);
+            }
+
         } catch (error: any) {
             alert(`Failed to post comment: ${error.message}`);
         } finally {
@@ -437,7 +448,7 @@ export default function PostDetail() {
                                                     <span className="font-bold text-sm text-[#1f382a]">{comment.author_name || 'Anonymous User'}</span>
                                                     <span className="text-[10px] text-gray-400">{formatDate(comment.created_at)}</span>
                                                 </div>
-                                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{comment.content}</p>
+                                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{comment.body}</p>
                                             </div>
                                         </div>
                                     </div>
