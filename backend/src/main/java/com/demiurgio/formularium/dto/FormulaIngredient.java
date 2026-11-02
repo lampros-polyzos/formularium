@@ -16,5 +16,14 @@ public record FormulaIngredient(
     Boolean isParaben,
     Boolean isFragrance,
     Boolean cosmosCompliant,
-    Integer comedogenicRating
-) {}
+    Integer comedogenicRating,
+    // Optional: separate names for documents (name() combines both for the validation rules)
+    String inciName,
+    String tradeName,
+    String casNumber
+) {
+    /** Readable name for messages: the trade name when known, else the combined name. */
+    public String displayName() {
+        return tradeName != null && !tradeName.isBlank() ? tradeName : name;
+    }
+}

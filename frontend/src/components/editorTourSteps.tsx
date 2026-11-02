@@ -30,6 +30,16 @@ export const EDITOR_TOUR_STEPS: TourStep[] = [
         ),
     },
     {
+        target: 'sourcing',
+        title: 'Missing something? Swap it',
+        body: (
+            <>
+                <p>Your formula is checked against your <strong>Stash</strong>. Anything you don't have, or don't have enough of, is marked in the table with <strong>swap suggestions</strong> from your own shelf or to buy.</p>
+                <p><strong>Print → Substitutions &amp; Sourcing</strong> gives you a shopping list with alternatives in case your shop doesn't carry an ingredient.</p>
+            </>
+        ),
+    },
+    {
         target: 'phases',
         title: '3. Fine-tune your phases',
         body: (

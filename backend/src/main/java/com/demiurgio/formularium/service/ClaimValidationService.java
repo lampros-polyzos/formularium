@@ -23,38 +23,38 @@ public class ClaimValidationService {
                 switch (claim) {
                     case VEGAN -> {
                         if (Boolean.FALSE.equals(ing.isVegan())) {
-                            violations.add(new ClaimViolation(claim, ing.name(), "Ingredient is animal-derived or a byproduct."));
+                            violations.add(new ClaimViolation(claim, ing.displayName(), "Ingredient is animal-derived or a byproduct."));
                         }
                     }
                     case SULFATE_FREE -> {
                         if (Boolean.TRUE.equals(ing.isSulfate())) {
-                            violations.add(new ClaimViolation(claim, ing.name(), "Ingredient is an alkyl or ether sulfate."));
+                            violations.add(new ClaimViolation(claim, ing.displayName(), "Ingredient is an alkyl or ether sulfate."));
                         }
                     }
                     case SILICONE_FREE -> {
                         if (Boolean.TRUE.equals(ing.isSilicone())) {
-                            violations.add(new ClaimViolation(claim, ing.name(), "Ingredient contains siloxane or synthetic polymer chains."));
+                            violations.add(new ClaimViolation(claim, ing.displayName(), "Ingredient contains siloxane or synthetic polymer chains."));
                         }
                     }
                     case PARABEN_FREE -> {
                         if (Boolean.TRUE.equals(ing.isParaben())) {
-                            violations.add(new ClaimViolation(claim, ing.name(), "Ingredient is a paraben ester."));
+                            violations.add(new ClaimViolation(claim, ing.displayName(), "Ingredient is a paraben ester."));
                         }
                     }
                     case FRAGRANCE_FREE -> {
                         if (Boolean.TRUE.equals(ing.isFragrance())) {
-                            violations.add(new ClaimViolation(claim, ing.name(), "Ingredient is a synthetic fragrance or essential oil."));
+                            violations.add(new ClaimViolation(claim, ing.displayName(), "Ingredient is a synthetic fragrance or essential oil."));
                         }
                     }
                     case COSMOS -> {
                         if (Boolean.FALSE.equals(ing.cosmosCompliant())) {
-                            violations.add(new ClaimViolation(claim, ing.name(), "Ingredient is not COSMOS Natural/Organic certified."));
+                            violations.add(new ClaimViolation(claim, ing.displayName(), "Ingredient is not COSMOS Natural/Organic certified."));
                         }
                     }
                     case NON_COMEDOGENIC -> {
                         int rating = ing.comedogenicRating() != null ? ing.comedogenicRating() : 0;
                         if (rating > 2) {
-                            violations.add(new ClaimViolation(claim, ing.name(), "Comedogenic rating is " + rating + " (threshold is ≤2)."));
+                            violations.add(new ClaimViolation(claim, ing.displayName(), "Comedogenic rating is " + rating + " (threshold is 2 or lower)."));
                         }
                     }
                 }

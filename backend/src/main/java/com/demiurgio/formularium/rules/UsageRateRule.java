@@ -16,7 +16,7 @@ public class UsageRateRule implements ValidationRule {
         // Heat Sensitivity
         List<String> misplacedHeat = request.ingredients().stream()
                 .filter(i -> i != null && i.maxHeatingTempC() != null && i.maxHeatingTempC() < 50 && !"C".equals(i.phase()))
-                .map(i -> i.name()) // Lambda bypasses the strict null-safety warning
+                .map(i -> i.displayName()) // Lambda bypasses the strict null-safety warning
                 .collect(Collectors.toList());
 
         if (!misplacedHeat.isEmpty()) {
@@ -28,12 +28,12 @@ public class UsageRateRule implements ValidationRule {
             if (i.percentage() == 0) continue;
 
             if (i.maxPercentage() != null && i.percentage() > i.maxPercentage()) {
-                response.addAlert("error", String.format("%s is at %.2f%%, exceeding safe usage rate of %.2f%%.", i.name(), i.percentage(), i.maxPercentage()));
+                response.addAlert("error", String.format("%s is at %.2f%%, exceeding safe usage rate of %.2f%%.", i.displayName(), i.percentage(), i.maxPercentage()));
             }
 
             if (i.minPercentage() != null && i.percentage() < i.minPercentage()) {
                 String type = ("Preservative".equals(i.function()) || "Emulsifier".equals(i.function())) ? "error" : "warning";
-                response.addAlert(type, String.format("%s is at %.2f%%, below minimum effective rate of %.2f%%.", i.name(), i.percentage(), i.minPercentage()));
+                response.addAlert(type, String.format("%s is at %.2f%%, below minimum effective rate of %.2f%%.", i.displayName(), i.percentage(), i.minPercentage()));
             }
         }
     }

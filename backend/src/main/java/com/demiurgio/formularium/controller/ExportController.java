@@ -1,9 +1,11 @@
 package com.demiurgio.formularium.controller;
 
+import com.demiurgio.formularium.dto.SourcingGuideRequest;
 import com.demiurgio.formularium.dto.ValidationRequest;
 import com.demiurgio.formularium.export.BatchTicketPdfGenerator;
 import com.demiurgio.formularium.export.PifPdfGenerator;
 import com.demiurgio.formularium.export.ShoppingListPdfGenerator;
+import com.demiurgio.formularium.export.SourcingGuidePdfGenerator;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -19,11 +21,13 @@ public class ExportController {
     private final PifPdfGenerator pifGenerator;
     private final BatchTicketPdfGenerator batchGenerator;
     private final ShoppingListPdfGenerator shoppingGenerator;
+    private final SourcingGuidePdfGenerator sourcingGenerator;
 
-    public ExportController(PifPdfGenerator pifGenerator, BatchTicketPdfGenerator batchGenerator, ShoppingListPdfGenerator shoppingGenerator) {
+    public ExportController(PifPdfGenerator pifGenerator, BatchTicketPdfGenerator batchGenerator, ShoppingListPdfGenerator shoppingGenerator, SourcingGuidePdfGenerator sourcingGenerator) {
         this.pifGenerator = pifGenerator;
         this.batchGenerator = batchGenerator;
         this.shoppingGenerator = shoppingGenerator;
+        this.sourcingGenerator = sourcingGenerator;
     }
 
     @PostMapping("/pif")
@@ -39,6 +43,11 @@ public class ExportController {
     @PostMapping("/shopping")
     public ResponseEntity<byte[]> exportShoppingList(@RequestBody ValidationRequest request) {
         return buildPdfResponse(shoppingGenerator.generate(request), "Shopping_List.pdf");
+    }
+
+    @PostMapping("/sourcing")
+    public ResponseEntity<byte[]> exportSourcingGuide(@RequestBody SourcingGuideRequest request) {
+        return buildPdfResponse(sourcingGenerator.generate(request), "Sourcing_Guide.pdf");
     }
 
     // Helper method to reduce boilerplate

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
@@ -13,8 +13,18 @@ import ShareFormulaModal from '../components/ShareFormulaModal';
 import Header from '../components/Header';
 import GuidedTour from '../components/GuidedTour';
 import { EDITOR_TOUR_STEPS } from '../components/editorTourSteps';
+import SubstitutionHint from '../components/SubstitutionHint';
+import {
+    analyzeFormula,
+    buildSourcingPayload,
+    displayName,
+    type CatalogIngredient,
+    type StashEntry,
+    type SubstituteOption,
+} from '../lib/substitutions';
 
 const TOUR_SEEN_KEY = 'formularium.editorTourSeen';
+const STASH_CHECK_KEY = 'formularium.stashCheckHidden';
 
 // 1. Define Types for the Database and Formula state
 type DatabaseIngredient = {
@@ -47,6 +57,8 @@ type FormulaIngredient = DatabaseIngredient & {
     is_fragrance?: boolean;
     cosmos_compliant?: boolean;
     comedogenic_rating?: number;
+    cas_number?: string | null;
+    substitutedFor?: FormulaIngredient; // in-memory only, lets the user undo a swap
 };
 
 type ProfileConfig = {
@@ -61,6 +73,29 @@ type ProfileConfig = {
     requires_emulsifier?: boolean;
     requires_preservative?: boolean;
 };
+
+// Shape the backend expects for validation and PDF exports
+const toApiIngredient = (i: FormulaIngredient) => ({
+    id: i.id,
+    name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
+    inciName: i.inci_name || null,
+    tradeName: i.trade_name || null,
+    casNumber: i.cas_number || null,
+    function: i.function || "None",
+    phase: i.phase || "A",
+    percentage: i.percentage || 0,
+    solubility: i.solubility || "water",
+    maxHeatingTempC: i.max_heating_temp_c ?? null,
+    minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
+    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null,
+    isVegan: i.is_vegan ?? null,
+    isSulfate: i.is_sulfate ?? null,
+    isSilicone: i.is_silicone ?? null,
+    isParaben: i.is_paraben ?? null,
+    isFragrance: i.is_fragrance ?? null,
+    cosmosCompliant: i.cosmos_compliant ?? null,
+    comedogenicRating: i.comedogenic_rating ?? null
+});
 
 const FormulationEditor = () => {
     const navigate = useNavigate();
@@ -118,6 +153,14 @@ const FormulationEditor = () => {
         const timer = setTimeout(() => setIsTourOpen(true), 600); // let the layout settle first
         return () => clearTimeout(timer);
     }, []);
+
+    // Stash check & substitutions
+    const [catalog, setCatalog] = useState<CatalogIngredient[]>([]);
+    const [stashEntries, setStashEntries] = useState<StashEntry[]>([]);
+    const [isStashLoaded, setIsStashLoaded] = useState(false);
+    const [isStashCheckHidden, setIsStashCheckHidden] = useState(() => {
+        try { return localStorage.getItem(STASH_CHECK_KEY) === '1'; } catch { return false; }
+    });
 
     const closeTour = () => {
         setIsTourOpen(false);
@@ -202,6 +245,24 @@ const FormulationEditor = () => {
 
         loadSavedFormulation();
     }, [id]);
+
+    useEffect(() => {
+        if (!user) return;
+
+        const fetchSourcingData = async () => {
+            const [catalogRes, stashRes] = await Promise.all([
+                supabase.from('ingredients').select('*'),
+                supabase.from('user_stash').select('ingredient_id, amount_left_g').eq('user_id', user.id),
+            ]);
+            if (catalogRes.error) console.error("Error loading ingredient catalog:", catalogRes.error);
+            else setCatalog(catalogRes.data ?? []);
+            if (stashRes.error) console.error("Error loading stash:", stashRes.error);
+            else setStashEntries(stashRes.data ?? []);
+            setIsStashLoaded(!stashRes.error);
+        };
+
+        fetchSourcingData();
+    }, [user]);
 
     // Favorites State
     const [favorites, setFavorites] = useState<DatabaseIngredient[]>([]);
@@ -434,24 +495,7 @@ const FormulationEditor = () => {
                 profile: activeProfile,
                 targetPh: targetPh ?? null,
                 targetClaims: targetClaims,
-                ingredients: formulaIngredients.map(i => ({
-                    id: i.id,
-                    name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
-                    function: i.function || "None",
-                    phase: i.phase || "A",
-                    percentage: i.percentage || 0,
-                    solubility: i.solubility || "water",
-                    maxHeatingTempC: i.max_heating_temp_c ?? null,
-                    minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
-                    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null,
-                    isVegan: i.is_vegan ?? null,
-                    isSulfate: i.is_sulfate ?? null,
-                    isSilicone: i.is_silicone ?? null,
-                    isParaben: i.is_paraben ?? null,
-                    isFragrance: i.is_fragrance ?? null,
-                    cosmosCompliant: i.cosmos_compliant ?? null,
-                    comedogenicRating: i.comedogenic_rating ?? null
-                })),
+                ingredients: formulaIngredients.map(toApiIngredient),
                 totalPercentage: totalPct,
                 oilPhasePercentage: oilPhasePct,
                 waterPhasePercentage: waterPhasePct
@@ -493,6 +537,44 @@ const FormulationEditor = () => {
     };
 
     const currentTotalPercentage = formulaIngredients.reduce((sum, item) => sum + item.percentage, 0);
+
+    // Stock status + substitution suggestions for every row, keyed by its index
+    const sourcing = useMemo(() => {
+        if (!isStashLoaded || catalog.length === 0) return [];
+        const lines = formulaIngredients.map(ing => ({
+            ingredient: ing as unknown as CatalogIngredient,
+            phase: ing.phase,
+            percentage: ing.percentage || 0,
+            isQS: ing.isQS,
+        }));
+        return analyzeFormula(lines, catalog, stashEntries, targetWeight || 100, targetPh);
+    }, [formulaIngredients, catalog, stashEntries, isStashLoaded, targetWeight, targetPh]);
+
+    const isStashEmpty = isStashLoaded && stashEntries.length === 0;
+    const showStashHints = !isStashCheckHidden && !isStashEmpty;
+    const missingCount = sourcing.filter(s => s.status === 'missing').length;
+    const lowCount = sourcing.filter(s => s.status === 'low').length;
+
+    const toggleStashCheck = (hidden: boolean) => {
+        setIsStashCheckHidden(hidden);
+        try { localStorage.setItem(STASH_CHECK_KEY, hidden ? '1' : '0'); } catch { /* ignore */ }
+    };
+
+    const handleSwap = (index: number, option: SubstituteOption) => {
+        setFormulaIngredients(prev => prev.map((ing, i) => i !== index ? ing : {
+            ...(option.ingredient as unknown as DatabaseIngredient),
+            phase: ing.phase,
+            percentage: option.percentage,
+            isQS: false,
+            substitutedFor: ing.substitutedFor ?? ing, // undo always returns to the recipe's original
+        }));
+    };
+
+    const handleUndoSwap = (index: number) => {
+        setFormulaIngredients(prev => prev.map((ing, i) =>
+            i === index && ing.substitutedFor ? { ...ing.substitutedFor, phase: ing.phase } : ing
+        ));
+    };
 
     const getPhaseIngredients = (phase: 'A' | 'B' | 'C') => {
         return formulaIngredients
@@ -704,17 +786,8 @@ const FormulationEditor = () => {
                 profileId: profileId || "Unassigned",
                 profile: activeProfile || null,
                 targetPh: targetPh ?? null,
-                ingredients: formulaIngredients.map(i => ({
-                    id: i.id,
-                    name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
-                    function: i.function || "None",
-                    phase: i.phase || "A",
-                    percentage: i.percentage || 0,
-                    solubility: i.solubility || "water",
-                    maxHeatingTempC: i.max_heating_temp_c ?? null,
-                    minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
-                    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null
-                })),
+                targetClaims: targetClaims,
+                ingredients: formulaIngredients.map(toApiIngredient),
                 totalPercentage: formulaIngredients.reduce((sum, item) => sum + (item.percentage || 0), 0),
                 oilPhasePercentage: formulaIngredients.filter(i => i.phase === 'B' || i.solubility === 'oil').reduce((sum, item) => sum + (item.percentage || 0), 0),
                 waterPhasePercentage: formulaIngredients.filter(i => i.phase === 'A' || i.solubility === 'water').reduce((sum, item) => sum + (item.percentage || 0), 0)
@@ -741,6 +814,38 @@ const FormulationEditor = () => {
         } catch (error) {
             console.error("PDF Export error:", error);
             setModal({ isOpen: true, type: 'error', title: 'Export Failed', message: `Could not generate the ${documentType.toUpperCase()} document.` });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleExportSourcing = async () => {
+        setIsSaving(true);
+        setShowPrintMenu(false);
+
+        try {
+            const payload = buildSourcingPayload(projectName || "Untitled Project", targetWeight || 100, targetPh, sourcing);
+            const res = await fetch(`http://localhost:8080/api/v1/export/sourcing`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error("Failed to generate PDF");
+
+            const blob = await res.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `${projectName.replace(/\s+/g, '_')}_SOURCING.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+        } catch (error) {
+            console.error("Sourcing export error:", error);
+            setModal({ isOpen: true, type: 'error', title: 'Export Failed', message: 'Could not generate the sourcing guide.' });
         } finally {
             setIsSaving(false);
         }
@@ -919,6 +1024,14 @@ const FormulationEditor = () => {
                                             Shopping List <span className="text-xs text-gray-400">🛒</span>
                                         </button>
                                         <button
+                                            onClick={handleExportSourcing}
+                                            disabled={sourcing.length === 0}
+                                            title={sourcing.length === 0 ? "Add ingredients first" : "Stash check, substitutions and shopping options"}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Substitutions & Sourcing <span className="text-xs text-gray-400">⇄</span>
+                                        </button>
+                                        <button
                                             onClick={() => handleExportPDF('pif')}
                                             className="w-full text-left px-4 py-2.5 text-sm font-medium text-[#2c4c3b] hover:bg-gray-50 flex justify-between items-center"
                                         >
@@ -1027,6 +1140,43 @@ const FormulationEditor = () => {
                         )}
                     </div>
 
+                    {/* Stash check summary */}
+                    {formulaIngredients.length > 0 && isStashLoaded && (
+                        isStashEmpty ? (
+                            <div data-tour="sourcing" className="bg-white border border-dashed border-[#c1d1b9] rounded-lg px-4 py-3 text-sm text-gray-600">
+                                🧺 Add what you own on the <button onClick={() => navigate('/stash')} className="font-semibold text-[#2c4c3b] hover:underline">Stash page</button> to see what you're missing and get substitutions from your own shelf.
+                            </div>
+                        ) : isStashCheckHidden ? (
+                            <button onClick={() => toggleStashCheck(false)} className="self-start text-xs font-medium text-[#2c4c3b] hover:underline">
+                                🧺 Show stash check
+                            </button>
+                        ) : missingCount + lowCount > 0 ? (
+                            <div data-tour="sourcing" className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
+                                <span className="text-amber-900">
+                                    🧺 For a {targetWeight || 100} g batch you're missing <strong>{missingCount}</strong> ingredient{missingCount !== 1 && 's'}
+                                    {lowCount > 0 && <> and are low on <strong>{lowCount}</strong></>}. Swap suggestions are shown under each one.
+                                </span>
+                                <span className="flex gap-2">
+                                    <button
+                                        onClick={handleExportSourcing}
+                                        disabled={isSaving}
+                                        className="px-3 py-1 bg-white border border-amber-300 rounded text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                                    >
+                                        🖨️ Print sourcing guide
+                                    </button>
+                                    <button onClick={() => toggleStashCheck(true)} className="px-2 text-xs text-amber-800 hover:underline">
+                                        Hide
+                                    </button>
+                                </span>
+                            </div>
+                        ) : (
+                            <div data-tour="sourcing" className="bg-[#e9eee7] border border-[#c1d1b9] rounded-lg px-4 py-2 text-sm text-[#1f382a] flex justify-between items-center gap-3">
+                                <span>✅ You have everything in your stash for a {targetWeight || 100} g batch.</span>
+                                <button onClick={() => toggleStashCheck(true)} className="text-xs text-gray-500 hover:underline">Hide</button>
+                            </div>
+                        )
+                    )}
+
                     {/* Phases Container */}
                     <div className="bg-white border border-[#c1d1b9] rounded-lg shadow-sm overflow-hidden text-sm" data-tour="phases">
 
@@ -1071,8 +1221,12 @@ const FormulationEditor = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {phaseItems.map((item) => (
-                                                        <tr key={item.originalIndex} className="border-b border-gray-100 hover:bg-gray-50">
+                                                    {phaseItems.map((item) => {
+                                                        const stock = showStashHints ? sourcing[item.originalIndex!] : undefined;
+                                                        const needsAttention = stock && (stock.status === 'missing' || stock.status === 'low');
+                                                        return (
+                                                        <Fragment key={item.originalIndex}>
+                                                        <tr className={`hover:bg-gray-50 ${needsAttention ? 'bg-amber-50/40' : 'border-b border-gray-100'}`}>
                                                             {/* 1. Ingredient Column */}
                                                             <td className="px-4 py-2 font-medium text-[#1f382a] truncate">
                                                                 <button
@@ -1086,6 +1240,14 @@ const FormulationEditor = () => {
                                                                     <span>{item.trade_name}</span>
                                                                     <span className="text-[10px] text-gray-500 font-normal">{item.inci_name}</span>
                                                                 </button>
+                                                                {item.substitutedFor && (
+                                                                    <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate">
+                                                                        ⇄ replaces {displayName(item.substitutedFor as unknown as CatalogIngredient)} ·{' '}
+                                                                        <button onClick={() => handleUndoSwap(item.originalIndex!)} className="text-[#2c4c3b] font-medium hover:underline">
+                                                                            Undo
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                             </td>
 
                                                             {/* 2. Function Column */}
@@ -1178,7 +1340,15 @@ const FormulationEditor = () => {
                                                                 🗑
                                                             </td>
                                                         </tr>
-                                                    ))}
+                                                        {needsAttention && (
+                                                            <SubstitutionHint
+                                                                item={stock}
+                                                                onSwap={(option) => handleSwap(item.originalIndex!, option)}
+                                                            />
+                                                        )}
+                                                        </Fragment>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
