@@ -14,6 +14,9 @@ import Header from '../components/Header';
 import GuidedTour from '../components/GuidedTour';
 import { EDITOR_TOUR_STEPS } from '../components/editorTourSteps';
 import SubstitutionHint from '../components/SubstitutionHint';
+import BalancePreviewModal from '../components/BalancePreviewModal';
+import { Lock, LockOpen, Scale } from 'lucide-react';
+import { balanceFormula, inferKind, startingPercentage, type BalanceResult } from '../lib/autoBalance';
 import {
     analyzeFormula,
     buildSourcingPayload,
@@ -25,6 +28,7 @@ import {
 
 const TOUR_SEEN_KEY = 'formularium.editorTourSeen';
 const STASH_CHECK_KEY = 'formularium.stashCheckHidden';
+const AUTO_BALANCE_KEY = 'formularium.autoBalance';
 
 // 1. Define Types for the Database and Formula state
 type DatabaseIngredient = {
@@ -37,6 +41,8 @@ type DatabaseIngredient = {
     optimal_ph_min: number | null;
     optimal_ph_max: number | null;
     ionic_charge?: string | null;
+    default_min_usage?: number | null;
+    default_max_usage?: number | null;
     min_usage_pct: number | null;
     max_usage_pct: number | null;
     description?: string;
@@ -60,6 +66,7 @@ type FormulaIngredient = DatabaseIngredient & {
     comedogenic_rating?: number;
     cas_number?: string | null;
     substitutedFor?: FormulaIngredient; // in-memory only, lets the user undo a swap
+    locked?: boolean; // in-memory only: balancing never changes a locked percentage
 };
 
 type ProfileConfig = {
@@ -146,6 +153,13 @@ const FormulationEditor = () => {
 
     const [showPrintMenu, setShowPrintMenu] = useState(false);
     const [isTourOpen, setIsTourOpen] = useState(false);
+
+    // Percentage balancing
+    const [isBalanceOpen, setIsBalanceOpen] = useState(false);
+    const [keepLipidLoad, setKeepLipidLoad] = useState(false);
+    const [isAutoBalance, setIsAutoBalance] = useState(() => {
+        try { return localStorage.getItem(AUTO_BALANCE_KEY) === '1'; } catch { return false; }
+    });
 
     // Show the guided tour automatically on a user's first visit
     useEffect(() => {
@@ -356,33 +370,30 @@ const FormulationEditor = () => {
         return 'A';
     };
 
+    // Applies a balance result: new percentages, and the filler becomes the Q.S. ingredient
+    const applyBalance = (list: FormulaIngredient[], result: BalanceResult): FormulaIngredient[] =>
+        list.map((ing, i) => ({
+            ...ing,
+            percentage: result.lines[i]?.after ?? ing.percentage,
+            isQS: result.fillerIndex === null ? ing.isQS : i === result.fillerIndex,
+        }));
+
+    // In auto mode, rebalance after the formula's make-up changes (not after the user's own edits)
+    const withAutoBalance = (list: FormulaIngredient[], profile: ProfileConfig | null = activeProfile) =>
+        isAutoBalance && list.length > 0 ? applyBalance(list, balanceFormula(list, profile)) : list;
+
     const handleAddIngredient = (ingredient: DatabaseIngredient) => {
         const assignedPhase = determinePhase(ingredient);
-
-        let defaultPct = 0;
-        const min = ingredient.min_usage_pct;
-        const max = ingredient.max_usage_pct;
-
-        if (min !== null && max !== null && min !== undefined && max !== undefined) {
-            if (ingredient.function === "Preservative") {
-                defaultPct = max;
-            } else {
-                defaultPct = parseFloat(((min + max) / 2).toFixed(2));
-            }
-        } else if (max !== null && max !== undefined) {
-            defaultPct = ingredient.function === "Preservative" ? max : parseFloat((max / 2).toFixed(2));
-        } else if (min !== null && min !== undefined) {
-            defaultPct = min;
-        }
+        const kind = inferKind([...formulaIngredients, { ...ingredient, percentage: 0 }], activeProfile);
 
         const newIngredient: FormulaIngredient = {
             ...ingredient,
             phase: assignedPhase,
-            percentage: defaultPct,
+            percentage: startingPercentage({ ...ingredient, percentage: 0 }, kind),
             isQS: false
         };
 
-        setFormulaIngredients(prev => [...prev, newIngredient]);
+        setFormulaIngredients(prev => withAutoBalance([...prev, newIngredient]));
         setSearchTerm('');
         setSearchResults([]);
     };
@@ -399,10 +410,25 @@ const FormulationEditor = () => {
         const value = parseFloat(newPct) || 0;
         setFormulaIngredients(prev => {
             const updated = [...prev];
-            updated[index].percentage = value;
+            updated[index] = { ...updated[index], percentage: value, locked: updated[index].locked || isAutoBalance };
             return updated;
         });
     };
+
+    const toggleLock = (index: number) => {
+        setFormulaIngredients(prev => prev.map((ing, i) => (i === index ? { ...ing, locked: !ing.locked } : ing)));
+    };
+
+    const toggleAutoBalance = (on: boolean) => {
+        setIsAutoBalance(on);
+        try { localStorage.setItem(AUTO_BALANCE_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+        if (on) setFormulaIngredients(prev => (prev.length ? applyBalance(prev, balanceFormula(prev, activeProfile)) : prev));
+    };
+
+    const balancePreview = useMemo(
+        () => (isBalanceOpen ? balanceFormula(formulaIngredients, activeProfile, { keepLipidLoad }) : null),
+        [isBalanceOpen, formulaIngredients, activeProfile, keepLipidLoad]
+    );
 
     const handleProfileChange = async (newProfileId: string) => {
         setProfileId(newProfileId);
@@ -435,7 +461,7 @@ const FormulationEditor = () => {
                             const updated = [...prev];
                             updated.forEach(ing => ing.isQS = false);
                             updated[waterIndex] = { ...updated[waterIndex], isQS: true };
-                            return updated;
+                            return withAutoBalance(updated, profileData);
                         } else {
                             const waterIngredient: FormulaIngredient = {
                                 ...aquaData,
@@ -444,16 +470,18 @@ const FormulationEditor = () => {
                                 isQS: true
                             };
                             const updatedPrev = prev.map(ing => ({ ...ing, isQS: false }));
-                            return [...updatedPrev, waterIngredient];
+                            return withAutoBalance([...updatedPrev, waterIngredient], profileData);
                         }
                     });
                 }
+            } else {
+                setFormulaIngredients(prev => withAutoBalance(prev, profileData));
             }
         }
     };
 
     const removeIngredient = (index: number) => {
-        setFormulaIngredients(prev => prev.filter((_, i) => i !== index));
+        setFormulaIngredients(prev => withAutoBalance(prev.filter((_, i) => i !== index)));
     };
 
     // Auto-balance the Q.S. ingredient
@@ -1260,6 +1288,7 @@ const FormulationEditor = () => {
                                                             {/* 3. Target % Column (with tightened spacing) */}
                                                             <td className="px-4 py-2">
                                                                 <div className="flex flex-col justify-center items-start">
+                                                                    <div className="flex items-center gap-1">
                                                                     <div className="relative w-16">
                                                                         <input
                                                                             type="number"
@@ -1282,6 +1311,18 @@ const FormulationEditor = () => {
                                                                             placeholder="0"
                                                                         />
                                                                         <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
+                                                                    </div>
+                                                                    {!item.isQS && (
+                                                                        <button
+                                                                            onClick={() => toggleLock(item.originalIndex!)}
+                                                                            aria-label={item.locked ? 'Unlock percentage' : 'Lock percentage'}
+                                                                            aria-pressed={!!item.locked}
+                                                                            title={item.locked ? 'Locked: balancing keeps this value. Click to unlock.' : 'Lock this value so balancing never changes it'}
+                                                                            className={`p-0.5 rounded transition-colors ${item.locked ? 'text-[#2c4c3b]' : 'text-gray-300 hover:text-gray-500'}`}
+                                                                        >
+                                                                            {item.locked ? <Lock size={12} /> : <LockOpen size={12} />}
+                                                                        </button>
+                                                                    )}
                                                                     </div>
 
                                                                     <div className="mt-0.5 leading-none">
@@ -1362,7 +1403,27 @@ const FormulationEditor = () => {
                         })}
 
                         {/* Total Footer */}
-                        <div className="bg-[#f0f4ef] px-4 py-3 text-right font-medium flex justify-end gap-2 items-center border-t border-[#c1d1b9]" data-tour="total">
+                        <div className="bg-[#f0f4ef] px-4 py-3 text-right font-medium flex flex-wrap justify-between gap-3 items-center border-t border-[#c1d1b9]" data-tour="total">
+                            <div className="flex items-center gap-3" data-tour="balance">
+                                <button
+                                    onClick={() => setIsBalanceOpen(true)}
+                                    disabled={formulaIngredients.length === 0}
+                                    title="Suggest logical percentages and fill to 100%"
+                                    className="flex items-center gap-1.5 px-3 py-1 bg-white border border-[#c1d1b9] rounded shadow-sm text-xs font-bold text-[#2c4c3b] hover:bg-[#e9eee7] disabled:opacity-50 transition-colors"
+                                >
+                                    <Scale size={14} aria-hidden /> Balance
+                                </button>
+                                <label className="flex items-center gap-1.5 text-xs font-normal text-gray-600 cursor-pointer" title="Rebalance automatically when you add or remove ingredients. Values you type are locked.">
+                                    <input
+                                        type="checkbox"
+                                        checked={isAutoBalance}
+                                        onChange={(e) => toggleAutoBalance(e.target.checked)}
+                                        className="w-3.5 h-3.5 accent-[#2c4c3b]"
+                                    />
+                                    Auto
+                                </label>
+                            </div>
+                            <div className="flex items-center gap-2">
                             <span>
                                 Total: {currentTotalPercentage.toFixed(2)}% | {((currentTotalPercentage / 100) * targetWeight).toFixed(2)}g
                                 {targetWeight > 0 && ` (of ${targetWeight.toFixed(2)}g target)`}
@@ -1375,6 +1436,7 @@ const FormulationEditor = () => {
                                     !
                                 </span>
                             )}
+                            </div>
                         </div>
                     </div>
                     <div data-tour="cost">
@@ -1503,6 +1565,20 @@ const FormulationEditor = () => {
                 message={modal.message}
                 onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {balancePreview && (
+                <BalancePreviewModal
+                    result={balancePreview}
+                    names={formulaIngredients.map(i => i.trade_name || i.inci_name)}
+                    keepLipidLoad={keepLipidLoad}
+                    onKeepLipidLoadChange={setKeepLipidLoad}
+                    onApply={() => {
+                        setFormulaIngredients(prev => applyBalance(prev, balancePreview));
+                        setIsBalanceOpen(false);
+                    }}
+                    onClose={() => setIsBalanceOpen(false)}
+                />
+            )}
 
             {isTourOpen && <GuidedTour steps={EDITOR_TOUR_STEPS} onClose={closeTour} />}
 

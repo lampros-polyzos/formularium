@@ -61,6 +61,16 @@ export const EDITOR_TOUR_STEPS: TourStep[] = [
         ),
     },
     {
+        target: 'balance',
+        title: 'Balance to 100% automatically',
+        body: (
+            <>
+                <p><strong>Balance</strong> suggests logical percentages: preservative and chelator at safe levels, actives at their typical dose, emulsifier sized to your oils, and water filling the rest.</p>
+                <p>You see every change and the reason before applying. Tick <strong>Auto</strong> to rebalance whenever you add or remove an ingredient; values you type yourself get a 🔒 so they're never overwritten.</p>
+            </>
+        ),
+    },
+    {
         target: 'companion',
         title: '5. Your formulation companion',
         body: (
