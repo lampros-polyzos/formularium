@@ -1,4 +1,5 @@
 import { isExpired, type StashLot } from './batchPlan';
+import { lowStockLevel } from './lowStock';
 import type { BatchStatus, CheckResult } from '../types/batches';
 
 // Everything the Metrics page shows is worked out here from plain data, so each number can be tested.
@@ -39,6 +40,8 @@ export interface MetricsInput {
     lots: StashLot[];
     /** Names for what is in the stash. */
     stashNames: Map<string, string>;
+    /** The highest usual amount (% of a batch) of what is in the stash, so small-dose ingredients are not called low too soon. */
+    stashMaxUsage?: Map<string, number | null>;
     /** Recipes of yours that others can see. */
     sharedCount: number;
 }
@@ -303,7 +306,8 @@ export function computeMetrics(input: MetricsInput, { range, today = new Date(),
         if (lotValue !== null) p.value = (p.value ?? 0) + lotValue;
         perIngredient.set(l.ingredient_id, p);
     }
-    const low = [...perIngredient.entries()].filter(([, p]) => p.grams !== null && p.grams > 0 && p.grams <= lowStockG + EPS).length;
+    const low = [...perIngredient.entries()].filter(([id, p]) =>
+        p.grams !== null && p.grams > 0 && p.grams <= lowStockLevel(input.stashMaxUsage?.get(id), lowStockG) + EPS).length;
     const idle = [...perIngredient.entries()]
         .filter(([id]) => !everUsed.has(id))
         .map(([id, p]) => ({ id, name: input.stashNames.get(id) ?? 'Unknown ingredient', grams: p.grams === null ? null : round2(p.grams), value: p.value === null ? null : round2(p.value) }))

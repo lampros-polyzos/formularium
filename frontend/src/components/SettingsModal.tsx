@@ -137,7 +137,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         <div className="mt-4">
                             <label htmlFor="low-stock" className="block text-sm font-medium text-gray-700 mb-1">Low Stock Level (grams)</label>
                             <p className="text-xs text-gray-500 mb-2">
-                                An ingredient with this much or less left is flagged as running low on the shopping list.
+                                An ingredient with this much or less left is flagged as running low on the shopping list. This is the level for ingredients used in large amounts (10% or more of a batch). Ingredients used in small amounts, such as essential oils and preservatives, get proportionally less, so you are only warned when they are nearly gone.
                             </p>
                             <input
                                 id="low-stock"

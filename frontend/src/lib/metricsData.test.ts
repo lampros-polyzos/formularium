@@ -127,6 +127,7 @@ describe('loadMetricsInput', () => {
         expect(input.lines).toHaveLength(1);
         expect(input.sharedCount).toBe(2);
         expect(input.stashNames.get('i1')).toBe('Shea Butter');
+        expect(input.stashMaxUsage?.has('i1')).toBe(true);
     });
 
     it('fails as a whole if any part fails', async () => {

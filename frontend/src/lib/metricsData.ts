@@ -98,5 +98,6 @@ export async function loadMetricsInput(userId: string, client: Client = supabase
     return {
         batches, lines, favorites, formulas, sharedCount, lots,
         stashNames: new Map(stashRows.map(i => [i.id, i.trade_name || i.inci_name])),
+        stashMaxUsage: new Map(stashRows.map(i => [i.id, i.max_usage_pct ?? null])),
     };
 }

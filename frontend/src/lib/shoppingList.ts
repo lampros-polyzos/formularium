@@ -1,4 +1,5 @@
 import { isExpired, type StashLot } from './batchPlan';
+import { lowStockLevel } from './lowStock';
 import { isWaterIngredient } from './pantry';
 import type { CatalogIngredient } from './substitutions';
 
@@ -63,7 +64,8 @@ export interface ListOptions {
     today?: Date;
     /** Lots expiring within this many days are flagged. */
     warningDays: number;
-    /** Stock at or below this many grams is flagged as low. */
+    /** Stock at or below this many grams is flagged as low, for an ingredient used at 10% or more. Ingredients used in
+     *  small amounts (essential oils, preservatives) get proportionally less, see `lowStockLevel`. */
     lowStockG: number;
 }
 
@@ -169,9 +171,11 @@ export function buildShoppingList(
         const s = stock.get(id)!;
         if (s.unknown || !(s.grams > 0)) continue;
         const item = itemFor.get(id);
-        if (s.grams <= lowStockG) {
-            alerts.push({ kind: 'low', ingredientId: id, name: nameOf(names.get(id) ?? item?.ingredient), amountG: round2(s.grams), inList: Boolean(item) });
-        } else if (item && item.leftG !== null && item.leftG > 0 && item.leftG <= lowStockG) {
+        const known = names.get(id) ?? item?.ingredient;
+        const level = lowStockLevel(known?.max_usage_pct, lowStockG);
+        if (s.grams <= level) {
+            alerts.push({ kind: 'low', ingredientId: id, name: nameOf(known), amountG: round2(s.grams), inList: Boolean(item) });
+        } else if (item && item.leftG !== null && item.leftG > 0 && item.leftG <= level) {
             alerts.push({ kind: 'low-after', ingredientId: id, name: nameOf(item.ingredient), amountG: item.leftG, inList: true });
         }
     }
