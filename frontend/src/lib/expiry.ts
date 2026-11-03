@@ -46,3 +46,35 @@ export function formatExpiry(iso: string | null | undefined, formatDate: (d: str
     const [year, month] = iso.split('-').map(Number);
     return new Date(year, month - 1, 1).toLocaleDateString(dateFormat, { month: '2-digit', year: 'numeric' });
 }
+
+// ---------- The month and year as two pieces, for the pickers ----------
+
+/** The month ("01"-"12") and year ("2027") chosen so far; either can be missing while the user is still choosing. */
+export interface ExpiryParts { month: string; year: string }
+
+export const NO_EXPIRY: ExpiryParts = { month: '', year: '' };
+
+/** The stored date as the two pieces. */
+export function expiryParts(iso: string | null | undefined): ExpiryParts {
+    const ym = toMonthInput(iso);
+    return ym ? { year: ym.slice(0, 4), month: ym.slice(5, 7) } : NO_EXPIRY;
+}
+
+/** "2027-03" once both are chosen, otherwise nothing. */
+export const partsToMonth = ({ month, year }: ExpiryParts): string => (month && year ? `${year}-${month}` : '');
+
+/** One of the two is chosen and the other is not: the expiry is not finished, and cannot be saved yet. */
+export const isPartialExpiry = ({ month, year }: ExpiryParts): boolean => Boolean(month) !== Boolean(year);
+
+/** The month this many months from now, for the quick options ("in a year"). */
+export function monthsFromNow(count: number, today: Date = new Date()): ExpiryParts {
+    const d = new Date(today.getFullYear(), today.getMonth() + count, 1);
+    return { year: String(d.getFullYear()), month: String(d.getMonth() + 1).padStart(2, '0') };
+}
+
+/** When only a month is chosen, the next time that month comes round: this year, or next year if it has already passed. */
+export function nextYearFor(month: string, today: Date = new Date()): string {
+    return String(Number(month) >= today.getMonth() + 1 ? today.getFullYear() : today.getFullYear() + 1);
+}
+
+export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

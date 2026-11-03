@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
 import { useSettings } from '../contexts/SettingsContext';
-import { expiryFromMonth, formatExpiry, isValidMonth, parseDay, toMonthInput } from '../lib/expiry';
+import ExpiryPicker from '../components/ExpiryPicker';
+import { NO_EXPIRY, expiryFromMonth, expiryParts, formatExpiry, isPartialExpiry, parseDay, partsToMonth, type ExpiryParts } from '../lib/expiry';
 import StudioLayout from '../components/StudioLayout';
 
 // Types
@@ -56,9 +57,9 @@ const StashPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedIngredient, setSelectedIngredient] = useState<DatabaseIngredient | null>(null);
     const [editingStashId, setEditingStashId] = useState<string | null>(null);
-    // What is in the expiry box. Browsers without a month picker let you type it, so it can be half-finished
-    const [expiryText, setExpiryText] = useState('');
-    const expiryInvalid = expiryText !== '' && !isValidMonth(expiryText);
+    // The month and year picked so far. Either can be missing while choosing, and then the expiry cannot be saved yet
+    const [expiry, setExpiry] = useState<ExpiryParts>(NO_EXPIRY);
+    const expiryInvalid = isPartialExpiry(expiry);
 
     // Form State
     const [formData, setFormData] = useState<StashFormData>({
@@ -132,7 +133,7 @@ const StashPage = () => {
     const openAddModal = (ingredient: DatabaseIngredient) => {
         setSelectedIngredient(ingredient);
         setEditingStashId(null);
-        setExpiryText('');
+        setExpiry(NO_EXPIRY);
         setFormData({
             supplier_name: '',
             batch_lot_number: '',
@@ -149,7 +150,7 @@ const StashPage = () => {
     const openEditModal = (item: StashItem) => {
         setSelectedIngredient(item.ingredients);
         setEditingStashId(item.id);
-        setExpiryText(toMonthInput(item.expiration_date));
+        setExpiry(expiryParts(item.expiration_date));
         setFormData({
             supplier_name: item.supplier_name || '',
             batch_lot_number: item.batch_lot_number || '',
@@ -408,29 +409,38 @@ const StashPage = () => {
                 </div>
             </main>
 
-            {/* Add/Edit Modal */}
+            {/* Add/Edit Modal: a header and footer that stay put, and a middle that scrolls on small screens */}
             {isModalOpen && selectedIngredient && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1f382a]/40 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-[#c1d1b9]">
-                        <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-start">
-                            <div>
-                                <h3 className="text-xl font-bold text-[#1f382a]">
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1f382a]/40 backdrop-blur-sm"
+                    onKeyDown={e => { if (e.key === 'Escape') setIsModalOpen(false); }}
+                >
+                    <form
+                        onSubmit={handleSaveStashItem}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="stash-dialog-title"
+                        className="bg-white w-full max-w-xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden border border-[#c1d1b9]"
+                    >
+                        <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-start gap-4 shrink-0">
+                            <div className="min-w-0">
+                                <h3 id="stash-dialog-title" className="text-xl font-bold text-[#1f382a]">
                                     {editingStashId ? 'Edit Stock' : 'Add to Stash'}
                                 </h3>
-                                <p className="text-sm text-[#3a5a4a] font-medium mt-1">{selectedIngredient.trade_name}</p>
-                                <p className="text-xs text-gray-500 font-mono">{selectedIngredient.inci_name}</p>
+                                <p className="text-sm text-[#3a5a4a] font-medium mt-1 truncate">{selectedIngredient.trade_name}</p>
+                                <p className="text-xs text-gray-500 font-mono truncate">{selectedIngredient.inci_name}</p>
                             </div>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">
+                            <button type="button" onClick={() => setIsModalOpen(false)} aria-label="Close" className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">
                                 &times;
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveStashItem} className="p-6 space-y-4">
-                            {/* Row 1: Three columns */}
-                            <div className="grid grid-cols-3 gap-4">
+                        <div className="p-6 space-y-6 overflow-y-auto">
+                            <section aria-label="How much you have" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount Left (g)*</label>
+                                    <label htmlFor="stash-amount" className="block text-sm font-medium text-gray-700 mb-1">Amount left (g)*</label>
                                     <input
+                                        id="stash-amount"
                                         type="number"
                                         step="0.01"
                                         required
@@ -441,8 +451,9 @@ const StashPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Price ($)</label>
+                                    <label htmlFor="stash-price" className="block text-sm font-medium text-gray-700 mb-1">Total price ({currency})</label>
                                     <input
+                                        id="stash-price"
                                         type="number"
                                         step="0.01"
                                         min="0"
@@ -452,43 +463,34 @@ const StashPage = () => {
                                         placeholder="e.g. 15.50"
                                     />
                                     {formData.amount_left_g > 0 && formData.total_price > 0 && (
-                                        <div className="text-[10px] text-gray-500 mt-1 font-medium text-right">
-                                            = ${(formData.total_price / formData.amount_left_g).toFixed(4)} / gram
-                                        </div>
+                                        <p className="text-[11px] text-gray-500 mt-1 font-medium">
+                                            = {currency}{(formData.total_price / formData.amount_left_g).toFixed(4)} per gram
+                                        </p>
                                     )}
                                 </div>
-                                <div>
-                                    <label htmlFor="stash-expiry" className="block text-sm font-medium text-gray-700 mb-1">Expires (month and year)</label>
-                                    <input
-                                        id="stash-expiry"
-                                        type="month"
-                                        placeholder="YYYY-MM"
-                                        pattern="\d{4}-(0[1-9]|1[0-2])"
-                                        value={expiryText}
-                                        aria-invalid={expiryInvalid}
-                                        aria-describedby="stash-expiry-hint"
-                                        onChange={e => {
-                                            const text = e.target.value;
-                                            setExpiryText(text);
-                                            if (text === '') setFormData(f => ({ ...f, expiration_date: '' }));
-                                            else if (isValidMonth(text)) {
-                                                const original = stashItems.find(s => s.id === editingStashId)?.expiration_date;
-                                                setFormData(f => ({ ...f, expiration_date: expiryFromMonth(text, original) }));
-                                            }
-                                        }}
-                                        className={`w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none ${expiryInvalid ? 'border-red-400' : 'border-gray-300'}`}
-                                    />
-                                    <p id="stash-expiry-hint" className={`text-[10px] mt-1 ${expiryInvalid ? 'text-red-600' : 'text-gray-500'}`}>
-                                        {expiryInvalid ? 'Type the month and year like 2027-03.' : 'The last day of the month is used. Leave empty if it does not expire.'}
-                                    </p>
-                                </div>
-                            </div>
+                            </section>
 
-                            {/* Row 2: Two columns */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <section aria-label="Shelf life">
+                                <ExpiryPicker
+                                    value={expiry}
+                                    onChange={next => {
+                                        setExpiry(next);
+                                        const month = partsToMonth(next);
+                                        if (month) {
+                                            const original = stashItems.find(s => s.id === editingStashId)?.expiration_date;
+                                            setFormData(f => ({ ...f, expiration_date: expiryFromMonth(month, original) }));
+                                        } else if (!next.month && !next.year) {
+                                            setFormData(f => ({ ...f, expiration_date: '' }));
+                                        }
+                                    }}
+                                />
+                            </section>
+
+                            <section aria-label="Where it came from" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                                    <label htmlFor="stash-supplier" className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
                                     <input
+                                        id="stash-supplier"
                                         type="text"
                                         value={formData.supplier_name}
                                         onChange={e => setFormData({ ...formData, supplier_name: e.target.value })}
@@ -497,8 +499,9 @@ const StashPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Batch / Lot Number</label>
+                                    <label htmlFor="stash-lot" className="block text-sm font-medium text-gray-700 mb-1">Batch / lot number</label>
                                     <input
+                                        id="stash-lot"
                                         type="text"
                                         value={formData.batch_lot_number}
                                         onChange={e => setFormData({ ...formData, batch_lot_number: e.target.value })}
@@ -506,37 +509,36 @@ const StashPage = () => {
                                         placeholder="e.g. LOT-2023-A"
                                     />
                                 </div>
-                            </div>
+                                <div className="sm:col-span-2">
+                                    <label htmlFor="stash-notes" className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                    <textarea
+                                        id="stash-notes"
+                                        value={formData.notes}
+                                        onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none min-h-[72px]"
+                                        placeholder="Storage requirements, visual condition..."
+                                    />
+                                </div>
+                            </section>
+                        </div>
 
-                            {/* Row 3: Full width */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                                <textarea
-                                    value={formData.notes}
-                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none min-h-[80px]"
-                                    placeholder="Storage requirements, visual condition..."
-                                />
-                            </div>
-
-                            <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium transition-colors border border-transparent"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={expiryInvalid}
-                                    className="px-6 py-2 bg-[#2c4c3b] text-white rounded-lg font-medium hover:bg-[#1f382a] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Save Stock
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                        <div className="px-6 py-4 flex justify-end gap-3 border-t border-gray-100 bg-gray-50 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsModalOpen(false)}
+                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={expiryInvalid}
+                                className="px-6 py-2 bg-[#2c4c3b] text-white rounded-lg font-medium hover:bg-[#1f382a] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Save Stock
+                            </button>
+                        </div>
+                    </form>
                 </div>
             )}
 
