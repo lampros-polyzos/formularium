@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useShoppingData } from '../hooks/useShoppingData';
 import { buildShoppingList, type AlertKind, type ShoppingItem, type StashAlert, type Usage } from '../lib/shoppingList';
+import { formatExpiry, isMonthEnd } from '../lib/expiry';
 import { displayName } from '../lib/substitutions';
 
 const grams = (g: number) => `${Number(g.toFixed(2))} g`;
@@ -18,9 +19,11 @@ const ALERT_STYLE: Record<AlertKind, string> = {
 };
 const ALERT_BADGE: Record<AlertKind, string> = { expired: 'Expired', expiring: 'Expiring soon', low: 'Low stock', 'low-after': 'Will run low' };
 
-function alertText(a: StashAlert, formatDate: (d: string | null) => string): string {
-    if (a.kind === 'expired') return `${a.lot} expired on ${formatDate(a.expiresOn ?? null)}${a.amountG !== null ? `, ${grams(a.amountG)} left` : ''}. It is not counted as stock.`;
-    if (a.kind === 'expiring') return `${a.lot} expires ${a.daysLeft === 0 ? 'today' : `in ${a.daysLeft} ${a.daysLeft === 1 ? 'day' : 'days'}`} (${formatDate(a.expiresOn ?? null)})${a.amountG !== null ? `, ${grams(a.amountG)} left` : ''}.`;
+function alertText(a: StashAlert, formatDate: (d: string | null) => string, dateFormat: string): string {
+    const when = formatExpiry(a.expiresOn ?? null, formatDate, dateFormat);
+    const monthOnly = isMonthEnd(a.expiresOn);
+    if (a.kind === 'expired') return `${a.lot} expired ${monthOnly ? 'at the end of' : 'on'} ${when}${a.amountG !== null ? `, ${grams(a.amountG)} left` : ''}. It is not counted as stock.`;
+    if (a.kind === 'expiring') return `${a.lot} expires ${a.daysLeft === 0 ? 'today' : `in ${a.daysLeft} ${a.daysLeft === 1 ? 'day' : 'days'}`} (${monthOnly ? 'end of ' : ''}${when})${a.amountG !== null ? `, ${grams(a.amountG)} left` : ''}.`;
     if (a.kind === 'low') return `Only ${grams(a.amountG ?? 0)} in stock.`;
     return `Only ${grams(a.amountG ?? 0)} would be left after making these.`;
 }
@@ -34,7 +37,7 @@ const USAGE_STYLE: Record<Usage['state'], string> = { covered: 'text-green-700',
 
 export default function ShoppingListPage() {
     const { user } = useAuth();
-    const { formatDate, warningDays, lowStockGrams = 20 } = useSettings();
+    const { formatDate, warningDays, lowStockGrams = 20, dateFormat = 'en-US' } = useSettings();
     const { state, reload } = useShoppingData(user?.id);
     /** In the order they were chosen: stock goes to the first ones first. */
     const [chosen, setChosen] = useState<string[]>([]);
@@ -137,7 +140,7 @@ export default function ShoppingListPage() {
                                                 <span className="font-semibold">{a.name}</span>
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-white/60">{ALERT_BADGE[a.kind]}</span>
                                             </div>
-                                            <p className="mt-0.5">{alertText(a, formatDate)}{a.inList && a.kind !== 'low-after' && ' You need it for the list below.'}</p>
+                                            <p className="mt-0.5">{alertText(a, formatDate, dateFormat)}{a.inList && a.kind !== 'low-after' && ' You need it for the list below.'}</p>
                                         </li>
                                     ))}
                                 </ul>

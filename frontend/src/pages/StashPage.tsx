@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
 import { useSettings } from '../contexts/SettingsContext';
+import { expiryFromMonth, formatExpiry, isValidMonth, parseDay, toMonthInput } from '../lib/expiry';
 import StudioLayout from '../components/StudioLayout';
 
 // Types
@@ -43,7 +44,7 @@ const StashPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     // Settings State (Persisted to localStorage)
 
-    const { currency, formatDate, warningDays } = useSettings();
+    const { currency, formatDate, warningDays, dateFormat } = useSettings();
 
     // Global Search State
     const [searchTerm, setSearchTerm] = useState('');
@@ -55,6 +56,9 @@ const StashPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedIngredient, setSelectedIngredient] = useState<DatabaseIngredient | null>(null);
     const [editingStashId, setEditingStashId] = useState<string | null>(null);
+    // What is in the expiry box. Browsers without a month picker let you type it, so it can be half-finished
+    const [expiryText, setExpiryText] = useState('');
+    const expiryInvalid = expiryText !== '' && !isValidMonth(expiryText);
 
     // Form State
     const [formData, setFormData] = useState<StashFormData>({
@@ -128,6 +132,7 @@ const StashPage = () => {
     const openAddModal = (ingredient: DatabaseIngredient) => {
         setSelectedIngredient(ingredient);
         setEditingStashId(null);
+        setExpiryText('');
         setFormData({
             supplier_name: '',
             batch_lot_number: '',
@@ -144,6 +149,7 @@ const StashPage = () => {
     const openEditModal = (item: StashItem) => {
         setSelectedIngredient(item.ingredients);
         setEditingStashId(item.id);
+        setExpiryText(toMonthInput(item.expiration_date));
         setFormData({
             supplier_name: item.supplier_name || '',
             batch_lot_number: item.batch_lot_number || '',
@@ -157,7 +163,7 @@ const StashPage = () => {
 
     const handleSaveStashItem = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user || !selectedIngredient) return;
+        if (!user || !selectedIngredient || expiryInvalid) return;
 
         // Auto-calculate the price per gram (safeguard against dividing by zero)
         const calculatedPricePerG = formData.amount_left_g > 0
@@ -328,7 +334,7 @@ const StashPage = () => {
                                         const today = new Date();
                                         today.setHours(0, 0, 0, 0);
 
-                                        const expDate = item.expiration_date ? new Date(item.expiration_date) : null;
+                                        const expDate = item.expiration_date ? parseDay(item.expiration_date) : null;
                                         const warningDate = new Date(today);
                                         warningDate.setDate(today.getDate() + warningDays);
 
@@ -372,7 +378,7 @@ const StashPage = () => {
                                                 <td className="px-6 py-4 text-center">
                                                     {expDate ? (
                                                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${badgeClass}`}>
-                                                            {formatDate(item.expiration_date)}
+                                                            {formatExpiry(item.expiration_date, formatDate, dateFormat)}
                                                         </span>
                                                     ) : '—'}
                                                 </td>
@@ -452,13 +458,29 @@ const StashPage = () => {
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
+                                    <label htmlFor="stash-expiry" className="block text-sm font-medium text-gray-700 mb-1">Expires (month and year)</label>
                                     <input
-                                        type="date"
-                                        value={formData.expiration_date}
-                                        onChange={e => setFormData({ ...formData, expiration_date: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                                        id="stash-expiry"
+                                        type="month"
+                                        placeholder="YYYY-MM"
+                                        pattern="\d{4}-(0[1-9]|1[0-2])"
+                                        value={expiryText}
+                                        aria-invalid={expiryInvalid}
+                                        aria-describedby="stash-expiry-hint"
+                                        onChange={e => {
+                                            const text = e.target.value;
+                                            setExpiryText(text);
+                                            if (text === '') setFormData(f => ({ ...f, expiration_date: '' }));
+                                            else if (isValidMonth(text)) {
+                                                const original = stashItems.find(s => s.id === editingStashId)?.expiration_date;
+                                                setFormData(f => ({ ...f, expiration_date: expiryFromMonth(text, original) }));
+                                            }
+                                        }}
+                                        className={`w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none ${expiryInvalid ? 'border-red-400' : 'border-gray-300'}`}
                                     />
+                                    <p id="stash-expiry-hint" className={`text-[10px] mt-1 ${expiryInvalid ? 'text-red-600' : 'text-gray-500'}`}>
+                                        {expiryInvalid ? 'Type the month and year like 2027-03.' : 'The last day of the month is used. Leave empty if it does not expire.'}
+                                    </p>
                                 </div>
                             </div>
 
@@ -507,7 +529,8 @@ const StashPage = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-6 py-2 bg-[#2c4c3b] text-white rounded-lg font-medium hover:bg-[#1f382a] shadow-sm transition-colors"
+                                    disabled={expiryInvalid}
+                                    className="px-6 py-2 bg-[#2c4c3b] text-white rounded-lg font-medium hover:bg-[#1f382a] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Save Stock
                                 </button>

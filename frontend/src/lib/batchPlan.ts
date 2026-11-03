@@ -1,4 +1,5 @@
 import type { BatchCheck } from '../types/batches';
+import { isMonthEnd } from './expiry';
 
 // Pure planning logic for "Make this batch": what to weigh, and which stash lots would be used.
 // Nothing here reads or writes the database; the stash is only changed when the user confirms (see createBatch).
@@ -51,7 +52,7 @@ export function isExpired(lot: Pick<StashLot, 'expiration_date'>, today: Date = 
 export function lotLabel(lot: StashLot): string {
     const parts = [lot.batch_lot_number, lot.supplier_name].filter(Boolean);
     if (parts.length > 0) return parts.join(' · ');
-    return lot.expiration_date ? `expires ${lot.expiration_date}` : 'stash lot';
+    return lot.expiration_date ? `expires ${isMonthEnd(lot.expiration_date) ? lot.expiration_date.slice(0, 7) : lot.expiration_date}` : 'stash lot';
 }
 
 export function availability(ingredientId: string | null, lots: StashLot[], today: Date = new Date()): StashAvailability {
