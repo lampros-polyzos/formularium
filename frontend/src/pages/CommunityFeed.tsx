@@ -131,10 +131,10 @@ export default function CommunityFeed() {
     };
 
     return (
-        <div className="min-h-screen bg-[#f3f5f2] text-[#1f382a] font-sans p-6">
+        <div className="min-h-screen bg-[#f7f8f6] text-[#1f382a] font-sans">
             <Header title="Community Hub" backPath="/studio" backLabel="Back to Studio" />
-            <div className="max-w-6xl mx-auto mt-4">
-                <div className="flex justify-between items-end mb-8">
+            <div className="max-w-6xl mx-auto p-4 sm:p-6">
+                <div className="flex flex-wrap justify-between items-end gap-4 mb-8">
                     <div>
                         <h1 className="text-3xl font-bold">Community Hub</h1>
                         <p className="text-gray-600 mt-1">Discover formulas, ask questions, and learn from other chemists.</p>
