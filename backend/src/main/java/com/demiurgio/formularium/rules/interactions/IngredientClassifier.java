@@ -35,9 +35,9 @@ public final class IngredientClassifier {
     private static final Pattern CHELATOR_P = p("edta|phytate|phytic|glutamate diacetate|gluconate");
     private static final Pattern CLAY_P = p("kaolin|bentonite|^illite|moroccan lava|magnesium aluminum silicate|rhassoul");
     private static final Pattern OIL_ANTIOXIDANT_P = p("^tocopherol$|^tocopherol |rosmarinus officinalis.*leaf extract|ascorbyl palmitate|^bht$");
-    private static final Pattern FRAGILE_OIL_P = p("cannabis sativa|rosa canina|oenothera|vitis vinifera|triticum vulgare|\\bsqualene\\b|linum usitatissimum|borago|hippophae|rubus idaeus|carthamus tinctorius|punica granatum|nigella sativa|cucurbita pepo|opuntia ficus|aleurites moluccana");
+    private static final Pattern FRAGILE_OIL_P = p("cannabis sativa|rosa canina|oenothera|vitis vinifera.*\\boil\\b|triticum vulgare|\\bsqualene\\b|linum usitatissimum|borago|hippophae|rubus idaeus|carthamus tinctorius|punica granatum|nigella sativa|cucurbita pepo|opuntia ficus|aleurites moluccana");
     private static final Pattern PHOTOTOXIC_P = p("citrus (limon|aurantifolia|paradisi|bergamia)|aurantium amara (peel|fruit)");
-    private static final Pattern SOOTHER_P = p("panthenol|allantoin|bisabolol|madecassoside|centella|avena sativa|beta-glucan|calendula|chamomil|anthemis|aloe barbadensis|ectoin|hydrolyzed oat|cucumis|althaea");
+    private static final Pattern SOOTHER_P = p("panthenol|allantoin|bisabolol|madecassoside|centella|avena sativa|beta-glucan|calendula|chamomil|anthemis|aloe barbadensis|ectoin|hydrolyzed oat|cucumis|althaea|arnica");
     private static final Pattern BOTANICAL_P = p(" extract|juice| water$|hydrosol|distillate");
     private static final Pattern FATTY_ACID_P = p("^stearic acid|linoleic acid|palmitic acid");
     private static final Pattern PHOTOSTABILIZER_P = p("octocrylene|bis-ethylhexyloxyphenol|methylene bis-benzotriazolyl");
@@ -100,6 +100,10 @@ public final class IngredientClassifier {
         if (FATTY_ACID_P.matcher(inci).find()) t.add(BARRIER_FATTY_ACID);
         if (SOOTHER_P.matcher(inci).find() && !t.contains(WATER)) t.add(SOOTHER);
         if (inci.equals("caffeine")) t.add(CAFFEINE);
+        if (inci.contains("hedera helix") || inci.contains("aesculus hippocastanum") || inci.contains("ruscus aculeatus")) t.add(SAPONIN_EXTRACT);
+        if (t.contains(SAPONIN_EXTRACT) || inci.contains("paullinia cupana") || inci.contains("coffea arabica") || inci.contains("fucus vesiculosus")
+                || inci.contains("capsicum")) t.add(CONTOURING_EXTRACT);
+        if (inci.contains("capsicum") || inci.contains("zingiber officinale")) t.add(WARMING_IRRITANT);
         if (inci.equals("urea")) t.add(UREA);
         if (inci.equals("gluconolactone")) t.add(GLUCONOLACTONE);
         if ("alcohol".equals(lower(ing.solubility())) || inci.equals("azelaic acid")) t.add(NEEDS_SOLVENT);
@@ -149,7 +153,8 @@ public final class IngredientClassifier {
         if (inci.startsWith("tocopheryl acetate")) t.add(TOCOPHERYL_ACETATE);
         if (inci.startsWith("tocopher")) t.add(VITAMIN_E);
         if (inci.startsWith("ferulic")) t.add(FERULIC_ACID);
-        if (FRAGILE_OIL_P.matcher(inci).find()) t.add(FRAGILE_OIL);
+        // An extract of the same plant (grape seed extract, pomegranate extract) is not a polyunsaturated oil
+        if (FRAGILE_OIL_P.matcher(inci).find() && !inci.contains("extract")) t.add(FRAGILE_OIL);
         if (t.contains(RETINOID) || t.contains(BAKUCHIOL) || inci.startsWith("ubiquinone") || inci.startsWith("thioctic")) t.add(OXIDATION_PRONE);
         if ((Boolean.TRUE.equals(ing.isFragrance()) || fn.contains("fragrance")) && !water) t.add(FRAGRANCE);
         boolean furocoumarinFree = text.contains("fcf") || text.contains("bergapten-free") || text.contains("furocoumarin-free");

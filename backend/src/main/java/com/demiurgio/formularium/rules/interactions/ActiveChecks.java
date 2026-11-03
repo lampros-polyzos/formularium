@@ -48,6 +48,11 @@ public final class ActiveChecks {
                 Fix.remove(c.with(CHELATOR).stream().map(FormulaIngredient::id).toList(), "Remove the chelator"));
             }
         }
+        if (c.has(PEPTIDE) && c.has(L_ASCORBIC_ACID)) {
+            c.conflict("Peptides + L-Ascorbic Acid",
+                    c.names(L_ASCORBIC_ACID) + " needs a very low pH (about 2.5-3.5), which slowly breaks down " + c.names(PEPTIDE) + ".",
+                    "Use a vitamin C derivative (SAP, MAP, ethyl ascorbic acid), or keep the peptide and the vitamin C in separate products.");
+        }
         if (c.has(PEPTIDE) && (c.hasAny(AHA, BHA) || c.phBelow(4))) {
             c.conflict("Peptides + Acids",
                     "The low pH needed for exfoliating acids slowly breaks down " + c.names(PEPTIDE) + ".",
@@ -134,6 +139,13 @@ public final class ActiveChecks {
             c.synergy("Layered Hydration",
                     c.names(HYALURONIC) + " holds water on the surface while " + c.names(LIQUID_HUMECTANT) + " draws it into the skin.",
                     "Seal it in with an emollient or occlusive in dry climates.");
+        }
+
+        // Body-contouring extracts are traditionally paired with caffeine
+        if (c.has(CAFFEINE) && c.has(CONTOURING_EXTRACT)) {
+            c.synergy("Body-Contouring Team",
+                    c.names(CAFFEINE) + " is traditionally paired with " + c.names(CONTOURING_EXTRACT) + " in leg and body-contouring products.",
+                    "Dissolve the caffeine in hot water (it crystallizes above about 2%). Evidence that these products change body shape is limited, so avoid claims such as 'burns fat' or 'removes cellulite'.");
         }
 
         // Skin-identical lipids work best together

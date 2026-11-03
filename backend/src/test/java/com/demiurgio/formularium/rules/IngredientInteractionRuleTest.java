@@ -93,6 +93,21 @@ class IngredientInteractionRuleTest {
     private static final FormulaIngredient DHHB = ing("Diethylamino Hydroxybenzoyl Hexyl Benzoate", "Uvinul A Plus", "Active / UV Filter", 5, "oil", "non-ionic", null, null);
     private static final FormulaIngredient ZINC_OXIDE = ing("Zinc Oxide", "Zinc Oxide (Non-Nano)", "Active / UV Filter", 15, "dispersible", "non-ionic", 6.0, 8.0);
 
+    // Solid forms, peptides and extracts
+    private static final FormulaIngredient IVY = ing("Hedera Helix (Ivy) Extract", "Ivy Extract", "Active (Contouring)", 3, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient IVY_HIGH = ing("Hedera Helix (Ivy) Extract", "Ivy Extract", "Active (Contouring)", 4, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient HORSE_CHESTNUT = ing("Aesculus Hippocastanum (Horse Chestnut) Seed Extract", "Horse Chestnut Extract", "Active (Circulation)", 3, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient BUTCHERS_BROOM = ing("Ruscus Aculeatus Root Extract", "Butcher's Broom Extract", "Active (Circulation)", 2, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient CAPSICUM = ing("Capsicum Annuum Fruit Extract", "Capsicum Fruit Extract", "Active (Warming)", 0.3, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient GINGER = ing("Zingiber Officinale (Ginger) Root Extract", "Ginger Root Extract", "Active (Warming)", 0.5, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient CAFFEINE = ing("Caffeine", "Caffeine Anhydrous", "Active", 1.5, "water", "non-ionic", 4.0, 5.5);
+    private static final FormulaIngredient ARNICA = ing("Arnica Montana Flower Extract", "Arnica Flower Extract", "Active (Soothing)", 2, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient GRAPE_SEED_EXTRACT = ing("Vitis Vinifera (Grape) Seed Extract", "Grape Seed Extract", "Active (Antioxidant)", 1, "water", "non-ionic", 3.5, 7.0);
+    private static final FormulaIngredient GRAPE_SEED_OIL = ing("Vitis Vinifera (Grape) Seed Oil", "Grapeseed Oil", "Carrier Oil", 10, "oil", "non-ionic", null, null);
+    private static final FormulaIngredient POMEGRANATE_EXTRACT = ing("Punica Granatum Fruit Extract", "Pomegranate Extract", "Active (Antioxidant)", 1, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient PALMITOYL_TRIPEPTIDE_5 = ing("Palmitoyl Tripeptide-5", "Syn-Coll", "Active (Anti-Aging)", 2, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient GHK = ing("Tripeptide-1", "GHK", "Active (Repair)", 0.3, "water", "cationic", 5.0, 7.0);
+
     // ---------- Helpers ----------
 
     private List<Recommendation> run(Double ph, ProfileConfig profile, FormulaIngredient... ingredients) {
@@ -413,6 +428,75 @@ class IngredientInteractionRuleTest {
     void aFormulaWithoutUvFiltersGetsNoSunCareAdvice() {
         List<Recommendation> recs = run(null, WATER, GLYCERIN, OLIVEM, JOJOBA, PE9010);
         assertTrue(recs.stream().noneMatch(r -> r.title().startsWith("No UV") || r.title().equals("Broad-Spectrum Filter Mix")));
+    }
+
+    // ---------- Peptides ----------
+
+    @Test
+    void anyPeptideIsToldToStayAwayFromTheVeryLowPhOfPureVitaminC() {
+        assertTrue(has(run(null, WATER, PALMITOYL_TRIPEPTIDE_5, LAA, PE9010), "conflict", "Peptides + L-Ascorbic Acid"));
+        assertTrue(has(run(null, WATER, GHK, LAA, PE9010), "conflict", "Peptides + L-Ascorbic Acid"));
+    }
+
+    @Test
+    void peptidesAreFineWithAVitaminCDerivative() {
+        assertFalse(has(run(5.5, WATER, PALMITOYL_TRIPEPTIDE_5, ETHYL_C, PE9010), "conflict", "Peptides + L-Ascorbic Acid"));
+    }
+
+    @Test
+    void peptidesStillClashWithExfoliatingAcids() {
+        assertTrue(has(run(null, WATER, GHK, GLYCOLIC, PE9010), "conflict", "Peptides + Acids"));
+    }
+
+    // ---------- Extracts ----------
+
+    @Test
+    void caffeineWithAContouringExtractIsASynergyWithAHonestWarningAboutClaims() {
+        for (FormulaIngredient extract : List.of(IVY, HORSE_CHESTNUT, BUTCHERS_BROOM, CAPSICUM)) {
+            List<Recommendation> recs = run(null, WATER, CAFFEINE, extract, PE9010);
+            assertTrue(has(recs, "synergy", "Body-Contouring Team"), extract.name());
+        }
+        assertTrue(find(run(null, WATER, CAFFEINE, IVY, PE9010), "Body-Contouring Team").action().contains("avoid claims"));
+    }
+
+    @Test
+    void aContouringExtractAloneOrCaffeineAloneIsNotASynergy() {
+        assertFalse(has(run(null, WATER, IVY, PE9010), "synergy", "Body-Contouring Team"));
+        assertFalse(has(run(null, WATER, CAFFEINE, PE9010), "synergy", "Body-Contouring Team"));
+    }
+
+    @Test
+    void warmingExtractsGetASafetyTipInLeaveOnProducts() {
+        assertTrue(has(run(null, WATER, CAPSICUM, PE9010), "tip", "Warming Ingredient"));
+        assertTrue(has(run(null, WATER, GINGER, PE9010), "tip", "Warming Ingredient"));
+        assertTrue(find(run(null, WATER, CAPSICUM, PE9010), "Warming Ingredient").action().contains("never near the eyes"));
+        assertFalse(has(run(null, WATER, IVY, PE9010), "tip", "Warming Ingredient"));
+    }
+
+    @Test
+    void highSaponinExtractLevelsGetATip() {
+        assertTrue(has(run(null, WATER, IVY_HIGH, HORSE_CHESTNUT, PE9010), "tip", "High Saponin Extract Level")); // 7% together
+        assertFalse(has(run(null, WATER, IVY, PE9010), "tip", "High Saponin Extract Level")); // 3%
+        assertFalse(has(run(null, WATER, IVY, BUTCHERS_BROOM, PE9010), "tip", "High Saponin Extract Level")); // 5% is the limit, not over it
+    }
+
+    @Test
+    void arnicaCountsAsASoother() {
+        List<Recommendation> recs = run(null, WATER, GLYCOLIC, ARNICA, OLIVEM, PE9010);
+        assertTrue(has(recs, "synergy", "Actives + Soothers"));
+        assertFalse(has(recs, "tip", "Add a Soothing Ingredient"));
+    }
+
+    @Test
+    void grapeSeedOilIsFragileButGrapeSeedExtractAndPomegranateExtractAreNot() {
+        assertTrue(has(run(null, GRAPE_SEED_OIL, OLIVEM), "tip", "Protect Fragile Oils"));
+        assertFalse(has(run(null, WATER, GRAPE_SEED_EXTRACT, OLIVEM, PE9010), "tip", "Protect Fragile Oils"));
+        assertFalse(has(run(null, WATER, POMEGRANATE_EXTRACT, OLIVEM, PE9010), "tip", "Protect Fragile Oils"));
+        assertTrue(has(run(null, POMEGRANATE_OIL(), OLIVEM), "tip", "Protect Fragile Oils"));
+    }
+
+    private static FormulaIngredient POMEGRANATE_OIL() {
+        return ing("Punica Granatum Seed Oil", "Pomegranate Seed Oil", "Carrier Oil", 3, "oil", "non-ionic", null, null);
     }
 
     // ---------- Output ----------

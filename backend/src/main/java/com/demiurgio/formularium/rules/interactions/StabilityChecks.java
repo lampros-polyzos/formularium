@@ -162,6 +162,16 @@ public final class StabilityChecks {
                     c.names(PHOTOTOXIC_OIL) + " contains furocoumarins that can cause burns and dark patches on sun-exposed skin.",
                     "Use the furocoumarin-free (FCF) grade or a steam-distilled citrus oil.");
         }
+        if (c.has(WARMING_IRRITANT)) {
+            c.tip("Warming Ingredient",
+                    c.names(WARMING_IRRITANT) + " heats the skin and can sting or burn, especially on hot, damp or freshly shaved skin.",
+                    "Keep the level low, use it on the body only, never near the eyes or lips or on broken skin, patch test first and wash your hands after applying.");
+        }
+        if (c.percent(SAPONIN_EXTRACT) > 5) {
+            c.tip("High Saponin Extract Level",
+                    String.format(Locale.ROOT, "%.1f%% of %s is a lot: the saponins can irritate or cause allergies.", c.percent(SAPONIN_EXTRACT), c.names(SAPONIN_EXTRACT)),
+                    "Stay at or below about 5% and patch test; avoid broken skin.");
+        }
         double fragrance = c.percent(FRAGRANCE);
         if (fragrance > 1) {
             c.tip("High Fragrance Level",
