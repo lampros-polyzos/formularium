@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { regionFrom, type SellingRegion } from '../lib/regionalLimits';
 
 type SettingsContextType = {
     currency: string;
@@ -7,6 +8,9 @@ type SettingsContextType = {
     setDateFormat: (val: string) => void;
     warningDays: number;
     setWarningDays: (val: number) => void;
+    /** Where you plan to sell: formulas are checked against that region's ingredient limits. */
+    sellingRegion: SellingRegion;
+    setSellingRegion: (val: SellingRegion) => void;
     formatDate: (dateString: string | null) => string;
 };
 
@@ -17,11 +21,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const [dateFormat, setDateFormat] = useState(() => localStorage.getItem('app_date_format') || 'en-US');
     const [warningDays, setWarningDays] = useState(() => parseInt(localStorage.getItem('stash_warning_days') || '30', 10));
 
+    const [sellingRegion, setSellingRegion] = useState<SellingRegion>(() => regionFrom(localStorage.getItem('selling_region')));
+
     useEffect(() => {
         localStorage.setItem('app_currency', currency);
         localStorage.setItem('app_date_format', dateFormat);
         localStorage.setItem('stash_warning_days', warningDays.toString());
-    }, [currency, dateFormat, warningDays]);
+        localStorage.setItem('selling_region', sellingRegion);
+    }, [currency, dateFormat, warningDays, sellingRegion]);
 
     const formatDate = (dateString: string | null) => {
         if (!dateString) return '—';
@@ -34,7 +41,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     return (
-        <SettingsContext.Provider value={{ currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays, formatDate }}>
+        <SettingsContext.Provider value={{ currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays, sellingRegion, setSellingRegion, formatDate }}>
             {children}
         </SettingsContext.Provider>
     );

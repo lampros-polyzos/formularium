@@ -3,6 +3,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useDialog } from '../hooks/useDialog';
 import { supabase } from '../lib/supabase';
+import { REGIONS, regionFrom } from '../lib/regionalLimits';
 import AccountDataSection from './AccountDataSection';
 
 interface SettingsModalProps {
@@ -11,7 +12,7 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-    const { currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays } = useSettings();
+    const { currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays, sellingRegion, setSellingRegion } = useSettings();
     const { user, username } = useAuth();
     const { alert } = useDialog();
 
@@ -133,6 +134,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
                             />
                         </div>
+                    </div>
+
+                    {/* Selling */}
+                    <div>
+                        <h4 className="font-semibold text-[#1f382a] border-b border-gray-100 pb-2 mb-3">Selling</h4>
+                        <label htmlFor="selling-region" className="block text-sm font-medium text-gray-700 mb-1">Where do you plan to sell?</label>
+                        <p className="text-xs text-gray-500 mb-2">
+                            Formulas are checked against that region's maximum levels (for example salicylic acid and arbutin in the EU), with a warning in the editor when one is over.
+                        </p>
+                        <select
+                            id="selling-region"
+                            value={regionFrom(sellingRegion)}
+                            onChange={(e) => setSellingRegion(regionFrom(e.target.value))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none bg-white"
+                        >
+                            <option value="none">Not selling (no checks)</option>
+                            <option value="eu">{REGIONS.eu.label}</option>
+                        </select>
                     </div>
 
                     <AccountDataSection />

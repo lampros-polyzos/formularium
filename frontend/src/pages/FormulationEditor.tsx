@@ -31,6 +31,7 @@ import { ClaimsPanel } from '../components/ClaimsPanel';
 import type { MarketingClaim, ClaimViolation } from '../types/claims';
 import FormulationCostCalculator from '../components/FormulationCostCalculator';
 import { useSettings } from '../contexts/SettingsContext';
+import RegionalLimitsPanel from '../components/RegionalLimitsPanel';
 import ShareFormulaModal from '../components/ShareFormulaModal';
 import Header from '../components/Header';
 import GuidedTour from '../components/GuidedTour';
@@ -807,7 +808,7 @@ const FormulationEditor = () => {
         name: ing.trade_name || ing.inci_name,
         percentage: ing.percentage || 0
     }));
-    const { currency } = useSettings();
+    const { currency, sellingRegion } = useSettings();
 
     return (
         <div className="min-h-screen bg-[#f3f5f2] text-[#1f382a] font-sans flex flex-col">
@@ -968,6 +969,7 @@ const FormulationEditor = () => {
                             }}
                         />
                     </div>
+                    <RegionalLimitsPanel region={sellingRegion} ingredients={formulaIngredients} />
                     <div data-tour="recommendations">
                         <RecommendationsPanel recommendations={recommendations} onFix={handleFix} canFix={canFix} />
                     </div>

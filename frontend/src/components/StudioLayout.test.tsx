@@ -35,7 +35,7 @@ vi.mock('../lib/batches', async (importOriginal) => ({
 }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, session: null, username: null, isLoading: false }) }));
 vi.mock('../contexts/SettingsContext', () => ({
-    useSettings: () => ({ currency: '$', setCurrency: vi.fn(), dateFormat: 'en-US', setDateFormat: vi.fn(), warningDays: 30, setWarningDays: vi.fn(), formatDate: (d: string) => d }),
+    useSettings: () => ({ currency: '$', setCurrency: vi.fn(), dateFormat: 'en-US', setDateFormat: vi.fn(), warningDays: 30, setWarningDays: vi.fn(), sellingRegion: 'none', setSellingRegion: vi.fn(), formatDate: (d: string) => d }),
 }));
 
 const settle = () => act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); });
