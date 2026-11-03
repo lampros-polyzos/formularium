@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BellRing, FlaskConical } from 'lucide-react';
-import Header from '../components/Header';
+import StudioLayout from '../components/StudioLayout';
 import DueCheckRow from '../components/DueCheckRow';
 import { usePageTitle } from '../components/content/usePageTitle';
 import { listBatches, type BatchListItem } from '../lib/batches';
@@ -54,9 +54,7 @@ export default function BatchesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#f7f8f6] text-gray-900 font-sans">
-            <Header title="Batches" />
-
+        <StudioLayout active="batches" title="Batches">
             <main className="max-w-5xl mx-auto px-6 py-10">
                 <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
                     <div>
@@ -154,6 +152,6 @@ export default function BatchesPage() {
                     </ul>
                 )}
             </main>
-        </div>
+        </StudioLayout>
     );
 }

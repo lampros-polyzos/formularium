@@ -104,6 +104,15 @@ describe('BatchesPage', () => {
         expect(screen.queryByText('Day Cream')).not.toBeInTheDocument();
     });
 
+    it('has the Studio sidebar with Batches highlighted, and a way back to the Studio', async () => {
+        mocks.listBatches.mockResolvedValue([]);
+        await renderList();
+        const nav = screen.getByRole('navigation', { name: 'Studio' });
+        expect(within(nav).getByRole('link', { name: /Batches/ })).toHaveAttribute('aria-current', 'page');
+        expect(within(nav).getByRole('link', { name: 'My Stash' })).toHaveAttribute('href', '/stash');
+        expect(screen.getByRole('button', { name: /Back to Studio/ })).toBeInTheDocument();
+    });
+
     it('explains how to make a first batch when there are none', async () => {
         mocks.listBatches.mockResolvedValue([]);
         await renderList();
@@ -147,6 +156,27 @@ describe('BatchDetailPage', () => {
         expect(screen.getByText('26 g')).toBeInTheDocument();
         expect(screen.getByText(/5 g was taken out of your stash/)).toBeInTheDocument();
         expect(screen.getByRole('link', { name: /Make it again/ })).toHaveAttribute('href', '/studio/f1');
+    });
+
+    it('has the Studio sidebar with Batches highlighted, and a way back to the Studio', async () => {
+        await renderDetail();
+        const nav = screen.getByRole('navigation', { name: 'Studio' });
+        expect(within(nav).getByRole('link', { name: /Batches/ })).toHaveAttribute('aria-current', 'page');
+        expect(screen.getByRole('button', { name: /Back to Studio/ })).toBeInTheDocument();
+    });
+
+    it('keeps the sidebar and the way back even when the batch cannot be loaded', async () => {
+        mocks.getBatch.mockRejectedValue(new Error('Could not load this batch.'));
+        render(
+            <MemoryRouter initialEntries={['/batches/b1']}>
+                <Routes><Route path="/batches/:id" element={<BatchDetailPage />} /></Routes>
+            </MemoryRouter>
+        );
+        await act(async () => { await Promise.resolve(); });
+        await act(async () => { await Promise.resolve(); });
+        expect(screen.getByRole('alert')).toHaveTextContent('Could not load this batch.');
+        expect(screen.getByRole('navigation', { name: 'Studio' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Back to Studio/ })).toBeInTheDocument();
     });
 
     it('records a check-in and reloads the batch', async () => {

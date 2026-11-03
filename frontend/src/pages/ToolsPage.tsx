@@ -6,10 +6,12 @@ import PhDoseTool from '../components/tools/PhDoseTool';
 import PreservativeTool from '../components/tools/PreservativeTool';
 import UnitsTool from '../components/tools/UnitsTool';
 import { usePageTitle } from '../components/content/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 import { TOOLS, isToolId, type ToolId } from '../lib/toolLinks';
 
 export default function ToolsPage() {
     usePageTitle('Calculators');
+    const { user } = useAuth();
     const [params, setParams] = useSearchParams();
     const requested = params.get('tool');
     const tool: ToolId = isToolId(requested) ? requested : 'hlb';
@@ -20,7 +22,7 @@ export default function ToolsPage() {
 
     return (
         <div className="min-h-screen bg-[#f7f8f6] text-gray-900 font-sans">
-            <Header title="Calculators" />
+            <Header title="Calculators" backPath={user ? "/studio" : undefined} backLabel="Back to Studio" />
 
             <section className="bg-[#d8e2d3] px-6 py-10 rounded-b-[3rem]">
                 <div className="max-w-4xl mx-auto text-center">

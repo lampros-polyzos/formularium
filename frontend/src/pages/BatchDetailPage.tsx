@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarPlus, Check, Plus, Printer, RotateCcw, TriangleAlert } from 'lucide-react';
-import Header from '../components/Header';
+import StudioLayout from '../components/StudioLayout';
 import CheckInForm from '../components/CheckInForm';
 import ObservationHelp from '../components/ObservationHelp';
 import { buildCheckCalendar, calendarFilename } from '../lib/checkCalendar';
@@ -91,21 +91,19 @@ export default function BatchDetailPage() {
 
     if (error && !detail) {
         return (
-            <div className="min-h-screen bg-[#f7f8f6]">
-                <Header title="Batch" />
+            <StudioLayout active="batches" title="Batch">
                 <main className="max-w-xl mx-auto px-6 py-20 text-center">
                     <p role="alert" className="text-red-700 mb-6">{error}</p>
                     <Link to="/batches" className="font-bold text-[#2c4c3b] hover:underline">Back to your batches</Link>
                 </main>
-            </div>
+            </StudioLayout>
         );
     }
     if (!detail) {
         return (
-            <div className="min-h-screen bg-[#f7f8f6]">
-                <Header title="Batch" />
+            <StudioLayout active="batches" title="Batch">
                 <p className="text-center text-gray-500 py-20">Loading...</p>
-            </div>
+            </StudioLayout>
         );
     }
 
@@ -167,8 +165,7 @@ export default function BatchDetailPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#f7f8f6] text-gray-900 font-sans">
-            <Header title="Batch" />
+        <StudioLayout active="batches" title="Batch">
             <main className="max-w-4xl mx-auto px-6 py-8">
                 <Link to="/batches" className="inline-flex items-center gap-1 text-sm font-medium text-[#3a5a4a] hover:text-[#1f382a] mb-4">
                     <ArrowLeft size={14} aria-hidden /> All batches
@@ -456,6 +453,6 @@ export default function BatchDetailPage() {
                     </div>
                 </section>
             </main>
-        </div>
+        </StudioLayout>
     );
 }
