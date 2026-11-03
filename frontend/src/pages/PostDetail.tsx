@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
 import RecipeRatings from '../components/RecipeRatings';
+import { RemixedFrom, RemixList } from '../components/PostRemixes';
+import { withLineage } from '../lib/lineage';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -208,18 +210,21 @@ export default function PostDetail() {
 
         setIsCloning(true);
         try {
-            // 1. Create a new formulation draft in the user's studio
-            const { data: newDraft, error: draftError } = await supabase
-                .from('formulations')
-                .insert([{
-                    name: `${post.title} (Clone)`,
-                    user_id: user.id,
-                    status: 'Draft',
-                    target_weight_g: 100
-                }])
-                .select('id')
-                .single();
-
+            // 1. Create a new formulation draft in the user's studio, remembering which recipe it started as
+            const { data: newDraft, error: draftError } = await withLineage(
+                extra => supabase
+                    .from('formulations')
+                    .insert([{
+                        name: `${post.title} (Clone)`,
+                        user_id: user.id,
+                        status: 'Draft',
+                        target_weight_g: 100,
+                        ...extra,
+                    }])
+                    .select('id')
+                    .single(),
+                { remixed_from_post_id: post.id },
+            );
             if (draftError) throw draftError;
 
             // 2. Extract unique phases from the recipe snapshot
@@ -359,6 +364,8 @@ export default function PostDetail() {
 
                             <h1 className="text-3xl font-bold text-[#1f382a] mb-2">{post.title}</h1>
 
+                            <RemixedFrom originalPostId={post.remixed_from_post_id} />
+
                             <div className="text-xs text-gray-500 mb-6 flex items-center gap-2">
                                 <span className="font-medium text-gray-700">{post.author_name || 'Anonymous Formulary'}</span>
                                 <span>•</span>
@@ -436,6 +443,8 @@ export default function PostDetail() {
                         activeVersion={activeVersion}
                     />
                 )}
+
+                {post.post_type === 'formulation' && <RemixList postId={post.id} />}
 
                 {/* Comments Section */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#c1d1b9] overflow-hidden">

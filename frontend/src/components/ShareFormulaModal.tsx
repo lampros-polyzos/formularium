@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { withLineage } from '../lib/lineage';
 
 interface ShareFormulaModalProps {
     isOpen: boolean;
@@ -10,13 +11,15 @@ interface ShareFormulaModalProps {
     activeProfileName: string | null;
     formulaId: string | null;
     communityPostId: string | null;
+    /** The community recipe this formula started as, if it is a remix. */
+    remixedFromPostId?: string | null;
     onShareSuccess: (postId: string) => void;
 }
 
 type DevStatus = 'concept' | 'in-testing' | 'stable';
 
 export default function ShareFormulaModal({
-    isOpen, onClose, currentProjectName, recipeData, activeProfileName, formulaId, communityPostId, onShareSuccess
+    isOpen, onClose, currentProjectName, recipeData, activeProfileName, formulaId, communityPostId, remixedFromPostId = null, onShareSuccess
 }: ShareFormulaModalProps) {
     const { user, username } = useAuth(); // Correctly extracted once
 
@@ -74,19 +77,24 @@ export default function ShareFormulaModal({
                     .eq('id', activePostId);
                 if (updateError) throw updateError;
             } else {
-                const { data: postData, error: postError } = await supabase
-                    .from('community_posts')
-                    .insert([{
-                        title: title.trim(),
-                        write_up: writeUp.trim(),
-                        post_type: 'formulation',
-                        development_status: devStatus,
-                        profile_name: activeProfileName,
-                        author_id: user.id,
-                        author_name: username || 'Anonymous Formulary' // Applied here
-                    }])
-                    .select('id')
-                    .single();
+                // A recipe that started as someone else's says so on its post
+                const { data: postData, error: postError } = await withLineage(
+                    extra => supabase
+                        .from('community_posts')
+                        .insert([{
+                            title: title.trim(),
+                            write_up: writeUp.trim(),
+                            post_type: 'formulation',
+                            development_status: devStatus,
+                            profile_name: activeProfileName,
+                            author_id: user.id,
+                            author_name: username || 'Anonymous Formulary', // Applied here
+                            ...extra,
+                        }])
+                        .select('id')
+                        .single(),
+                    { remixed_from_post_id: remixedFromPostId },
+                );
 
                 if (postError) throw postError;
                 activePostId = postData.id;

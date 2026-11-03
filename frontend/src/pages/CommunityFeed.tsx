@@ -18,6 +18,8 @@ interface CommunityPost {
     development_status?: DevStatus;
     created_at: string;
     author_id: string;
+    /** Set when the recipe started as another community recipe. */
+    remixed_from_post_id?: string | null;
 }
 
 const POPULAR_TAGS = [
@@ -239,8 +241,13 @@ export default function CommunityFeed() {
                                             <span className={`text-xs font-bold px-2 py-1 rounded border flex items-center gap-1 ${typeMeta.color}`}>
                                                 {typeMeta.icon} {typeMeta.label}
                                             </span>
-                                            {/* Formulation Status Badge (renders only if applicable) */}
-                                            {post.post_type === 'formulation' && getStatusBadge(post.development_status)}
+                                            <div className="flex items-center gap-1.5">
+                                                {/* Formulation Status Badge (renders only if applicable) */}
+                                                {post.post_type === 'formulation' && getStatusBadge(post.development_status)}
+                                                {post.remixed_from_post_id && (
+                                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-[#e9eee7] text-[#2c4c3b] border border-[#c1d1b9]" title="This recipe started as another community recipe">↻ Remix</span>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <h3 className="text-lg font-bold text-[#1f382a] mb-2 group-hover:text-[#2c4c3b] line-clamp-2 pr-12">

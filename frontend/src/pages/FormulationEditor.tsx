@@ -16,6 +16,9 @@ import { clearDraft, formulaSnapshot, loadDraft, saveDraft, type FormulaDraft } 
 import { useAutosave } from '../hooks/useAutosave';
 import { useFavorites } from '../hooks/useFavorites';
 import { useCatalogCandidates } from '../hooks/useCatalogCandidates';
+import { useLineage } from '../hooks/useLineage';
+import { withLineage } from '../lib/lineage';
+import LineageNotice from '../components/LineageNotice';
 import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import AutosaveIndicator from '../components/AutosaveIndicator';
 import { useAuth } from '../contexts/AuthContext';
@@ -79,6 +82,10 @@ const FormulationEditor = () => {
     const [targetClaims, setTargetClaims] = useState<MarketingClaim[]>([]);
     const [claimViolations, setClaimViolations] = useState<ClaimViolation[]>([]);
     const [communityPostId, setCommunityPostId] = useState<string | null>(null);
+    // Where this formula came from: a community recipe, and/or another of the user's formulas
+    const [remixedFromPostId, setRemixedFromPostId] = useState<string | null>(null);
+    const [clonedFromFormulationId, setClonedFromFormulationId] = useState<string | null>(null);
+    const { remixedFrom, clonedFrom } = useLineage(remixedFromPostId, clonedFromFormulationId);
 
     // Search and Ingredients State
     const [searchTerm, setSearchTerm] = useState('');
@@ -158,6 +165,8 @@ const FormulationEditor = () => {
                 setProjectName(formulation.name);
                 setProfileId(formulation.profile_id);
                 setCommunityPostId(formulation.community_post_id);
+                setRemixedFromPostId(formulation.remixed_from_post_id ?? null);
+                setClonedFromFormulationId(formulation.cloned_from_formulation_id ?? null);
                 setTargetWeight(formulation.target_weight_g || 100);
                 if (formulation.target_ph) setTargetPh(formulation.target_ph);
 
@@ -678,11 +687,11 @@ const FormulationEditor = () => {
                 status: 'Draft'
             };
 
-            const { data: newFormulation, error: insertError } = await supabase
-                .from('formulations')
-                .insert([formulationData])
-                .select('id')
-                .single();
+            // The copy remembers what it was copied from, and keeps the community recipe the original started as
+            const { data: newFormulation, error: insertError } = await withLineage(
+                extra => supabase.from('formulations').insert([{ ...formulationData, ...extra }]).select('id').single(),
+                { cloned_from_formulation_id: formulaId, remixed_from_post_id: remixedFromPostId },
+            );
 
             if (insertError) throw insertError;
             const newFormulationId = newFormulation.id;
@@ -826,6 +835,7 @@ const FormulationEditor = () => {
                                 hasProfile={!!profileId}
                                 onRetry={() => { void autosave.saveNow(); }}
                             />
+                            <LineageNotice remixedFrom={remixedFrom} clonedFrom={clonedFrom} className="mt-0.5" />
                         </ProjectTitle>
 
                         <EditorActions
@@ -1012,6 +1022,7 @@ const FormulationEditor = () => {
                 activeProfileName={activeProfile?.name || null}
                 formulaId={formulaId}
                 communityPostId={communityPostId}
+                remixedFromPostId={remixedFromPostId}
                 onShareSuccess={(newPostId) => setCommunityPostId(newPostId)}
             />
         </div>
