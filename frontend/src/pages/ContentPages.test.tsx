@@ -154,6 +154,29 @@ describe('Blog article page', () => {
         for (const link of links) expect(link).toHaveAttribute('href', '/blog/home-lab-starter-kit');
     });
 
+    it('renders the thickeners article for beginners, with every section, no raw markup and working links', () => {
+        renderAt('/blog/thickeners-and-stable-emulsions');
+        expect(screen.getByRole('heading', { level: 1, name: /why emulsions separate/i })).toBeInTheDocument();
+        expect(screen.getAllByText('Beginner').length).toBeGreaterThan(0);
+        const toc = within(screen.getByRole('navigation', { name: /on this page/i }));
+        for (const heading of ['Why every emulsion wants to separate', 'Four ways an emulsion fails', 'Meet the main families', 'How to choose the right one', 'How to add a thickener without lumps', 'Fixing common problems', 'Quick checklist']) {
+            expect(toc.getByText(heading)).toBeInTheDocument();
+        }
+        expect(document.body.textContent).not.toContain('**');
+        expect(document.body.textContent).not.toMatch(/\]\(/);
+        expect(screen.getByRole('link', { name: 'regulation text' })).toHaveAttribute('href', expect.stringContaining('eur-lex.europa.eu'));
+        expect(screen.getByRole('link', { name: 'HLB calculator' })).toHaveAttribute('href', '/tools?tool=hlb');
+        expect(screen.getByText(/Planning to sell in the EU/)).toBeInTheDocument();
+    });
+
+    it('covers the four instability mechanisms and the main thickener families', () => {
+        const text = ARTICLES.find(a => a.slug === 'thickeners-and-stable-emulsions')!.body
+            .map(b => ('text' in b ? b.text : 'items' in b ? b.items.join(' ') : 'rows' in b ? b.rows.flat().join(' ') : '')).join(' ');
+        for (const word of ['Creaming', 'Flocculation', 'Coalescence', 'Ostwald ripening', 'Stokes', 'yield stress', 'shear-thinning', 'Carbomer', 'Xanthan', 'Gellan', 'Carrageenan', 'Alginate', 'Konjac', 'HEC', 'HPMC', 'Bentonite', 'Fumed silica', 'Turbiscan', 'Dynamic light scattering', 'Thixotropy']) {
+            expect(text.toLowerCase(), word).toContain(word.toLowerCase());
+        }
+    });
+
     it('shows a friendly message for an unknown article', () => {
         renderAt('/blog/does-not-exist');
         expect(screen.getByText(/couldn't find that article/i)).toBeInTheDocument();
