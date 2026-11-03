@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowRight, BookOpen, ClipboardList, GraduationCap, HelpCircle, Search, ShieldCheck, Table2, Wrench, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Calculator, ClipboardList, GraduationCap, HelpCircle, Search, ShieldCheck, Table2, Wrench, X } from 'lucide-react';
 import Header from '../components/Header';
 import ArticleCard from '../components/content/ArticleCard';
 import {
@@ -15,6 +15,7 @@ import { usePageTitle } from '../components/content/usePageTitle';
 import { ARTICLES } from '../content/articles';
 import { FAQ, GLOSSARY, TROUBLESHOOTING } from '../content/learn';
 import { searchLearn } from '../content/search';
+import { TOOLS, toolsUrl } from '../lib/toolLinks';
 
 const TABS = [
     { id: 'start', label: 'Start here', icon: GraduationCap, blurb: `A step-by-step path from your first question to your first batch.` },
@@ -155,6 +156,21 @@ export default function LearnHubPage() {
                         </div>
                     </>
                 )}
+
+                <section className="mt-16" aria-labelledby="learn-calculators">
+                    <div className="flex items-baseline justify-between mb-6">
+                        <h2 id="learn-calculators" className="text-2xl font-bold text-[#1f382a] flex items-center gap-2"><Calculator size={22} aria-hidden /> Calculators</h2>
+                        <Link to="/tools" className="text-sm font-bold text-[#2c4c3b] hover:underline inline-flex items-center gap-1">All calculators <ArrowRight size={14} /></Link>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {TOOLS.map(t => (
+                            <Link key={t.id} to={toolsUrl(t.id)} className="block bg-white border border-[#c1d1b9] rounded-xl p-4 hover:shadow-md transition-shadow">
+                                <span className="font-bold text-[#1f382a]">{t.label}</span>
+                                <span className="block text-sm text-gray-600 mt-1">{t.blurb}</span>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
 
                 <section className="mt-16">
                     <div className="flex items-baseline justify-between mb-6">

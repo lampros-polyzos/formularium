@@ -15,6 +15,7 @@ import PostDetail from './pages/PostDetail';
 import BlogPage from './pages/BlogPage';
 import BlogArticlePage from './pages/BlogArticlePage';
 import LearnHubPage from './pages/LearnHubPage';
+import ToolsPage from './pages/ToolsPage';
 import LegalPage from './pages/LegalPage';
 import BatchesPage from './pages/BatchesPage';
 import BatchDetailPage from './pages/BatchDetailPage';
@@ -33,6 +34,7 @@ function App() {
             <Route path="/blog" element={<BlogPage />} />
             <Route path="/blog/:slug" element={<BlogArticlePage />} />
             <Route path="/learn" element={<LearnHubPage />} />
+            <Route path="/tools" element={<ToolsPage />} />
             <Route path="/privacy" element={<LegalPage document={PRIVACY_POLICY} />} />
             <Route path="/terms" element={<LegalPage document={TERMS_OF_USE} />} />
 

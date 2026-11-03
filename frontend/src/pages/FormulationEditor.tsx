@@ -29,7 +29,8 @@ import { EDITOR_TOUR_STEPS } from '../components/editorTourSteps';
 import SubstitutionHint from '../components/SubstitutionHint';
 import BalancePreviewModal from '../components/BalancePreviewModal';
 import { Lock, LockOpen, PackageCheck, Scale } from 'lucide-react';
-import { balanceFormula, inferKind, startingPercentage, type BalanceResult } from '../lib/autoBalance';
+import { balanceFormula, inferKind, isWaterBase, startingPercentage, type BalanceResult } from '../lib/autoBalance';
+import { fixToolLink, toolsUrl } from '../lib/toolLinks';
 import {
     analyzeFormula,
     buildSourcingPayload,
@@ -460,6 +461,12 @@ const FormulationEditor = () => {
             stashIds: new Set(stashEntries.map(entry => entry.ingredient_id)),
         })
         : []), [fixPicker, catalog, targetPh, targetClaims, formulaIngredients, stashEntries]);
+
+    const fixTool = useMemo(() => {
+        if (!fixPicker) return null;
+        const waterPct = formulaIngredients.filter(isWaterBase).reduce((sum, i) => sum + (i.percentage || 0), 0);
+        return fixToolLink(fixPicker, { batchG: targetWeight, waterPct, targetPh });
+    }, [fixPicker, formulaIngredients, targetWeight, targetPh]);
 
     useEffect(() => {
         if (!fixToast) return;
@@ -954,6 +961,17 @@ const FormulationEditor = () => {
                     Guide
                 </button>
 
+                {/* Page-Specific Action: Calculators (new tab, so the open formula is untouched) */}
+                <a
+                    href="/tools"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-[#2c4c3b] transition-colors"
+                    title="Open the calculators in a new tab"
+                >
+                    Calculators
+                </a>
+
                 {/* Page-Specific Action: Favorites Dropdown */}
                 <div className="relative" data-tour="favorites">
                     <button
@@ -1221,6 +1239,15 @@ const FormulationEditor = () => {
                                 className="w-20 border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
                                 placeholder="5.5"
                             />
+                            <a
+                                href={toolsUrl('ph', { batch: targetWeight, target: targetPh })}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs font-bold text-[#2c4c3b] hover:underline"
+                                title="Work out how much acid or base to add"
+                            >
+                                Adjust pH
+                            </a>
                         </div>
                     </div>
 
@@ -1680,6 +1707,7 @@ const FormulationEditor = () => {
                 <FixSuggestionModal
                     category={fixPicker}
                     suggestions={fixSuggestions}
+                    toolLink={fixTool}
                     onPick={({ ingredient }) => {
                         handleAddIngredient(ingredient as unknown as DatabaseIngredient);
                         setFixPicker(null);

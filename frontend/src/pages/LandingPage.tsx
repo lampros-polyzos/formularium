@@ -171,6 +171,7 @@ const LandingPage = () => {
         <div className="flex items-center gap-6 text-[#2c4c3b] font-medium text-sm">
           <button onClick={() => goTo('/library')} className="hover:text-black hidden sm:block">Library</button>
           <button onClick={() => goTo('/community')} className="hover:text-black hidden sm:block">Community</button>
+          <button onClick={() => navigate('/tools')} className="hover:text-black hidden sm:block">Tools</button>
           <button onClick={() => navigate('/learn')} className="hover:text-black hidden sm:block">Learn</button>
           <button onClick={() => navigate('/blog')} className="hover:text-black hidden sm:block">Blog</button>
           <div>
@@ -535,6 +536,7 @@ const LandingPage = () => {
               <ul className="space-y-2 text-gray-500">
                 <li><button onClick={() => goTo('/studio')} className="hover:text-[#1f382a]">Studio</button></li>
                 <li><button onClick={() => goTo('/library')} className="hover:text-[#1f382a]">Library</button></li>
+                <li><button onClick={() => navigate('/tools')} className="hover:text-[#1f382a]">Calculators</button></li>
                 <li><button onClick={() => navigate('/learn')} className="hover:text-[#1f382a]">Learn</button></li>
                 <li><button onClick={() => navigate('/blog')} className="hover:text-[#1f382a]">Blog</button></li>
                 <li><a href="#pricing" className="hover:text-[#1f382a]">Pricing</a></li>

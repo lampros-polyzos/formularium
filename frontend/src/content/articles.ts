@@ -157,7 +157,7 @@ const RAW_ARTICLES: Article[] = [
             { type: 'h2', text: `Using a preservative correctly` },
             { type: 'ol', items: [
                 `Read the supplier's datasheet for the **usage range, pH range and maximum temperature**.`,
-                `Weigh it accurately, since it is usually only 0.5-1.5% of the batch.`,
+                `Weigh it accurately, since it is usually only 0.5-1.5% of the batch. The [preservative calculator](/tools?tool=preservative) gives the exact grams.`,
                 `Add it during the **cool-down phase**, below its heat limit, and mix thoroughly.`,
                 `Check the final **pH** is inside the preservative's working range.`,
                 `Use clean, sanitised tools and containers. A preservative cannot rescue a dirty batch.`,
@@ -196,7 +196,7 @@ const RAW_ARTICLES: Article[] = [
                 [`Washes off`, `Easily`, `Needs a cleanser`],
             ] },
             { type: 'h2', text: `What HLB means` },
-            { type: 'p', text: `**HLB** (hydrophilic-lipophilic balance) is a 0-20 scale describing how water-loving an emulsifier is. Many stable creams combine two emulsifiers, one low and one high. In the ingredient library, for example, Steareth-2 has an HLB of 4.9 and Steareth-20 an HLB of 15.3. Used together they form very tight, stable structures.` },
+            { type: 'p', text: `**HLB** (hydrophilic-lipophilic balance) is a 0-20 scale describing how water-loving an emulsifier is. Many stable creams combine two emulsifiers, one low and one high. In the ingredient library, for example, Steareth-2 has an HLB of 4.9 and Steareth-20 an HLB of 15.3. Used together they form very tight, stable structures. The [HLB calculator](/tools?tool=hlb) works out the ratio for your oils.` },
             { type: 'h2', text: `The ingredients of a stable emulsion` },
             { type: 'ul', items: [
                 `**Emulsifier**, typically 2-5% of a lotion. Higher oil loads need more.`,
@@ -358,7 +358,7 @@ const RAW_ARTICLES: Article[] = [
             { type: 'ul', items: [
                 `**To lower:** citric acid or lactic acid solution, added drop by drop.`,
                 `**To raise:** L-arginine, or a dilute (about 10%) sodium hydroxide solution.`,
-                `Stir well and re-measure after each addition. It is easy to overshoot.`,
+                `Stir well and re-measure after each addition. It is easy to overshoot. The [pH adjuster calculator](/tools?tool=ph) turns a small test into a dose for the whole batch.`,
                 `Re-check after 24 hours, because some ingredients (zinc oxide, gluconolactone) make pH drift.`,
             ] },
             { type: 'callout', tone: 'warning', title: `Handle acids and alkalis with care`, text: `Wear gloves and eye protection when working with concentrated acids or sodium hydroxide. Add them to water, never the reverse, and keep them away from children and pets.` },

@@ -3,6 +3,7 @@ import { ARTICLES } from './articles';
 import { blockText, CATEGORIES, headingId, internalLinks, readingMinutes, tableOfContents } from './helpers';
 import { CHEAT_SHEETS, FAQ, GLOSSARY, LEARNING_PATH, TROUBLESHOOTING } from './learn';
 import { searchLearn } from './search';
+import { isToolId } from '../lib/toolLinks';
 import { excerptOf, toCommunityArticle } from './community';
 
 const slugs = new Set(ARTICLES.map(a => a.slug));
@@ -13,6 +14,7 @@ function isValidInternalLink(href: string): boolean {
     const [path, queryString] = href.split('?');
     if (path === '/blog') return true;
     if (path.startsWith('/blog/')) return slugs.has(path.slice('/blog/'.length));
+    if (path === '/tools') return isToolId(new URLSearchParams(queryString ?? '').get('tool'));
     if (path === '/learn') return !queryString || TABS.has(new URLSearchParams(queryString).get('tab') ?? '');
     return ['/studio/new', '/library', '/stash', '/community', '/'].includes(path);
 }

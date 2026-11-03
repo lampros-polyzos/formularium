@@ -71,6 +71,7 @@ export default function Header({ title, backPath, backLabel, children }: HeaderP
                         Community
                     </Link>
                     {user && <BatchesNavLink className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors" />}
+                    <Link to="/tools" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">Tools</Link>
                     <Link to="/learn" className="text-[#3a5a4a] hover:text-[#1f382a] hover:underline transition-colors">
                         Learn
                     </Link>

@@ -9,9 +9,11 @@ interface FixSuggestionModalProps {
     onPick: (suggestion: Suggestion) => void;
     onBrowse: () => void;
     onClose: () => void;
+    /** A calculator that helps with this fix, opened in a new tab. */
+    toolLink?: { label: string; href: string } | null;
 }
 
-export default function FixSuggestionModal({ category, suggestions, onPick, onBrowse, onClose }: FixSuggestionModalProps) {
+export default function FixSuggestionModal({ category, suggestions, onPick, onBrowse, onClose, toolLink }: FixSuggestionModalProps) {
     const info = CATEGORY_INFO[category];
 
     useEffect(() => {
@@ -76,7 +78,14 @@ export default function FixSuggestionModal({ category, suggestions, onPick, onBr
                 </div>
 
                 <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center gap-3">
-                    <button onClick={onBrowse} className="text-xs font-bold text-[#2c4c3b] hover:underline">Search the full library</button>
+                    <div className="flex items-center gap-4">
+                        <button onClick={onBrowse} className="text-xs font-bold text-[#2c4c3b] hover:underline">Search the full library</button>
+                        {toolLink && (
+                            <a href={toolLink.href} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-[#2c4c3b] hover:underline">
+                                {toolLink.label} &rarr;
+                            </a>
+                        )}
+                    </div>
                     <button onClick={onClose} className="px-4 py-1.5 text-sm font-medium text-gray-600 rounded hover:bg-gray-100">Cancel</button>
                 </div>
             </div>
