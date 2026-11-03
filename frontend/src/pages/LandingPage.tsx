@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import AuthModal from '../components/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ARTICLES } from '../content/articles';
 import ArticleCard from '../components/content/ArticleCard';
@@ -56,6 +56,8 @@ const LandingPage = () => {
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const accountDeleted = searchParams.get('account') === 'deleted';
 
   // Resume the navigation the visitor asked for before they were prompted to sign in
   useEffect(() => {
@@ -143,6 +145,12 @@ const LandingPage = () => {
       {/* Mounted only while open so each open starts in the requested mode */}
       {isAuthModalOpen && (
         <AuthModal isOpen onClose={() => setIsAuthModalOpen(false)} initialMode={authMode} />
+      )}
+      {accountDeleted && (
+        <div role="status" className="bg-[#1f382a] text-white text-sm px-6 py-3 flex items-center justify-between gap-4">
+          <span>Your account and data have been deleted. Thank you for trying Formularium.</span>
+          <button onClick={() => setSearchParams({}, { replace: true })} className="font-bold hover:underline shrink-0">Dismiss</button>
+        </div>
       )}
       {/* Navigation */}
       <nav className="flex items-center justify-between px-6 py-4 md:px-12 bg-[#d8e2d3]">

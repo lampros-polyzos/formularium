@@ -38,7 +38,7 @@ export const PRIVACY_POLICY: LegalDocument = {
         "We collect only what we need to run your account and the app: your email, display name and the formulas, stash and community content you create.",
         "We don't use advertising or analytics trackers, and we never sell your data.",
         "Your community posts, comments and ratings are visible to other members with your display name.",
-        `You can ask for a copy of your data, or for your account to be deleted, at any time by emailing ${mail}.`,
+        `You can download a copy of your data or delete your account yourself in Settings at any time, or ask us by emailing ${mail}.`,
     ],
     body: [
         { type: "h2", text: "Who we are" },
@@ -207,7 +207,7 @@ export const PRIVACY_POLICY: LegalDocument = {
             type: "ul",
             items: [
                 "Account data and your content: for as long as you have an account.",
-                "After you ask us to delete your account, we delete your personal data within **30 days**. Backups are overwritten on a rolling basis.",
+                "When you delete your account in Settings (or ask us to), your data is removed from our database straight away. Copies in backups are overwritten on a rolling basis, within **30 days**.",
                 "Community posts and comments are deleted with your account. Where deleting a comment would break a discussion, we may instead remove your name and keep the text anonymously.",
                 "Security logs kept by our providers: for the short period they need them.",
             ],
@@ -234,7 +234,7 @@ export const PRIVACY_POLICY: LegalDocument = {
         {
             type: "p",
             text:
-                `To use any of these rights, including deleting your account, email ${mail} from the address linked to your account. We reply within one month.`,
+                `You can download a copy of your data and delete your account yourself: open Global Settings from your profile menu and look under "Your data". For any other right, or if you prefer, email ${mail} from the address linked to your account. We reply within one month.`,
         },
 
         { type: "h2", text: "Children" },
@@ -396,7 +396,7 @@ export const TERMS_OF_USE: LegalDocument = {
         {
             type: "p",
             text:
-                `You can stop using Formularium at any time and ask us to delete your account at ${mail}. We may suspend or close accounts that seriously or repeatedly break these terms; where reasonable, we will tell you why first.`,
+                `You can stop using Formularium at any time and delete your account yourself in Settings, or ask us at ${mail}. We may suspend or close accounts that seriously or repeatedly break these terms; where reasonable, we will tell you why first.`,
         },
 
         { type: "h2", text: "Changes to these terms" },

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import AccountDataSection from './AccountDataSection';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -128,6 +129,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                             />
                         </div>
                     </div>
+
+                    <AccountDataSection />
                 </div>
 
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end">
