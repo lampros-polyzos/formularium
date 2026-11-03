@@ -5,6 +5,8 @@ import { createBatch, lotNumbersLike } from '../lib/batches';
 import {
     buildPlan, summarizePlan, suggestLotNumber, type PlanEdits, type PlanRow, type StashLot,
 } from '../lib/batchPlan';
+import { costPerContainer, formatMoney, planCost } from '../lib/batchCost';
+import { DEFAULT_FILL_PERCENT, containersFilled, describeCount, estimateDensity, sizeForContainers } from '../lib/batchContainer';
 
 interface MakeBatchModalProps {
     userId: string;
@@ -13,13 +15,17 @@ interface MakeBatchModalProps {
     targetPh: number | null;
     defaultBatchSizeG: number;
     rows: PlanRow[];
+    /** The currency symbol costs are shown in. */
+    currency?: string;
     onClose: () => void;
     onCreated: (batchId: string) => void;
 }
 
+interface ContainerOption { id: string; name: string; volume_ml: number; price_per_unit: number | null }
+
 const fmt = (v: number) => `${Number(v.toFixed(2))} g`;
 
-export default function MakeBatchModal({ userId, formulationId, formulaName, targetPh, defaultBatchSizeG, rows, onClose, onCreated }: MakeBatchModalProps) {
+export default function MakeBatchModal({ userId, formulationId, formulaName, targetPh, defaultBatchSizeG, rows, currency = '$', onClose, onCreated }: MakeBatchModalProps) {
     const [batchSize, setBatchSize] = useState(String(defaultBatchSizeG || 100));
     const [lotNumber, setLotNumber] = useState('');
     const [notes, setNotes] = useState('');
@@ -32,6 +38,13 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
     const [error, setError] = useState('');
     const lotTouched = useRef(false);
 
+    // Containers: pick one and the batch size follows, or just weigh and note what it goes into
+    const [containers, setContainers] = useState<ContainerOption[]>([]);
+    const [containerId, setContainerId] = useState('');
+    const [containerCount, setContainerCount] = useState('1');
+    const [fillPercent, setFillPercent] = useState(String(DEFAULT_FILL_PERCENT));
+    const density = useMemo(() => estimateDensity(rows), [rows]);
+
     // Read the stash (read-only) so the plan reflects what you own right now
     useEffect(() => {
         let cancelled = false;
@@ -39,7 +52,7 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
             try {
                 const { data, error: loadError } = await supabase
                     .from('user_stash')
-                    .select('id, ingredient_id, amount_left_g, expiration_date, supplier_name, batch_lot_number')
+                    .select('id, ingredient_id, amount_left_g, expiration_date, supplier_name, batch_lot_number, price_per_g')
                     .eq('user_id', userId);
                 if (loadError) throw loadError;
                 if (!cancelled) { setLots((data ?? []) as StashLot[]); setStashError(false); }
@@ -63,6 +76,17 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
         return () => { cancelled = true; };
     }, []);
 
+    // The containers you own that have a known size. Without any, the container picker simply doesn't show.
+    useEffect(() => {
+        let cancelled = false;
+        supabase.from('user_containers').select('id, name, volume_ml, price_per_unit').eq('user_id', userId).order('name')
+            .then(({ data, error: loadError }) => {
+                if (cancelled || loadError) return;
+                setContainers(((data ?? []) as ContainerOption[]).filter(c => c.volume_ml > 0));
+            });
+        return () => { cancelled = true; };
+    }, [userId]);
+
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !isSubmitting) onClose(); };
         window.addEventListener('keydown', onKey);
@@ -79,6 +103,22 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
     );
     const summary = useMemo(() => summarizePlan(plan), [plan]);
     const anyStock = plan.some(l => l.available.freshG > 0);
+
+    // What it costs: grams from a stash lot at that lot's price, anything else at your average price for it
+    const cost = useMemo(() => planCost(plan, lots ?? [], sizeG), [plan, lots, sizeG]);
+
+    const container = containers.find(c => c.id === containerId) ?? null;
+    const fill = parseFloat(fillPercent) || DEFAULT_FILL_PERCENT;
+    const filled = container ? containersFilled(sizeG, container.volume_ml, fill, density) : 0;
+    const perContainer = container ? costPerContainer(cost.total, filled, container.price_per_unit ?? 0) : null;
+
+    // Choosing a container (or how many, or how full) sets the batch size; typing a size afterwards is still allowed
+    const sizeFromContainer = (id: string, count: string, fillText: string) => {
+        const chosen = containers.find(c => c.id === id);
+        if (!chosen) return;
+        const grams = sizeForContainers(chosen.volume_ml, parseFloat(count) || 0, parseFloat(fillText) || DEFAULT_FILL_PERCENT, density);
+        if (grams > 0) { setBatchSize(String(grams)); setEdits(prev => ({ ...prev, amounts: {} })); }
+    };
 
     const blocker = rows.length === 0 ? 'Add ingredients to the formula first.'
         : totalOff ? `The formula adds up to ${Number(totalPct.toFixed(2))}%, not 100%. Balance it in the editor first.`
@@ -98,7 +138,10 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
                 batchSizeG: sizeG,
                 targetPh,
                 notes,
-                lines: plan.map(l => ({
+                container: container && filled > 0
+                    ? { id: container.id, name: container.name, volume_ml: container.volume_ml, count: filled, unit_price: container.price_per_unit ?? 0, density_g_ml: density }
+                    : null,
+                lines: plan.map((l, i) => ({
                     ingredient_id: l.row.ingredient_id,
                     name: l.row.name,
                     inci_name: l.row.inci_name,
@@ -107,6 +150,7 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
                     planned_g: l.plannedG,
                     actual_g: l.amountG,
                     allocations: l.takeFromStash ? l.allocation.allocations : [],
+                    est_price_per_g: cost.lines[i].estimatePerG,
                 })),
             });
             onCreated(id);
@@ -172,6 +216,46 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
                         </label>
                     </div>
 
+                    {containers.length > 0 && (
+                        <div className="grid gap-4 sm:grid-cols-3 items-end">
+                            <label className="text-sm font-medium text-gray-700">
+                                Fill containers (optional)
+                                <select
+                                    value={containerId}
+                                    onChange={(e) => { setContainerId(e.target.value); sizeFromContainer(e.target.value, containerCount, fillPercent); }}
+                                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-[#2c4c3b]"
+                                >
+                                    <option value="">Just use the weight above</option>
+                                    {containers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.volume_ml} ml)</option>)}
+                                </select>
+                            </label>
+                            {container && (
+                                <>
+                                    <label className="text-sm font-medium text-gray-700">
+                                        How many
+                                        <input
+                                            type="number" min="0.5" step="any" value={containerCount}
+                                            onChange={(e) => { setContainerCount(e.target.value); sizeFromContainer(containerId, e.target.value, fillPercent); }}
+                                            className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2c4c3b]"
+                                        />
+                                    </label>
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Fill to (%)
+                                        <input
+                                            type="number" min="1" max="100" step="any" value={fillPercent}
+                                            onChange={(e) => { setFillPercent(e.target.value); sizeFromContainer(containerId, containerCount, e.target.value); }}
+                                            className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2c4c3b]"
+                                        />
+                                    </label>
+                                    <p className="sm:col-span-3 text-xs text-gray-600">
+                                        This batch of {fmt(sizeG)} fills about <strong>{describeCount(filled)}</strong> of {container.name}, assuming {density} g per ml.
+                                        That density is an estimate: weigh one full container to be sure.
+                                    </p>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {blocker && (
                         <p role="alert" className="flex gap-2 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-2.5">
                             <TriangleAlert size={16} className="shrink-0 mt-0.5" aria-hidden /> {blocker}
@@ -194,6 +278,28 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
                         </span>
                     </label>
 
+                    <section aria-label="Cost" className="bg-[#f7f8f6] border border-[#c1d1b9] rounded-lg px-4 py-3 text-sm text-[#1f382a]">
+                        {cost.total === null ? (
+                            <p className="text-gray-600">
+                                No prices known yet. Enter what you paid on the Stash page and the real cost of every batch appears here.
+                            </p>
+                        ) : (
+                            <>
+                                <p>
+                                    <strong>{cost.estimated ? 'About ' : ''}{formatMoney(cost.total, currency)}</strong> for the ingredients
+                                    {cost.per100g !== null && <> · {formatMoney(cost.per100g, currency)} per 100 g</>}
+                                    {perContainer && <> · <strong>{formatMoney(perContainer.total, currency)}</strong> per {container?.name ?? 'container'} including the container</>}
+                                </p>
+                                <p className="text-xs text-gray-600 mt-1">
+                                    {cost.estimated
+                                        ? 'Grams taken from your stash use the price of that lot. The rest uses your average price for the ingredient (marked ~).'
+                                        : 'Worked out from the prices of the stash lots this batch uses.'}
+                                    {cost.unpriced > 0 && <> {cost.unpriced} ingredient{cost.unpriced !== 1 ? 's have' : ' has'} no price yet, so the total is higher in reality.</>}
+                                </p>
+                            </>
+                        )}
+                    </section>
+
                     <div className="overflow-x-auto border border-gray-200 rounded-lg">
                         <table className="w-full text-sm text-left min-w-[640px]">
                             <thead className="bg-gray-50 text-xs text-gray-500">
@@ -202,6 +308,7 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
                                     <th className="px-3 py-2 font-medium text-right">%</th>
                                     <th className="px-3 py-2 font-medium text-right">Weigh (g)</th>
                                     <th className="px-3 py-2 font-medium">From your stash</th>
+                                    <th className="px-3 py-2 font-medium text-right">Cost</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -251,6 +358,11 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
                                                 </div>
                                             )}
                                         </td>
+                                        <td className="px-3 py-2 text-right font-mono text-xs text-gray-700">
+                                            {cost.lines[line.index].cost === null
+                                                ? <span className="text-gray-400" title="No price entered for this ingredient">no price</span>
+                                                : <>{cost.lines[line.index].estimated ? '~' : ''}{formatMoney(cost.lines[line.index].cost!, currency)}</>}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -260,6 +372,7 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
                                     <td className={`px-3 py-2 text-right font-mono ${totalOff ? 'text-amber-700' : ''}`}>{Number(totalPct.toFixed(2))}</td>
                                     <td className="px-3 py-2 text-right font-mono">{fmt(summary.totalG)}</td>
                                     <td />
+                                    <td className="px-3 py-2 text-right font-mono text-xs">{cost.total !== null ? formatMoney(cost.total, currency) : ''}</td>
                                 </tr>
                             </tfoot>
                         </table>

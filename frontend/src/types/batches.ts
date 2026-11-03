@@ -14,6 +14,18 @@ export interface Batch {
     final_weight_g: number | null;
     notes: string | null;
     stash_deducted: boolean;
+    /** What was filled into: the container record survives the container being deleted. */
+    container_id?: string | null;
+    container_name?: string | null;
+    container_volume_ml?: number | null;
+    /** How many containers the batch fills (a fraction when the last is part full). */
+    container_count?: number | null;
+    container_unit_price?: number | null;
+    density_g_ml?: number | null;
+    /** What the ingredients cost, from the prices of the stash lots used. Null when nothing could be priced. */
+    ingredient_cost?: number | null;
+    /** Ingredients that had no price at all. */
+    unpriced_count?: number;
     created_at: string;
 }
 
@@ -27,6 +39,10 @@ export interface BatchLine {
     percentage: number;
     planned_g: number;
     actual_g: number;
+    /** Null when no price was known. */
+    cost?: number | null;
+    /** Part of the cost is a guess, or part of it had no price. */
+    cost_estimated?: boolean;
 }
 
 export interface BatchStashUse {

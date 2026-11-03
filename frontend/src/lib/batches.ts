@@ -35,6 +35,19 @@ export interface CreateBatchLine {
     actual_g: number;
     /** Grams to take out of stash lots. Empty means the batch is only recorded. */
     allocations: Allocation[];
+    /** Price per gram to use for grams that do not come out of the stash; null when none is known. */
+    est_price_per_g?: number | null;
+}
+
+/** What the batch is filled into. The name and size are kept on the batch even if the container is deleted later. */
+export interface CreateBatchContainer {
+    id: string | null;
+    name: string;
+    volume_ml: number;
+    /** How many containers the batch fills (a fraction when the last is part full). */
+    count: number;
+    unit_price: number;
+    density_g_ml: number;
 }
 
 export interface CreateBatchInput {
@@ -45,14 +58,16 @@ export interface CreateBatchInput {
     targetPh: number | null;
     notes: string;
     lines: CreateBatchLine[];
+    container?: CreateBatchContainer | null;
 }
 
 /**
- * Saves the batch and takes the allocated grams out of the stash in a single transaction.
+ * Saves the batch and takes the allocated grams out of the stash in a single transaction. What the batch cost is
+ * worked out from the stash lots' prices inside the same transaction.
  * This is the only function that can change the stash, and only for lines that carry allocations.
  */
 export async function createBatch(input: CreateBatchInput, client: Client = supabase): Promise<string> {
-    const { data, error } = await client.rpc('create_batch', {
+    const args = {
         p_formulation_id: input.formulationId,
         p_name: input.name,
         p_lot_number: input.lotNumber.trim(),
@@ -61,7 +76,14 @@ export async function createBatch(input: CreateBatchInput, client: Client = supa
         p_notes: input.notes,
         p_lines: input.lines,
         p_made_on: isoDate(),
-    });
+    };
+    let { data, error } = await client.rpc('create_batch', { ...args, p_container: input.container ?? null });
+    if (error?.code === 'PGRST202') {
+        // The database hasn't been updated with costs and containers yet. Nothing ran, so start the batch the
+        // way it was done before: it is recorded and the stash is still handled, just without costs.
+        console.warn('Batch costs and containers are not available yet (database migration pending); starting without them.');
+        ({ data, error } = await client.rpc('create_batch', args));
+    }
     if (error) throw friendlyError(error, 'Could not start the batch.');
     return data as string;
 }

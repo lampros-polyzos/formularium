@@ -7,8 +7,9 @@
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// A glob (rather than an import) so the test skips, instead of breaking the whole run, if the file was removed
-const migrations = import.meta.glob('../../../supabase/migrations/20261105000000_batch_log.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+// The migration as first applied (the file in supabase/migrations is removed once you have run it).
+// A glob (rather than an import) so the test skips, instead of breaking the whole run, if the fixture is missing
+const migrations = import.meta.glob('./fixtures/20261105000000_batch_log.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const MIGRATION_SQL = Object.values(migrations)[0];
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';

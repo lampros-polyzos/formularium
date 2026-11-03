@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Plus, RotateCcw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Check, Plus, Printer, RotateCcw, TriangleAlert } from 'lucide-react';
 import Header from '../components/Header';
 import CheckInForm from '../components/CheckInForm';
 import { usePageTitle } from '../components/content/usePageTitle';
 import { addCheck, completeCheck, getBatch, isoDate, updateBatch, voidBatch, type BatchDetail, type CheckInInput } from '../lib/batches';
 import { checkProgress, checkState, describeDue } from '../lib/batchPlan';
+import { costPerContainer, formatMoney } from '../lib/batchCost';
+import { downloadBatchRecord } from '../lib/batchRecord';
 import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import { useSettings } from '../contexts/SettingsContext';
 import { OBSERVATION_LABELS, RESULT_LABELS, STATUS_LABEL, type BatchCheck, type BatchStatus } from '../types/batches';
@@ -20,11 +22,12 @@ const grams = (v: number) => `${Number(Number(v).toFixed(2))} g`;
 
 export default function BatchDetailPage() {
     const { id } = useParams();
-    const { formatDate } = useSettings();
+    const { formatDate, currency } = useSettings();
     const [detail, setDetail] = useState<BatchDetail | null>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [busy, setBusy] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
     const [openCheck, setOpenCheck] = useState<string | null>(null);
 
     // Measurements
@@ -113,6 +116,26 @@ export default function BatchDetailPage() {
     const yieldPct = typedWeight > 0 ? (typedWeight / Number(batch.batch_size_g)) * 100 : null;
     const unsafe = isActive && (progress.critical || progress.worst === 'failed');
 
+    const lineCosts = lines.map(line => (line.cost === null || line.cost === undefined ? null : Number(line.cost)));
+    const totalCost = batch.ingredient_cost === null || batch.ingredient_cost === undefined ? null : Number(batch.ingredient_cost);
+    const anyEstimated = lines.some(line => line.cost_estimated);
+    const perContainer = costPerContainer(totalCost, Number(batch.container_count ?? 0), Number(batch.container_unit_price ?? 0));
+    const unpriced = batch.unpriced_count ?? lineCosts.filter(c => c === null).length;
+
+    // The printed quality record is built from what is stored, so it can be printed again any time
+    const printRecord = async () => {
+        setIsPrinting(true);
+        setError('');
+        try {
+            await downloadBatchRecord(detail, currency);
+        } catch (e) {
+            console.error('Could not create the batch record:', e);
+            setError("Couldn't create the record. Check that the app's server is running, then try again.");
+        } finally {
+            setIsPrinting(false);
+        }
+    };
+
     const setStatus = (next: BatchStatus, message: string) => run(() => updateBatch(batch.id, { status: next }), message);
 
     const confirmThen = (message: string, action: () => Promise<void>, success: string) => {
@@ -150,13 +173,24 @@ export default function BatchDetailPage() {
                         </div>
                         <p className="text-sm text-gray-600 mt-1">
                             Lot <strong>{batch.lot_number}</strong> · made {formatDate(batch.made_on)} · {grams(batch.batch_size_g)}
+                            {batch.container_name && (
+                                <> · fills {Number(Number(batch.container_count ?? 0).toFixed(2))} × {batch.container_name}</>
+                            )}
                         </p>
                     </div>
-                    {batch.formulation_id && (
-                        <Link to={`/studio/${batch.formulation_id}`} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#c1d1b9] text-[#2c4c3b] text-sm font-bold rounded-full hover:bg-[#e9eee7]">
-                            <RotateCcw size={14} aria-hidden /> Make it again
-                        </Link>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            onClick={printRecord} disabled={isPrinting}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#c1d1b9] text-[#2c4c3b] text-sm font-bold rounded-full hover:bg-[#e9eee7] disabled:opacity-50"
+                        >
+                            <Printer size={14} aria-hidden /> {isPrinting ? 'Preparing...' : 'Print record'}
+                        </button>
+                        {batch.formulation_id && (
+                            <Link to={`/studio/${batch.formulation_id}`} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#c1d1b9] text-[#2c4c3b] text-sm font-bold rounded-full hover:bg-[#e9eee7]">
+                                <RotateCcw size={14} aria-hidden /> Make it again
+                            </Link>
+                        )}
+                    </div>
                 </div>
 
                 {notice && <p role="status" className="mb-4 text-sm bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-2.5">{notice}</p>}
@@ -268,10 +302,11 @@ export default function BatchDetailPage() {
                                     <th className="px-3 py-2 font-medium text-right">%</th>
                                     <th className="px-3 py-2 font-medium text-right">Weighed</th>
                                     <th className="px-3 py-2 font-medium">From stash</th>
+                                    <th className="px-3 py-2 font-medium text-right">Cost</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {lines.map(line => {
+                                {lines.map((line, i) => {
                                     const used = usage.filter(u => u.batch_ingredient_id === line.id);
                                     return (
                                         <tr key={line.id} className="border-t border-gray-100 align-top">
@@ -284,11 +319,38 @@ export default function BatchDetailPage() {
                                             <td className="px-3 py-2 text-xs text-gray-600">
                                                 {used.length === 0 ? <span className="text-gray-400">not tracked</span> : used.map(u => `${grams(u.grams)} from ${u.label ?? 'stash'}`).join(', ')}
                                             </td>
+                                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-700">
+                                                {lineCosts[i] === null
+                                                    ? <span className="text-gray-400" title="No price was known for this ingredient">no price</span>
+                                                    : <>{line.cost_estimated ? '~' : ''}{formatMoney(lineCosts[i]!, currency)}</>}
+                                            </td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
+                            <tfoot>
+                                <tr className="border-t border-gray-200 bg-gray-50 font-bold">
+                                    <td className="px-3 py-2">Total</td>
+                                    <td className="px-3 py-2 text-right font-mono text-gray-500">{Number(lines.reduce((sum, l) => sum + Number(l.percentage), 0).toFixed(2))}</td>
+                                    <td className="px-3 py-2 text-right font-mono">{grams(lines.reduce((sum, l) => sum + Number(l.actual_g), 0))}</td>
+                                    <td />
+                                    <td className="px-3 py-2 text-right font-mono text-xs">{totalCost !== null ? formatMoney(totalCost, currency) : ''}</td>
+                                </tr>
+                            </tfoot>
                         </table>
+                    </div>
+                    <div aria-label="Cost of this batch" role="group" className="mt-3 text-sm text-[#1f382a]">
+                        {totalCost === null ? (
+                            <p className="text-gray-600">No prices were known when this batch was made, so there is no cost to show. Enter what you paid on the Stash page for the next one.</p>
+                        ) : (
+                            <p>
+                                <strong>{anyEstimated ? 'About ' : ''}{formatMoney(totalCost, currency)}</strong> for the ingredients
+                                {batch.batch_size_g > 0 && <> · {formatMoney((totalCost / Number(batch.batch_size_g)) * 100, currency)} per 100 g</>}
+                                {perContainer && <> · <strong>{formatMoney(perContainer.total, currency)}</strong> per {batch.container_name ?? 'container'} including the container</>}
+                                {unpriced > 0 && <span className="block text-xs text-gray-600 mt-1">{unpriced} ingredient{unpriced !== 1 ? 's had' : ' had'} no price, so the real cost is higher.</span>}
+                                {anyEstimated && <span className="block text-xs text-gray-600 mt-1">Marked ~ means part of that amount was priced at your average price for the ingredient.</span>}
+                            </p>
+                        )}
                     </div>
                     <p className="text-xs text-gray-500 mt-2">
                         {batch.stash_deducted && batch.status !== 'voided'

@@ -10,6 +10,8 @@ export interface StashLot {
     expiration_date: string | null;
     supplier_name?: string | null;
     batch_lot_number?: string | null;
+    /** What the lot cost per gram. Missing or 0 means no price was entered. */
+    price_per_g?: number | null;
 }
 
 export interface Allocation {
@@ -97,6 +99,8 @@ export interface PlanRow {
     inci_name: string | null;
     phase: string;
     percentage: number;
+    /** Used to estimate how heavy the product is per millilitre when sizing from a container. */
+    solubility?: string | null;
 }
 
 export interface PlanEdits {

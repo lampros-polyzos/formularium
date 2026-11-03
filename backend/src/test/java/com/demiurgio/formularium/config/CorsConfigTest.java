@@ -25,7 +25,7 @@ class CorsConfigTest {
 
     @Test
     void allowsEveryConfiguredOriginOnEveryApiEndpoint() throws Exception {
-        for (String path : new String[]{"/api/v1/validate", "/api/v1/export/pif", "/api/v1/export/sourcing"}) {
+        for (String path : new String[]{"/api/v1/validate", "/api/v1/export/pif", "/api/v1/export/sourcing", "/api/v1/export/batch-record"}) {
             preflight("https://app.example.com", path)
                     .andExpect(status().isOk())
                     .andExpect(header().string("Access-Control-Allow-Origin", "https://app.example.com"));

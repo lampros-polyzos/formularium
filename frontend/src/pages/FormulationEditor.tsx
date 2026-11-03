@@ -990,12 +990,14 @@ const FormulationEditor = () => {
                     formulaName={projectName}
                     targetPh={targetPh}
                     defaultBatchSizeG={targetWeight || 100}
+                    currency={currency}
                     rows={formulaIngredients.map(i => ({
                         ingredient_id: i.id,
                         name: i.trade_name || i.inci_name,
                         inci_name: i.inci_name || null,
                         phase: i.phase,
                         percentage: i.percentage || 0,
+                        solubility: i.solubility,
                     }))}
                     onClose={() => setIsMakeBatchOpen(false)}
                     onCreated={(batchId) => {

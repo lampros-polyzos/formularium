@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     lots: [] as Record<string, unknown>[],
     lotError: null as unknown,
     stashReads: 0,
+    containers: [] as Record<string, unknown>[],
 }));
 
 vi.mock('../lib/batches', () => ({
@@ -16,9 +17,10 @@ vi.mock('../lib/batches', () => ({
 }));
 vi.mock('../lib/supabase', () => ({
     supabase: {
-        from: () => ({
+        from: (table: string) => ({
             select: () => ({
                 eq: () => {
+                    if (table === 'user_containers') return { order: () => Promise.resolve({ data: mocks.containers, error: null }) };
                     mocks.stashReads += 1;
                     return Promise.resolve(mocks.lotError ? { data: null, error: mocks.lotError } : { data: mocks.lots, error: null });
                 },
@@ -55,6 +57,7 @@ beforeEach(() => {
     mocks.lots = [lot('w1', 'water', 500), lot('g1', 'gly', 3), lot('s1', 'shea', 100, '2027-01-01', 'SHEA-9')];
     mocks.lotError = null;
     mocks.stashReads = 0;
+    mocks.containers = [];
     onClose.mockReset();
     onCreated.mockReset();
 });

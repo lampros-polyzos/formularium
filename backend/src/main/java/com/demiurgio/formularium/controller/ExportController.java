@@ -1,7 +1,9 @@
 package com.demiurgio.formularium.controller;
 
+import com.demiurgio.formularium.dto.BatchRecordRequest;
 import com.demiurgio.formularium.dto.SourcingGuideRequest;
 import com.demiurgio.formularium.dto.ValidationRequest;
+import com.demiurgio.formularium.export.BatchRecordPdfGenerator;
 import com.demiurgio.formularium.export.BatchTicketPdfGenerator;
 import com.demiurgio.formularium.export.PifPdfGenerator;
 import com.demiurgio.formularium.export.ShoppingListPdfGenerator;
@@ -21,12 +23,14 @@ public class ExportController {
     private final BatchTicketPdfGenerator batchGenerator;
     private final ShoppingListPdfGenerator shoppingGenerator;
     private final SourcingGuidePdfGenerator sourcingGenerator;
+    private final BatchRecordPdfGenerator batchRecordGenerator;
 
-    public ExportController(PifPdfGenerator pifGenerator, BatchTicketPdfGenerator batchGenerator, ShoppingListPdfGenerator shoppingGenerator, SourcingGuidePdfGenerator sourcingGenerator) {
+    public ExportController(PifPdfGenerator pifGenerator, BatchTicketPdfGenerator batchGenerator, ShoppingListPdfGenerator shoppingGenerator, SourcingGuidePdfGenerator sourcingGenerator, BatchRecordPdfGenerator batchRecordGenerator) {
         this.pifGenerator = pifGenerator;
         this.batchGenerator = batchGenerator;
         this.shoppingGenerator = shoppingGenerator;
         this.sourcingGenerator = sourcingGenerator;
+        this.batchRecordGenerator = batchRecordGenerator;
     }
 
     @PostMapping("/pif")
@@ -47,6 +51,11 @@ public class ExportController {
     @PostMapping("/sourcing")
     public ResponseEntity<byte[]> exportSourcingGuide(@RequestBody SourcingGuideRequest request) {
         return buildPdfResponse(sourcingGenerator.generate(request), "Sourcing_Guide.pdf");
+    }
+
+    @PostMapping("/batch-record")
+    public ResponseEntity<byte[]> exportBatchRecord(@RequestBody BatchRecordRequest request) {
+        return buildPdfResponse(batchRecordGenerator.generate(request), "Batch_Record.pdf");
     }
 
     // Helper method to reduce boilerplate

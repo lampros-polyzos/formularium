@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import { usePageTitle } from '../components/content/usePageTitle';
 import { listBatches, type BatchListItem } from '../lib/batches';
 import { checkProgress, checkState, describeDue } from '../lib/batchPlan';
+import { formatMoney } from '../lib/batchCost';
 import { useSettings } from '../contexts/SettingsContext';
 import { STATUS_LABEL } from '../types/batches';
 
@@ -21,7 +22,7 @@ const DOT_STYLE = {
 
 export default function BatchesPage() {
     usePageTitle('Batches');
-    const { formatDate } = useSettings();
+    const { formatDate, currency } = useSettings();
     const [batches, setBatches] = useState<BatchListItem[] | null>(null);
     const [error, setError] = useState('');
     const [tab, setTab] = useState<Tab>('active');
@@ -127,6 +128,9 @@ export default function BatchesPage() {
                                                 <h3 className="font-bold text-lg text-[#1f382a]">{batch.name}</h3>
                                                 <p className="text-xs text-gray-500 mt-0.5">
                                                     Lot {batch.lot_number} · {formatDate(batch.made_on)} · {Number(batch.batch_size_g)} g
+                                                    {batch.container_name && ` · fills ${Number(Number(batch.container_count ?? 0).toFixed(2))} × ${batch.container_name}`}
+                                                    {batch.measured_ph !== null && batch.measured_ph !== undefined && ` · pH ${Number(batch.measured_ph)}`}
+                                                    {batch.ingredient_cost !== null && batch.ingredient_cost !== undefined && ` · ${formatMoney(Number(batch.ingredient_cost), currency)}`}
                                                     {batch.stash_deducted && batch.status !== 'voided' ? ' · used stash' : ''}
                                                 </p>
                                             </div>

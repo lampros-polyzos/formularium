@@ -47,6 +47,42 @@ describe('createBatch', () => {
         expect(sent.p_lines.every(l => l.allocations.length === 0)).toBe(true);
     });
 
+    it('sends the container, and the price to use for grams that are not taken from the stash', async () => {
+        const { client, rpc } = fakeClient();
+        const container = { id: 'c1', name: '50 ml bottle', volume_ml: 50, count: 3.4, unit_price: 0.8, density_g_ml: 0.97 };
+        await createBatch({ ...input, container, lines: [{ ...input.lines[0], est_price_per_g: 0.03 }] }, client);
+        expect(rpc).toHaveBeenCalledTimes(1);
+        const sent = rpc.mock.calls[0][1] as { p_container: unknown; p_lines: { est_price_per_g: number }[] };
+        expect(sent.p_container).toEqual(container);
+        expect(sent.p_lines[0].est_price_per_g).toBe(0.03);
+    });
+
+    it('sends no container when none was picked', async () => {
+        const { client, rpc } = fakeClient();
+        await createBatch(input, client);
+        expect((rpc.mock.calls[0][1] as { p_container: unknown }).p_container).toBeNull();
+    });
+
+    it('starts the batch the old way if the database has not been updated yet, and still returns its id', async () => {
+        const rpc = vi.fn()
+            .mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.create_batch(p_container, ...)' } })
+            .mockResolvedValueOnce({ data: 'batch-2', error: null });
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const id = await createBatch({ ...input, container: { id: null, name: 'Jar', volume_ml: 100, count: 1, unit_price: 1, density_g_ml: 1 } }, { rpc } as never);
+        expect(id).toBe('batch-2');
+        expect(rpc).toHaveBeenCalledTimes(2);
+        expect(rpc.mock.calls[0][1]).toHaveProperty('p_container');
+        expect(rpc.mock.calls[1][1]).not.toHaveProperty('p_container');
+        expect(rpc.mock.calls[1][1]).toMatchObject({ p_lot_number: '261103-1', p_lines: input.lines }); // the same batch, same stash allocations
+        vi.restoreAllMocks();
+    });
+
+    it('does not retry other failures: a retry could take from the stash twice', async () => {
+        const rpc = vi.fn().mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Not enough Glycerin left in your stash.' } });
+        await expect(createBatch(input, { rpc } as never)).rejects.toThrow(/Not enough Glycerin/);
+        expect(rpc).toHaveBeenCalledTimes(1);
+    });
+
     it('turns database errors into plain language', async () => {
         for (const [error, expected] of [
             [{ code: '23505', message: 'duplicate key value violates unique constraint' }, /lot number is already used/],
