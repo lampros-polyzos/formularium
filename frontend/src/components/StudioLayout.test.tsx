@@ -68,6 +68,7 @@ describe('the Studio sidebar', () => {
             ['My Formulations', '/studio'],
             ['Batches', '/batches'],
             ['My Stash', '/stash'],
+            ['What can I make?', '/what-can-i-make'],
             ['Containers', '/containers'],
             ['Calculators', '/tools'],
             ['Ingredients Library', '/library'],
@@ -84,7 +85,7 @@ describe('the Studio sidebar', () => {
     });
 
     it.each([
-        ['formulations', 'My Formulations'], ['batches', 'Batches'], ['stash', 'My Stash'],
+        ['formulations', 'My Formulations'], ['batches', 'Batches'], ['stash', 'My Stash'], ['pantry', 'What can I make?'],
         ['containers', 'Containers'], ['tools', 'Calculators'], ['library', 'Ingredients Library'],
     ] as const)('shows when you are on %s, and only there', async (section, label) => {
         await renderSidebar(section);

@@ -9,6 +9,7 @@ import StudioPage from './pages/StudioPage';
 import StartPage from './pages/StartPage';
 import FormulationEditor from './pages/FormulationEditor';
 import StashPage from './pages/StashPage';
+import WhatCanIMakePage from './pages/WhatCanIMakePage';
 import ContainersPage from './pages/ContainersPage';
 import IngredientsLibraryPage from './pages/IngredientsLibraryPage';
 import CommunityFeed from './pages/CommunityFeed';
@@ -49,6 +50,7 @@ function App() {
               <Route path="/studio/new" element={<FormulationEditor />} />
               <Route path="/studio/:id" element={<FormulationEditor />} />
               <Route path="/stash" element={<StashPage />} />
+              <Route path="/what-can-i-make" element={<WhatCanIMakePage />} />
               <Route path="/batches" element={<BatchesPage />} />
               <Route path="/batches/:id" element={<BatchDetailPage />} />
               <Route path="/batches/:id/bench" element={<BenchModePage />} />
