@@ -12,13 +12,15 @@ interface EditorActionsProps {
     onMakeBatch: () => void;
     onShare: () => void;
     onClone: () => void | Promise<void>;
+    onSaveVersion: () => void;
+    onHistory: () => void;
     onExportPDF: (documentType: 'pif' | 'batch' | 'shopping') => void | Promise<void>;
     onExportSourcing: () => void | Promise<void>;
 }
 
 export default function EditorActions({
     isSaving, hasIngredients, hasSourcing, isHealthCheckPassed, formulaId,
-    onSave, onMakeBatch, onShare, onClone, onExportPDF, onExportSourcing,
+    onSave, onMakeBatch, onShare, onClone, onSaveVersion, onHistory, onExportPDF, onExportSourcing,
 }: EditorActionsProps) {
     const [showPrintMenu, setShowPrintMenu] = useState(false);
 
@@ -76,6 +78,24 @@ export default function EditorActions({
                             className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Clone this formula <span className="text-xs text-gray-400" aria-hidden>⎘</span>
+                        </button>
+                        <button
+                            role="menuitem"
+                            onClick={() => { setShowPrintMenu(false); onSaveVersion(); }}
+                            disabled={!formulaId || !hasIngredients}
+                            title={!formulaId ? "Save this project first" : !hasIngredients ? "Add ingredients first" : "Keep a copy of this formula with a note on what changed"}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Save a version… <span className="text-xs text-gray-400" aria-hidden>🕘</span>
+                        </button>
+                        <button
+                            role="menuitem"
+                            onClick={() => { setShowPrintMenu(false); onHistory(); }}
+                            disabled={!formulaId}
+                            title={!formulaId ? "Save this project first" : "See earlier versions and compare them"}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Version history <span className="text-xs text-gray-400" aria-hidden>⇄</span>
                         </button>
                         <div className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Print &amp; export</div>
                         <button

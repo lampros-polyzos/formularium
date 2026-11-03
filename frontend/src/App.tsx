@@ -9,6 +9,7 @@ import StudioPage from './pages/StudioPage';
 import StartPage from './pages/StartPage';
 import FormulationEditor from './pages/FormulationEditor';
 import StashPage from './pages/StashPage';
+import FormulaHistoryPage from './pages/FormulaHistoryPage';
 import WhatCanIMakePage from './pages/WhatCanIMakePage';
 import ContainersPage from './pages/ContainersPage';
 import IngredientsLibraryPage from './pages/IngredientsLibraryPage';
@@ -49,6 +50,7 @@ function App() {
               <Route path="/studio/start" element={<StartPage />} />
               <Route path="/studio/new" element={<FormulationEditor />} />
               <Route path="/studio/:id" element={<FormulationEditor />} />
+              <Route path="/studio/:id/history" element={<FormulaHistoryPage />} />
               <Route path="/stash" element={<StashPage />} />
               <Route path="/what-can-i-make" element={<WhatCanIMakePage />} />
               <Route path="/batches" element={<BatchesPage />} />

@@ -12,6 +12,8 @@ import type { Fix, FixCategory } from '../types/fixes';
 import FixSuggestionModal from '../components/FixSuggestionModal';
 import FixToast from '../components/FixToast';
 import MakeBatchModal from '../components/MakeBatchModal';
+import SaveVersionModal from '../components/SaveVersionModal';
+import { saveVersion } from '../lib/formulaVersions';
 import { clearDraft, formulaSnapshot, loadDraft, saveDraft, type FormulaDraft } from '../lib/draftStore';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFavorites } from '../hooks/useFavorites';
@@ -114,6 +116,7 @@ const FormulationEditor = () => {
 
     const [isTourOpen, setIsTourOpen] = useState(false);
     const [isMakeBatchOpen, setIsMakeBatchOpen] = useState(false);
+    const [isVersionOpen, setIsVersionOpen] = useState(false);
 
     // Autosave: which formula's data is loaded, and any unsaved work found from a previous session
     const routeKey = !id || id === 'new' ? 'new' : id;
@@ -693,6 +696,22 @@ const FormulationEditor = () => {
         setIsSaving(false);
     };
 
+    /** Writes what is on screen first, so the version and the saved formula agree, then keeps a copy with the note. */
+    const handleSaveVersion = async (note: string) => {
+        if (!formulaId) throw new Error('Save this project first.');
+        const failure = await autosave.saveNow();
+        if (failure) throw new Error(`The formula could not be saved first: ${failure}`);
+        const kept = await saveVersion(formulaId, {
+            name: projectName,
+            profileId: profileId || null,
+            targetWeight,
+            targetPh,
+            ingredients: formulaIngredients.map(i => ({ id: i.id, inci_name: i.inci_name, trade_name: i.trade_name, phase: i.phase, percentage: i.percentage || 0, isQS: i.isQS })),
+        }, note);
+        setIsVersionOpen(false);
+        setModal({ isOpen: true, type: 'success', title: 'Version saved', message: `Saved as version ${kept.version_number}. Find it, and compare it with others, under More → Version history.` });
+    };
+
     const handleClone = async () => {
         if (!profileId) {
             setModal({ isOpen: true, type: 'error', title: 'Missing Profile', message: 'Please select a product profile before cloning.' });
@@ -877,6 +896,8 @@ const FormulationEditor = () => {
                             onMakeBatch={() => setIsMakeBatchOpen(true)}
                             onShare={() => setIsShareModalOpen(true)}
                             onClone={handleClone}
+                            onSaveVersion={() => setIsVersionOpen(true)}
+                            onHistory={() => navigate(`/studio/${formulaId}/history`)}
                             onExportPDF={handleExportPDF}
                             onExportSourcing={handleExportSourcing}
                         />
@@ -984,6 +1005,10 @@ const FormulationEditor = () => {
                 message={modal.message}
                 onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {isVersionOpen && (
+                <SaveVersionModal formulaName={projectName} onSave={handleSaveVersion} onClose={() => setIsVersionOpen(false)} />
+            )}
 
             {isMakeBatchOpen && user && (
                 <MakeBatchModal
