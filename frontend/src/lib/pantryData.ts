@@ -42,6 +42,7 @@ interface NestedFormulation {
     id: string;
     name: string;
     target_ph: number | null;
+    target_weight_g: number | string | null;
     formulation_phases: {
         phase_letter: 'A' | 'B' | 'C';
         formulation_ingredients: { percentage: number | string; is_qs: boolean | null; ingredients: CatalogIngredient | null }[];
@@ -52,7 +53,7 @@ interface NestedFormulation {
 export async function loadOwnRecipes(userId: string, client: Client = supabase): Promise<Recipe[]> {
     const { data, error } = await client
         .from('formulations')
-        .select('id, name, target_ph, formulation_phases(phase_letter, formulation_ingredients(percentage, is_qs, ingredients(*)))')
+        .select('id, name, target_ph, target_weight_g, formulation_phases(phase_letter, formulation_ingredients(percentage, is_qs, ingredients(*)))')
         .eq('user_id', userId)
         .order('name');
     if (error) fail('your formulas', error);
@@ -63,6 +64,7 @@ export async function loadOwnRecipes(userId: string, client: Client = supabase):
             source: 'own',
             name: f.name,
             targetPh: f.target_ph,
+            targetWeightG: f.target_weight_g === null ? null : Number(f.target_weight_g),
             lines: (f.formulation_phases ?? []).flatMap(phase =>
                 (phase.formulation_ingredients ?? [])
                     .filter(fi => fi.ingredients)

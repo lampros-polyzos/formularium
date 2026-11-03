@@ -13,6 +13,8 @@ export interface Recipe {
     author?: string | null;
     lines: FormulaLine[];
     targetPh?: number | null;
+    /** The batch size the formula was written for. */
+    targetWeightG?: number | null;
 }
 
 /** have: enough in stock. assumed: water. low: some, but not enough. missing: none. */
@@ -68,7 +70,9 @@ export function usableStash(lots: StashLot[], today: Date = new Date()): StashEn
         .map(lot => ({ ingredient_id: lot.ingredient_id, amount_left_g: lot.amount_left_g ?? null }));
 }
 
-const isWaterLine = (line: FormulaLine) => (line.ingredient.inci_name ?? '').toLowerCase().replace(/\[[^\]]*\]/g, '').trim().startsWith('aqua');
+/** Water is assumed to be at hand, so it is never bought or counted as missing. */
+export const isWaterIngredient = (ingredient: Pick<CatalogIngredient, 'inci_name'>) => (ingredient.inci_name ?? '').toLowerCase().replace(/\[[^\]]*\]/g, '').trim().startsWith('aqua');
+const isWaterLine = (line: FormulaLine) => isWaterIngredient(line.ingredient);
 
 export function matchRecipe(recipe: Recipe, stash: StashEntry[], stashIngredients: CatalogIngredient[], batchG: number): RecipeMatch {
     const items = analyzeFormula(recipe.lines, stashIngredients, stash, batchG, recipe.targetPh ?? null);

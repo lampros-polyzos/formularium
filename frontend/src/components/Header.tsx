@@ -43,7 +43,7 @@ export default function Header({ title, backPath, backLabel, children, leading }
 
     return (
         <>
-            <header className="bg-[#dbe3da] px-6 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[#c1d1b9] sticky top-0 z-40">
+            <header className="print:hidden bg-[#dbe3da] px-6 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[#c1d1b9] sticky top-0 z-40">
                 <div className="flex items-center gap-4">
                     {leading}
                     {backPath && (

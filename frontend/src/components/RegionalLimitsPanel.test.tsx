@@ -64,4 +64,19 @@ describe('the "where do you plan to sell" setting', () => {
         renderSettings();
         expect(screen.getByText('region:none')).toBeInTheDocument();
     });
+
+    it('has a low-stock level that starts at 20 g, can be changed, and is remembered', () => {
+        function LowProbe() { const { lowStockGrams } = useSettings(); return <p>low:{lowStockGrams}</p>; }
+        const draw = () => render(<SettingsProvider><LowProbe /><SettingsModal isOpen onClose={() => {}} /></SettingsProvider>);
+        const first = draw();
+        expect(screen.getByText('low:20')).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Low Stock Level (grams)'), { target: { value: '35' } });
+        expect(screen.getByText('low:35')).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Low Stock Level (grams)'), { target: { value: '-4' } });
+        expect(screen.getByText('low:0')).toBeInTheDocument(); // never below zero
+        fireEvent.change(screen.getByLabelText('Low Stock Level (grams)'), { target: { value: '35' } });
+        first.unmount();
+        draw();
+        expect(screen.getByText('low:35')).toBeInTheDocument();
+    });
 });

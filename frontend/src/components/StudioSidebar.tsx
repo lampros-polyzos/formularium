@@ -1,14 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Calculator, ChefHat, ClipboardCheck, FlaskConical, Settings, X } from 'lucide-react';
+import { BookOpen, Calculator, ChefHat, ClipboardCheck, FlaskConical, Settings, ShoppingCart, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import DueBadge from './DueBadge';
 import { SettingsModal } from './SettingsModal';
 
 /** The pages that live in the Studio, so the sidebar can show where you are. */
-export type StudioSection = 'formulations' | 'batches' | 'stash' | 'pantry' | 'containers' | 'tools' | 'library';
+export type StudioSection = 'formulations' | 'batches' | 'stash' | 'pantry' | 'shopping' | 'containers' | 'tools' | 'library';
 
 const ROW = 'w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors';
 const ACTIVE = 'bg-[#e8f0e5] text-[#1f382a]';
@@ -34,6 +34,7 @@ const MAIN: Item[] = [
     { id: 'batches', label: 'Batches', to: '/batches', icon: <ClipboardCheck size={20} aria-hidden />, badge: <DueBadge /> },
     { id: 'stash', label: 'My Stash', to: '/stash', icon: <StashIcon /> },
     { id: 'pantry', label: 'What can I make?', to: '/what-can-i-make', icon: <ChefHat size={20} aria-hidden /> },
+    { id: 'shopping', label: 'Shopping List', to: '/shopping', icon: <ShoppingCart size={20} aria-hidden /> },
     { id: 'containers', label: 'Containers', to: '/containers', icon: <ContainersIcon /> },
     { id: 'tools', label: 'Calculators', to: '/tools', icon: <Calculator size={20} aria-hidden /> },
 ];
@@ -80,7 +81,7 @@ export default function StudioSidebar({ active, isOpen = false, onClose }: Studi
         <aside
             id="studio-sidebar"
             data-open={isOpen}
-            className={`w-64 shrink-0 bg-white border-r border-[#c1d1b9] p-6 flex flex-col h-screen overflow-y-auto transition-[transform,visibility] duration-200 fixed inset-y-0 left-0 z-50 ${placement} lg:sticky lg:top-0 lg:bottom-auto lg:left-auto lg:z-auto lg:translate-x-0 lg:visible lg:self-start`}
+            className={`print:hidden w-64 shrink-0 bg-white border-r border-[#c1d1b9] p-6 flex flex-col h-screen overflow-y-auto transition-[transform,visibility] duration-200 fixed inset-y-0 left-0 z-50 ${placement} lg:sticky lg:top-0 lg:bottom-auto lg:left-auto lg:z-auto lg:translate-x-0 lg:visible lg:self-start`}
         >
             <div className="flex items-center justify-between gap-3 text-[#1f382a] mb-10">
                 <div className="flex items-center gap-3">

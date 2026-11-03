@@ -12,7 +12,7 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-    const { currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays, sellingRegion, setSellingRegion } = useSettings();
+    const { currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays, lowStockGrams, setLowStockGrams, sellingRegion, setSellingRegion } = useSettings();
     const { user, username } = useAuth();
     const { alert } = useDialog();
 
@@ -131,6 +131,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                 max="365"
                                 value={warningDays}
                                 onChange={(e) => setWarningDays(parseInt(e.target.value) || 30)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
+                            />
+                        </div>
+                        <div className="mt-4">
+                            <label htmlFor="low-stock" className="block text-sm font-medium text-gray-700 mb-1">Low Stock Level (grams)</label>
+                            <p className="text-xs text-gray-500 mb-2">
+                                An ingredient with this much or less left is flagged as running low on the shopping list.
+                            </p>
+                            <input
+                                id="low-stock"
+                                type="number"
+                                min="0"
+                                value={lowStockGrams}
+                                onChange={(e) => setLowStockGrams(Math.max(0, parseFloat(e.target.value) || 0))}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#2c4c3b] outline-none"
                             />
                         </div>
