@@ -3,6 +3,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MakeBatchModal from './MakeBatchModal';
 
+// Today's lot-number prefix (YYMMDD), so the test does not depend on the day it runs
+const TODAY_CODE = vi.hoisted(() => {
+    const d = new Date();
+    return `${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+});
+
 const mocks = vi.hoisted(() => ({
     createBatch: vi.fn(),
     lots: [] as Record<string, unknown>[],
@@ -13,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../lib/batches', () => ({
     createBatch: mocks.createBatch,
-    lotNumbersLike: vi.fn().mockResolvedValue(['261103-1']),
+    lotNumbersLike: vi.fn().mockResolvedValue([`${TODAY_CODE}-1`]),
 }));
 vi.mock('../lib/supabase', () => ({
     supabase: {
@@ -104,7 +110,7 @@ describe('MakeBatchModal: starting the batch', () => {
 
         expect(mocks.createBatch).toHaveBeenCalledTimes(1);
         const sent = mocks.createBatch.mock.calls[0][0];
-        expect(sent).toMatchObject({ formulationId: 'f1', name: 'Day Cream', lotNumber: '261103-2', batchSizeG: 100, targetPh: 5.5 });
+        expect(sent).toMatchObject({ formulationId: 'f1', name: 'Day Cream', lotNumber: `${TODAY_CODE}-2`, batchSizeG: 100, targetPh: 5.5 });
         const byName = Object.fromEntries(sent.lines.map((l: { name: string }) => [l.name, l]));
         expect(byName['Distilled Water'].allocations).toEqual([{ stash_id: 'w1', grams: 70, label: 'w1' }]);
         expect(byName['Glycerin'].allocations).toEqual([{ stash_id: 'g1', grams: 3, label: 'g1' }]);

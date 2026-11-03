@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import StudioPage from './StudioPage';
-import { STUDIO_TOUR_SEEN_KEY, STUDIO_WIDE_BREAKPOINT, studioTourSteps } from '../components/studioTourSteps';
+import { NAV_ITEMS, STUDIO_TOUR_SEEN_KEY, STUDIO_WIDE_BREAKPOINT, studioTourSteps } from '../components/studioTourSteps';
 
 const mocks = vi.hoisted(() => ({
     formulas: [] as Record<string, unknown>[],
@@ -66,14 +66,14 @@ describe('the Studio tour', () => {
         expect(await screen.findByText('Day Cream')).toBeInTheDocument();
         await waitFor(() => expect(tour()).toBeInTheDocument(), { timeout: 3000 });
         expect(within(screen.getByRole('dialog')).getByRole('heading', { name: /Welcome to your Studio/ })).toBeInTheDocument();
-        expect(screen.getByText(/1 \/ 6/)).toBeInTheDocument();
+        expect(screen.getByText(/1 \/ 15/)).toBeInTheDocument();
     });
 
     it('walks through every step in order and ends with a button that fits the page', async () => {
         renderStudio();
         await waitFor(() => expect(tour()).toBeInTheDocument(), { timeout: 3000 });
         const seen: string[] = [];
-        for (let n = 0; n < 5; n++) {
+        while (!screen.queryByRole('button', { name: 'Got it' })) {
             seen.push(stepTitle());
             next();
         }
@@ -82,18 +82,19 @@ describe('the Studio tour', () => {
             expect.stringContaining('Welcome to your Studio'),
             '1. Start a formula',
             '2. Your formulas live here',
-            '3. Everything else is in this menu',
+            '3. Your menu',
+            'Menu: Batches', 'Menu: My Stash', 'Menu: What can I make?', 'Menu: Shopping List', 'Menu: Containers',
+            'Menu: Calculators', 'Menu: Metrics', 'Menu: Ingredients Library', 'Menu: Settings',
             '4. The top bar',
             "You're all set",
         ]);
-        expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Start formulating' })).not.toBeInTheDocument();
     });
 
     it('is remembered once finished, and does not start again on the next visit', async () => {
         const first = renderStudio();
         await waitFor(() => expect(tour()).toBeInTheDocument(), { timeout: 3000 });
-        for (let n = 0; n < 5; n++) next();
+        while (!screen.queryByRole('button', { name: 'Got it' })) next();
         fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
         expect(tour()).not.toBeInTheDocument();
         expect(localStorage.getItem(STUDIO_TOUR_SEEN_KEY)).toBe('1');
@@ -151,9 +152,10 @@ describe('the Studio tour', () => {
 
 describe('what the Studio tour points at', () => {
     const targetsOf = (wide: boolean) => studioTourSteps(wide).flatMap(s => (s.target ? [s.target] : []));
+    const NAV = ['nav-batches', 'nav-stash', 'nav-pantry', 'nav-shopping', 'nav-containers', 'nav-tools', 'nav-metrics', 'nav-library', 'nav-settings'];
 
-    it('points at the sidebar on a wide screen, and at the menu button on a narrow one', () => {
-        expect(targetsOf(true)).toEqual(['studio-new', 'studio-formulas', 'studio-sidebar', 'header']);
+    it('points at each sidebar entry in turn on a wide screen, and at the menu button on a narrow one', () => {
+        expect(targetsOf(true)).toEqual(['studio-new', 'studio-formulas', 'studio-sidebar', ...NAV, 'header']);
         expect(targetsOf(false)).toEqual(['studio-new', 'studio-formulas', 'studio-menu', 'header']);
         expect(STUDIO_WIDE_BREAKPOINT).toBe(1024);
     });
@@ -163,8 +165,9 @@ describe('what the Studio tour points at', () => {
             const steps = studioTourSteps(wide);
             expect(steps[0].target).toBeUndefined();
             expect(steps.at(-1)!.target).toBeUndefined();
-            expect(steps).toHaveLength(6);
         }
+        expect(studioTourSteps(true)).toHaveLength(15);
+        expect(studioTourSteps(false)).toHaveLength(6);
     });
 
     it('only points at things that are really on the page', async () => {
@@ -175,17 +178,43 @@ describe('what the Studio tour points at', () => {
         }
     });
 
-    it('describes the menu entries that really exist in the sidebar', async () => {
+    it('points each menu step at the entry it is about', async () => {
+        renderStudio();
+        expect(await screen.findByText('Day Cream')).toBeInTheDocument();
+        for (const item of NAV_ITEMS) {
+            const el = document.querySelector(`[data-tour="${item.target}"]`)!;
+            expect(el.textContent, item.target).toContain(item.label);
+            expect(studioTourSteps(true).find(s => s.target === item.target)!.title).toBe(`Menu: ${item.label}`);
+        }
+    });
+
+    it('covers every entry of the sidebar, apart from the Studio home you are already on', async () => {
         renderStudio();
         expect(await screen.findByText('Day Cream')).toBeInTheDocument();
         const nav = within(screen.getByRole('navigation', { name: 'Studio' }));
-        const body = studioTourSteps(true).find(s => s.target === 'studio-sidebar')!;
-        const { container } = render(<div>{body.body}</div>);
-        const described = [...container.querySelectorAll('strong')].map(n => n.textContent ?? '');
-        for (const label of ['Batches', 'My Stash', 'What can I make?', 'Shopping List', 'Containers', 'Calculators', 'Metrics', 'Ingredients Library']) {
-            expect(described, label).toContain(label);
-            expect(nav.getByRole('link', { name: new RegExp(label.replace('?', '\\?')) }), label).toBeInTheDocument();
+        const labels = [...nav.getAllByRole('link'), nav.getByRole('button', { name: 'Settings' })].map(e => e.textContent?.trim() ?? '');
+        const covered = NAV_ITEMS.map(i => i.label);
+        for (const label of labels) {
+            if (label === 'My Formulations') continue;
+            expect(covered, `the tour should mention "${label}"`).toContain(label);
         }
+        expect(covered).toHaveLength(labels.length - 1);
+    });
+
+    it('gives every entry real detail, not just a name', () => {
+        for (const item of NAV_ITEMS) {
+            const { container } = render(<div>{item.body}</div>);
+            expect(container.textContent!.length, item.label).toBeGreaterThan(150);
+            expect(item.short.length, item.label).toBeGreaterThan(20);
+            cleanup();
+        }
+    });
+
+    it('lists every entry in the one narrow-screen step', () => {
+        const { container } = render(<div>{studioTourSteps(false).find(s => s.target === 'studio-menu')!.body}</div>);
+        const items = [...container.querySelectorAll('li')].map(li => li.textContent ?? '');
+        expect(items).toHaveLength(NAV_ITEMS.length);
+        NAV_ITEMS.forEach((item, n) => expect(items[n]).toContain(item.label));
     });
 });
 
@@ -195,6 +224,7 @@ describe('the Studio tour on a narrow screen', () => {
         renderStudio();
         await waitFor(() => expect(tour()).toBeInTheDocument(), { timeout: 3000 });
         next(); next(); next();
-        expect(stepTitle()).toBe('3. Everything else is in the menu');
+        expect(stepTitle()).toBe('3. Your menu');
+        expect(within(screen.getByRole('dialog')).getAllByRole('listitem')).toHaveLength(NAV_ITEMS.length);
     });
 });

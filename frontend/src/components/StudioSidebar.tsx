@@ -63,6 +63,7 @@ export default function StudioSidebar({ active, isOpen = false, onClose }: Studi
         <Link
             key={item.id}
             to={item.to}
+            data-tour={`nav-${item.id}`}
             aria-current={active === item.id ? 'page' : undefined}
             onClick={onClose}
             className={`${ROW} ${item.badge ? 'justify-between' : ''} ${active === item.id ? ACTIVE : IDLE} ${extra}`}
@@ -100,7 +101,7 @@ export default function StudioSidebar({ active, isOpen = false, onClose }: Studi
             <nav aria-label="Studio" className="flex-1 space-y-2">
                 {MAIN.map(item => link(item))}
                 {link({ id: 'library', label: 'Ingredients Library', to: '/library', icon: <BookOpen size={20} aria-hidden /> }, 'mt-4 border-t border-gray-100 pt-6')}
-                <button type="button" onClick={() => { onClose?.(); setIsSettingsOpen(true); }} className={`${ROW} ${IDLE}`}>
+                <button type="button" data-tour="nav-settings" onClick={() => { onClose?.(); setIsSettingsOpen(true); }} className={`${ROW} ${IDLE}`}>
                     <Settings size={20} aria-hidden />
                     Settings
                 </button>
