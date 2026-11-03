@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StashLot } from './batchPlan';
-import { filterByCloseness, matchRecipe, rankMatches, usableStash, type Recipe } from './pantry';
+import { cloneLines, filterByCloseness, matchRecipe, rankMatches, swapsToApply, usableStash, type Recipe } from './pantry';
 import type { CatalogIngredient, FormulaLine } from './substitutions';
 
 const ing = (id: string, inci_name: string, trade_name: string, fn: string, solubility: string, extra: Partial<CatalogIngredient> = {}): CatalogIngredient =>
@@ -294,5 +294,36 @@ describe('actives swap only with the same kind of active', () => {
     it('will not swap an oil-soluble active for a water-soluble one: they do different jobs in a formula', () => {
         const soothing = recipe('Calm', [line(WATER, 90), line(BISABOLOL, 1, 'C')]);
         expect(match(soothing, [lot('1', 'allantoin', 10)], [ALLANTOIN]).lines[1].swap).toBeNull();
+    });
+});
+
+describe('cloning with the stand-ins applied', () => {
+    // Almond oil is missing, jojoba is in stock as a stand-in; everything else is as written
+    const lotion = recipe('Lotion', [line(WATER, 80), line(ALMOND, 15, 'B'), line(GLYCERIN, 5)]);
+    const m = match(lotion, [lot('1', 'jojoba', 500), lot('2', 'gly', 500)], [JOJOBA, GLYCERIN]);
+
+    it('lists what would change', () => {
+        expect(swapsToApply(m).map(l => l.line.ingredient.id)).toEqual(['almond']);
+    });
+
+    it('as shared, changes nothing', () => {
+        expect(cloneLines(m, false)).toEqual([
+            { ingredient_id: 'water', percentage: 80, phase: 'A' },
+            { ingredient_id: 'almond', percentage: 15, phase: 'B' },
+            { ingredient_id: 'gly', percentage: 5, phase: 'A' },
+        ]);
+    });
+
+    it('with swaps, replaces only the missing ingredient, in its own phase, at the suggested amount', () => {
+        const lines = cloneLines(m, true);
+        expect(lines.map(l => l.ingredient_id)).toEqual(['water', 'jojoba', 'gly']);
+        expect(lines[1]).toEqual({ ingredient_id: 'jojoba', percentage: m.lines[1].swap!.percentage, phase: 'B' });
+        expect(lines[0]).toEqual({ ingredient_id: 'water', percentage: 80, phase: 'A' });
+    });
+
+    it('has nothing to apply when everything is in stock', () => {
+        const full = match(lotion, [lot('1', 'almond', 500), lot('2', 'gly', 500)], [ALMOND, GLYCERIN]);
+        expect(swapsToApply(full)).toEqual([]);
+        expect(cloneLines(full, true)).toEqual(cloneLines(full, false));
     });
 });

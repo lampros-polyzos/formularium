@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WhatCanIMakePage from './WhatCanIMakePage';
@@ -10,9 +10,15 @@ const mocks = vi.hoisted(() => ({
     user: { id: 'u1', email: 'sam@example.com' },
     state: { value: { status: 'loading' } as unknown },
     reload: vi.fn(),
+    clone: vi.fn(),
+    navigate: vi.fn(),
+    alert: vi.fn(),
 }));
 
 vi.mock('../hooks/usePantry', () => ({ usePantry: () => ({ state: mocks.state.value, reload: mocks.reload }) }));
+vi.mock('../lib/cloneRecipe', () => ({ cloneRecipeToStudio: (...a: unknown[]) => mocks.clone(...a) }));
+vi.mock('../hooks/useDialog', () => ({ useDialog: () => ({ alert: mocks.alert, confirm: vi.fn() }) }));
+vi.mock('react-router-dom', async (orig) => ({ ...(await orig<typeof import('react-router-dom')>()), useNavigate: () => mocks.navigate }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, session: null, username: null, isLoading: false }) }));
 vi.mock('../components/StudioLayout', () => ({ default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
@@ -35,7 +41,7 @@ function ready(recipes: Recipe[], stash: CatalogIngredient[], lots = stash.map((
 const renderPage = () => render(<MemoryRouter><WhatCanIMakePage /></MemoryRouter>);
 const titles = () => screen.getAllByRole('listitem').filter(li => li.querySelector('a')).map(li => within(li).getAllByRole('link')[0].textContent);
 
-beforeEach(() => { mocks.reload.mockReset(); });
+beforeEach(() => { mocks.reload.mockReset(); mocks.clone.mockReset().mockResolvedValue('new1'); mocks.navigate.mockReset(); mocks.alert.mockReset(); });
 afterEach(cleanup);
 
 describe('What can I make?', () => {
@@ -125,5 +131,51 @@ describe('What can I make?', () => {
         expect(screen.getByText(/200 newest community recipes/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Mine' }));
         expect(screen.queryByText(/200 newest community recipes/)).not.toBeInTheDocument();
+    });
+});
+
+describe('cloning a community recipe', () => {
+    const community = () => recipe('c1', 'Body balm', 'community', [OIL, GEL]);
+
+    it('offers a plain clone and a clone with the swaps, and the plain one changes nothing', async () => {
+        ready([community()], [BUTTER, GEL]);
+        renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'Everything' }));
+        expect(screen.getByRole('button', { name: 'Clone with 1 swap' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Clone as is' }));
+        await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/studio/new1'));
+        const [userId, post, lines, name] = mocks.clone.mock.calls[0];
+        expect(userId).toBe('u1');
+        expect(post).toEqual({ id: 'c1', title: 'Body balm' });
+        expect(lines.map((l: { ingredient_id: string }) => l.ingredient_id)).toEqual(['oil', 'gel']);
+        expect(name).toBe('Body balm (Clone)');
+    });
+
+    it('with the swaps, uses the stand-in from the stash', async () => {
+        ready([community()], [BUTTER, GEL]);
+        renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'Everything' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clone with 1 swap' }));
+        await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/studio/new1'));
+        expect(mocks.clone.mock.calls[0][2].map((l: { ingredient_id: string }) => l.ingredient_id)).toEqual(['butter', 'gel']);
+        expect(mocks.clone.mock.calls[0][3]).toBe('Body balm (Clone with swaps)');
+    });
+
+    it('does not offer a swap clone when nothing needs swapping, and never for your own formulas', () => {
+        ready([community(), recipe('o1', 'Mine', 'own', [OIL])], [OIL, GEL]);
+        renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'Everything' }));
+        expect(screen.queryByRole('button', { name: /Clone with/ })).not.toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: 'Clone as is' })).toHaveLength(1);
+    });
+
+    it('says so when the copy fails, and stays on the page', async () => {
+        mocks.clone.mockRejectedValue(new Error('nope'));
+        ready([community()], [BUTTER, GEL]);
+        renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'Everything' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clone as is' }));
+        await waitFor(() => expect(mocks.alert).toHaveBeenCalledWith(expect.stringContaining('nope'), expect.objectContaining({ tone: 'error' })));
+        expect(mocks.navigate).not.toHaveBeenCalled();
     });
 });

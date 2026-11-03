@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
 import RecipeRatings from '../components/RecipeRatings';
 import { RemixedFrom, RemixList } from '../components/PostRemixes';
-import { withLineage } from '../lib/lineage';
+import { cloneRecipeToStudio } from '../lib/cloneRecipe';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useDialog } from '../hooks/useDialog';
@@ -212,60 +212,14 @@ export default function PostDetail() {
 
         setIsCloning(true);
         try {
-            // 1. Create a new formulation draft in the user's studio, remembering which recipe it started as
-            const { data: newDraft, error: draftError } = await withLineage(
-                extra => supabase
-                    .from('formulations')
-                    .insert([{
-                        name: `${post.title} (Clone)`,
-                        user_id: user.id,
-                        status: 'Draft',
-                        target_weight_g: 100,
-                        ...extra,
-                    }])
-                    .select('id')
-                    .single(),
-                { remixed_from_post_id: post.id },
+            const newId = await cloneRecipeToStudio(
+                user.id,
+                post,
+                recipe.map((ing: any) => ({ ingredient_id: ing.id || ing.ingredient_id, percentage: ing.percentage, phase: ing.phase })),
             );
-            if (draftError) throw draftError;
 
-            // 2. Extract unique phases from the recipe snapshot
-            const uniquePhases = Array.from(new Set(recipe.map((ing: any) => ing.phase)));
-
-            if (uniquePhases.length > 0) {
-                // 3. Create the phases in the database
-                const phasesToInsert = uniquePhases.map(phaseLetter => ({
-                    formulation_id: newDraft.id,
-                    phase_letter: phaseLetter
-                }));
-
-                const { data: insertedPhases, error: phaseError } = await supabase
-                    .from('formulation_phases')
-                    .insert(phasesToInsert)
-                    .select('id, phase_letter');
-
-                if (phaseError) throw phaseError;
-
-                // 4. Map the ingredients to the newly created phase IDs
-                const ingredientsToInsert = recipe.map((ing: any) => {
-                    const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
-                    return {
-                        phase_id: matchedPhase!.id,
-                        ingredient_id: ing.id || ing.ingredient_id,
-                        percentage: ing.percentage,
-                        is_qs: false
-                    };
-                });
-
-                const { error: ingredientsError } = await supabase
-                    .from('formulation_ingredients')
-                    .insert(ingredientsToInsert);
-
-                if (ingredientsError) throw ingredientsError;
-            }
-
-            // 5. Navigate the user directly to their new private clone
-            navigate(`/studio/${newDraft.id}`);
+            // Straight to the new private clone
+            navigate(`/studio/${newId}`);
 
         } catch (error: any) {
             console.error("Error cloning:", error);

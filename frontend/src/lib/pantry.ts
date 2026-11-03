@@ -1,3 +1,4 @@
+import type { CloneLine } from './cloneRecipe';
 import { isExpired, type StashLot } from './batchPlan';
 import { analyzeFormula, parseFunction, type CatalogIngredient, type FormulaLine, type StashEntry, type SubstituteOption } from './substitutions';
 
@@ -148,4 +149,17 @@ export function filterByCloseness(matches: RecipeMatch[], closeness: Closeness):
     if (closeness === 'all') return matches;
     if (closeness === 'ready') return matches.filter(m => m.status === 'ready' || m.status === 'ready-with-swaps');
     return matches.filter(m => m.readiness >= ALMOST);
+}
+
+/** What is changed when you clone a recipe with the stand-ins applied: each swapped ingredient, at the amount suggested for it. */
+export function swapsToApply(match: RecipeMatch): LineMatch[] {
+    return match.lines.filter(l => l.state !== 'have' && l.state !== 'assumed' && l.swap);
+}
+
+/** The recipe's lines for cloning: as shared, or with every stand-in from your stash in place of what you are missing. */
+export function cloneLines(match: RecipeMatch, withSwaps: boolean): CloneLine[] {
+    return match.lines.map(l => {
+        const swap = withSwaps && l.state !== 'have' && l.state !== 'assumed' ? l.swap : null;
+        return { ingredient_id: swap ? swap.ingredient.id : l.line.ingredient.id, percentage: swap ? swap.percentage : l.line.percentage, phase: l.line.phase };
+    });
 }

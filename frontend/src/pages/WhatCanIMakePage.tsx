@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import StudioLayout from '../components/StudioLayout';
 import RecipeMatchCard from '../components/pantry/RecipeMatchCard';
 import { useAuth } from '../contexts/AuthContext';
+import { useDialog } from '../hooks/useDialog';
 import { usePantry } from '../hooks/usePantry';
-import { filterByCloseness, matchRecipe, rankMatches, usableStash, type Closeness } from '../lib/pantry';
+import { cloneRecipeToStudio } from '../lib/cloneRecipe';
+import { cloneLines, filterByCloseness, matchRecipe, rankMatches, usableStash, type Closeness, type RecipeMatch } from '../lib/pantry';
 
 type Source = 'all' | 'own' | 'community';
 
@@ -13,7 +15,10 @@ const chip = (on: boolean) => `${CHIP} ${on ? 'bg-[#2c4c3b] text-white border-[#
 
 export default function WhatCanIMakePage() {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const { alert } = useDialog();
     const { state, reload } = usePantry(user?.id);
+    const [cloning, setCloning] = useState(false);
     const [batchText, setBatchText] = useState('100');
     const [source, setSource] = useState<Source>('all');
     const [closeness, setCloseness] = useState<Closeness>('almost');
@@ -26,6 +31,23 @@ export default function WhatCanIMakePage() {
         const stash = usableStash(lots);
         return rankMatches(recipes.map(r => matchRecipe(r, stash, stashIngredients, batchG)));
     }, [state, batchG]);
+
+    const handleClone = async (match: RecipeMatch, withSwaps: boolean) => {
+        if (!user) return;
+        setCloning(true);
+        try {
+            const { recipe } = match;
+            const id = await cloneRecipeToStudio(
+                user.id, { id: recipe.id, title: recipe.name }, cloneLines(match, withSwaps),
+                `${recipe.name} (${withSwaps ? 'Clone with swaps' : 'Clone'})`,
+            );
+            navigate(`/studio/${id}`);
+        } catch (e) {
+            void alert(`Failed to clone: ${e instanceof Error ? e.message : 'unknown error'}`, { tone: 'error', title: "Couldn't clone the recipe" });
+        } finally {
+            setCloning(false);
+        }
+    };
 
     const bySource = matches.filter(m => source === 'all' || m.recipe.source === source);
     const shown = filterByCloseness(bySource, closeness);
@@ -79,7 +101,7 @@ export default function WhatCanIMakePage() {
                         </div>
 
                         {shown.length > 0 ? (
-                            <ul className="space-y-4">{shown.map(m => <RecipeMatchCard key={`${m.recipe.source}-${m.recipe.id}`} match={m} />)}</ul>
+                            <ul className="space-y-4">{shown.map(m => <RecipeMatchCard key={`${m.recipe.source}-${m.recipe.id}`} match={m} onClone={handleClone} cloning={cloning} />)}</ul>
                         ) : (
                             <div className="text-center py-12 bg-white border border-dashed border-[#c1d1b9] rounded-2xl">
                                 <p className="text-gray-600">Nothing matches that closely yet.</p>

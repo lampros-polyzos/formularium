@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
-import type { LineMatch, MatchStatus, RecipeMatch } from '../../lib/pantry';
+import { swapsToApply, type LineMatch, type MatchStatus, type RecipeMatch } from '../../lib/pantry';
 import { displayName } from '../../lib/substitutions';
 
 const STATUS: Record<MatchStatus, { label: string; style: string }> = {
@@ -20,7 +20,15 @@ function lineSummary(l: LineMatch): string {
     return 'Not in your stash';
 }
 
-export default function RecipeMatchCard({ match }: { match: RecipeMatch }) {
+interface Props {
+    match: RecipeMatch;
+    /** Copies a community recipe to your Studio, as shared or with the stand-ins applied. */
+    onClone?: (match: RecipeMatch, withSwaps: boolean) => void;
+    /** A copy is being made, so the buttons wait. */
+    cloning?: boolean;
+}
+
+export default function RecipeMatchCard({ match, onClone, cloning = false }: Props) {
     const [open, setOpen] = useState(false);
     const { recipe } = match;
     const percent = Math.round(match.readiness * 100);
@@ -65,6 +73,19 @@ export default function RecipeMatchCard({ match }: { match: RecipeMatch }) {
                 {open ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
                 {open ? 'Hide ingredients' : 'Show ingredients'}
             </button>
+
+            {recipe.source === 'community' && onClone && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" disabled={cloning} onClick={() => onClone(match, false)} className="px-4 py-2 rounded-full border border-[#c1d1b9] text-sm font-bold text-[#2c4c3b] hover:bg-[#e9eee7] disabled:opacity-50">
+                        Clone as is
+                    </button>
+                    {swapsToApply(match).length > 0 && (
+                        <button type="button" disabled={cloning} onClick={() => onClone(match, true)} className="px-4 py-2 rounded-full bg-[#2c4c3b] text-white text-sm font-bold hover:bg-[#1f382a] disabled:opacity-50">
+                            Clone with {swapsToApply(match).length} {swapsToApply(match).length === 1 ? 'swap' : 'swaps'}
+                        </button>
+                    )}
+                </div>
+            )}
 
             {open && (
                 <ul className="mt-3 divide-y divide-gray-100 text-sm">
