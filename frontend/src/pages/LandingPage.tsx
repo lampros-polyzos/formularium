@@ -214,7 +214,7 @@ const LandingPage = () => {
             </p>
             <div className="flex flex-wrap gap-4">
               <button
-                onClick={() => goTo('/studio/new', 'signup')}
+                onClick={() => goTo('/studio/start', 'signup')}
                 className="px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors shadow-sm"
               >
                 Start a New Formula

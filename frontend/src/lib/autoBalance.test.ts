@@ -169,3 +169,21 @@ describe('balanceFormula', () => {
         expect(balanceFormula([WATER, GLYCERIN, PE9010]).kind).toBe('aqueous');
     });
 });
+
+describe('emulsifiers that contain a fatty alcohol', () => {
+    // Montanov 68 is cetearyl alcohol + cetearyl glucoside, sold as an emulsifier
+    const MONTANOV = row('Cetearyl Alcohol (and) Cetearyl Glucoside', 'Montanov 68', 'Emulsifier', 2, 5, 'oil');
+
+    it('are treated as the emulsifier, not as a fatty alcohol', () => {
+        const list = [WATER, MONTANOV, JOJOBA, PE9010];
+        const r = balanceFormula(list, { id: 'ow_lotion', max_oil_phase_percent: 30 });
+        expect(r.lines[1].role).toBe('emulsifier');
+        expect(r.warnings.join(' ')).not.toMatch(/no emulsifier/);
+        expect(r.lines[1].after).toBeGreaterThan(2);
+    });
+
+    it('still treats plain fatty alcohols as co-emulsifiers', () => {
+        const r = balanceFormula([WATER, OLIVEM, CETYL, JOJOBA, PE9010], { id: 'ow_lotion' });
+        expect(r.lines[2].role).toBe('co-emulsifier');
+    });
+});

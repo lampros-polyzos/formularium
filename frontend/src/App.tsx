@@ -6,6 +6,7 @@ import ScrollManager from './components/ScrollManager';
 import './App.css'
 import LandingPage from './pages/LandingPage';
 import StudioPage from './pages/StudioPage';
+import StartPage from './pages/StartPage';
 import FormulationEditor from './pages/FormulationEditor';
 import StashPage from './pages/StashPage';
 import ContainersPage from './pages/ContainersPage';
@@ -41,6 +42,7 @@ function App() {
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
               <Route path="/studio" element={<StudioPage />} />
+              <Route path="/studio/start" element={<StartPage />} />
               <Route path="/studio/new" element={<FormulationEditor />} />
               <Route path="/studio/:id" element={<FormulationEditor />} />
               <Route path="/stash" element={<StashPage />} />

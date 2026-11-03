@@ -77,7 +77,7 @@ export default function BlogArticlePage() {
                     <section className="mt-10 bg-[#1f382a] rounded-2xl p-8 text-center">
                         <h2 className="text-xl font-bold text-white mb-2">Ready to put it into practice?</h2>
                         <p className="text-[#c1d1b9] text-sm mb-5">Build your formula in the Studio and get live safety checks as you go.</p>
-                        <Link to={user ? '/studio/new' : '/'} className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#1f382a] font-bold rounded-full hover:bg-[#e9eee7] transition-colors">
+                        <Link to={user ? '/studio/start' : '/'} className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#1f382a] font-bold rounded-full hover:bg-[#e9eee7] transition-colors">
                             {user ? 'Open the Studio' : 'Create a free account'} <ArrowRight size={16} />
                         </Link>
                     </section>

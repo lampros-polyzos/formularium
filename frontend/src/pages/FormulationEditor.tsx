@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
@@ -18,7 +18,11 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useCatalogCandidates } from '../hooks/useCatalogCandidates';
 import { useLineage } from '../hooks/useLineage';
 import { withLineage } from '../lib/lineage';
+import { determinePhase } from '../lib/phases';
 import LineageNotice from '../components/LineageNotice';
+import StarterNotice, { type StarterNoticeData } from '../components/editor/StarterNotice';
+import { getTemplate } from '../lib/starterTemplates';
+import { loadStarterFormula } from '../lib/loadStarterFormula';
 import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import AutosaveIndicator from '../components/AutosaveIndicator';
 import { useAuth } from '../contexts/AuthContext';
@@ -231,6 +235,40 @@ const FormulationEditor = () => {
         loadSavedFormulation();
     }, [id]);
 
+    // "New formula → what are you making?": a starter template pre-fills the formula and balances it to 100%
+    const [searchParams, setSearchParams] = useSearchParams();
+    const starterId = routeKey === 'new' ? searchParams.get('template') : null;
+    const appliedStarter = useRef<string | null>(null);
+    const [starterNotice, setStarterNotice] = useState<StarterNoticeData | null>(null);
+
+    useEffect(() => {
+        const template = getTemplate(starterId);
+        if (!template || !user || appliedStarter.current === template.id) return;
+        appliedStarter.current = template.id;
+
+        loadStarterFormula(template, user.id)
+            .then(({ formula, profile }) => {
+                setProfileId(template.profileId);
+                setActiveProfile(profile);
+                setProjectName(template.projectName);
+                setTargetWeight(template.targetWeightG);
+                if (profile?.default_ph_min && profile?.default_ph_max) {
+                    setTargetPh(parseFloat(((profile.default_ph_min + profile.default_ph_max) / 2).toFixed(1)));
+                }
+                setFormulaIngredients(formula.ingredients.map((ing, index) => ({ ...ing, percentage: ing.percentage, originalIndex: index })));
+                // Starting a template is a deliberate fresh start: an old unsaved draft should not offer to replace it
+                clearDraft(null);
+                setPendingDraft(null);
+                setStarterNotice({ template, missing: formula.missing, warnings: formula.balance.warnings });
+                setSearchParams({}, { replace: true }); // so a refresh doesn't start over
+            })
+            .catch(error => {
+                console.error('Could not load the starter template:', error);
+                appliedStarter.current = null;
+                setModal({ isOpen: true, type: 'error', title: 'Could not start from the template', message: 'We could not load the ingredients for this template. You can still build the formula from scratch.' });
+            });
+    }, [starterId, user, setSearchParams]);
+
     useEffect(() => {
         if (!user) return;
 
@@ -280,16 +318,6 @@ const FormulationEditor = () => {
 
         return () => clearTimeout(delayDebounceFn);
     }, [searchTerm]);
-
-    const determinePhase = (ingredient: DatabaseIngredient): 'A' | 'B' | 'C' => {
-        if (ingredient.max_heating_temp_c !== null && ingredient.max_heating_temp_c <= 50) {
-            return 'C';
-        }
-        if (ingredient.solubility === 'oil') {
-            return 'B';
-        }
-        return 'A';
-    };
 
     // Applies a balance result: new percentages, and the filler becomes the Q.S. ingredient
     const applyBalance = (list: FormulaIngredient[], result: BalanceResult): FormulaIngredient[] =>
@@ -863,6 +891,8 @@ const FormulationEditor = () => {
                         targetPh={targetPh}
                         onTargetPhChange={setTargetPh}
                     />
+
+                    {starterNotice && <StarterNotice {...starterNotice} onDismiss={() => setStarterNotice(null)} />}
 
                     <IngredientSearch
                         searchTerm={searchTerm}

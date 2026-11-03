@@ -139,8 +139,10 @@ export function roleOf(i: BalanceIngredient, kind: FormulaKind): Role {
         return f.includes('amphoteric') || lower(i.ionic_charge) === 'amphoteric' ? 'co-surfactant' : 'surfactant';
     }
     if (f.startsWith('solubilizer')) return kind === 'aqueous' || !f.includes('emulsifier') ? 'solubilizer' : 'emulsifier';
-    if (f.includes('co-emulsifier') || FATTY_STRUCTURANT.test(inci)) return 'co-emulsifier';
-    if (/(^|[^-])emulsifier/.test(f)) return 'emulsifier';
+    // A fatty alcohol in the name (Montanov 68 is cetearyl alcohol + glucoside) doesn't make a true emulsifier a co-emulsifier
+    const isEmulsifier = /(^|[^-])emulsifier/.test(f);
+    if (f.includes('co-emulsifier') || (!isEmulsifier && FATTY_STRUCTURANT.test(inci))) return 'co-emulsifier';
+    if (isEmulsifier) return 'emulsifier';
     if (f.includes('wax')) return 'wax';
     if (f.includes('rheology') || f.includes('suspending')) return 'thickener';
     if (f.startsWith('active')) return 'active';

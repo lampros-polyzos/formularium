@@ -187,7 +187,7 @@ export default function LearnHubPage() {
                         <h2 className="text-xl font-bold text-white mb-1 flex items-center gap-2"><ClipboardList size={20} aria-hidden /> Ready to try it?</h2>
                         <p className="text-[#c1d1b9] text-sm">Build a formula in the Studio and get live checks as you work.</p>
                     </div>
-                    <Link to="/studio/new" className="shrink-0 inline-flex items-center gap-2 px-6 py-3 bg-white text-[#1f382a] font-bold rounded-full hover:bg-[#e9eee7] transition-colors">
+                    <Link to="/studio/start" className="shrink-0 inline-flex items-center gap-2 px-6 py-3 bg-white text-[#1f382a] font-bold rounded-full hover:bg-[#e9eee7] transition-colors">
                         Open the Studio <ArrowRight size={16} />
                     </Link>
                 </section>
