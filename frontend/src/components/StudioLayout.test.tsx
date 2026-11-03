@@ -128,7 +128,7 @@ describe('the Studio sidebar', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
         fireEvent.click(screen.getByRole('button', { name: '×' }));
         expect(screen.queryByRole('heading', { name: 'Global Settings' })).not.toBeInTheDocument();
-        expect(document.body.querySelector('.fixed')).toBeNull();
+        expect(document.body.querySelector('[class*="backdrop-blur"]')).toBeNull(); // the modal's overlay is gone too
     });
 
     it('signs out and goes home', async () => {

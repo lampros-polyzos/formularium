@@ -11,9 +11,11 @@ interface HeaderProps {
     backPath?: string;
     backLabel?: string;
     children?: React.ReactNode; // This allows us to inject custom buttons on the right side
+    /** Shown before everything else on the left, e.g. the button that opens the Studio menu on small screens. */
+    leading?: React.ReactNode;
 }
 
-export default function Header({ title, backPath, backLabel, children }: HeaderProps) {
+export default function Header({ title, backPath, backLabel, children, leading }: HeaderProps) {
     const navigate = useNavigate();
     const { user, username } = useAuth();
 
@@ -41,8 +43,9 @@ export default function Header({ title, backPath, backLabel, children }: HeaderP
 
     return (
         <>
-            <header className="bg-[#dbe3da] px-6 py-3 flex items-center justify-between border-b border-[#c1d1b9] sticky top-0 z-40">
+            <header className="bg-[#dbe3da] px-6 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[#c1d1b9] sticky top-0 z-40">
                 <div className="flex items-center gap-4">
+                    {leading}
                     {backPath && (
                         <>
                             <button
@@ -57,7 +60,7 @@ export default function Header({ title, backPath, backLabel, children }: HeaderP
                     <h1 className="font-semibold text-[#1f382a]">{title}</h1>
                 </div>
 
-                <div className="flex gap-6 text-sm font-medium items-center relative">
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium items-center relative">
                     {/* Custom page-specific buttons injected here */}
                     {children}
 
