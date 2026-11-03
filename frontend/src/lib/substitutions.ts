@@ -2,6 +2,8 @@
 // Pure functions so the editor table and the printed sourcing guide always agree.
 // Strings are kept plain ASCII because they are also rendered into PDFs (Helvetica).
 
+import { fnHas, inci, type CatalogFilter } from './catalogFilter';
+
 export interface CatalogIngredient {
     id: string;
     inci_name: string;
@@ -71,7 +73,7 @@ const MAX_MARKET_OPTIONS = 4;
 // ---------- Function parsing ----------
 
 // Ordered: more specific patterns first
-const ROLE_PATTERNS: [string, RegExp][] = [
+export const ROLE_PATTERNS: [string, RegExp][] = [
     ['uv_filter', /uv filter/],
     ['preservative_booster', /preservative booster/],
     ['preservative', /preservative/],
@@ -100,6 +102,38 @@ const ROLE_PATTERNS: [string, RegExp][] = [
     ['protectant', /protectant/],
     ['active', /active/],
 ];
+
+// The words the database can search for to find ingredients with each role. Every word in a role's regex must
+// be here, so a search never misses something the regex would have matched (a test checks they stay in step).
+export const ROLE_KEYWORDS: Record<string, string[]> = {
+    uv_filter: ['uv filter'],
+    preservative_booster: ['preservative booster'],
+    preservative: ['preservative'],
+    ph_base: ['ph adjuster'],
+    ph_acid: ['ph adjuster'],
+    surfactant: ['surfactant'],
+    co_emulsifier: ['co-emulsifier'],
+    emulsifier: ['emulsifier'],
+    solubilizer: ['solubilizer'],
+    rheology: ['rheology', 'suspending'],
+    wax: ['wax'],
+    thickener: ['thickener'],
+    lipid: ['carrier oil', 'butter', 'emollient', 'active lipid'],
+    humectant: ['humectant', 'osmolyte'],
+    chelator: ['chelat'],
+    antioxidant: ['antioxidant'],
+    conditioning: ['conditioning'],
+    colorant: ['colorant'],
+    absorbent: ['absorbent'],
+    texture: ['texture enhancer'],
+    fragrance: ['fragrance'],
+    solvent: ['solvent'],
+    astringent: ['astringent'],
+    buffer: ['buffer'],
+    film_former: ['film former'],
+    protectant: ['protectant'],
+    active: ['active'],
+};
 
 // Roles that say little about interchangeability on their own
 const GENERIC_ROLES = new Set(['active', 'solvent', 'protectant']);
@@ -142,7 +176,7 @@ const casSet = (cas: string | null | undefined) =>
     new Set((cas ?? '').split(/[,;]/).map(c => c.trim()).filter(c => c && c.toLowerCase() !== 'n/a'));
 
 // "Argania Spinosa Kernel Oil [Raw]" -> "argania spinosa kernel oil"
-const inciBase = (inci: string) => inci.replace(/\[[^\]]*\]/g, '').trim().toLowerCase();
+const inciBase = (inci: string | null | undefined) => (inci ?? '').replace(/\[[^\]]*\]/g, '').trim().toLowerCase();
 
 // Words that appear in many unrelated INCI names
 const INCI_STOPWORDS = new Set(['oil', 'seed', 'butter', 'extract', 'leaf', 'flower', 'fruit', 'kernel', 'root', 'water', 'and', 'acid', 'sodium']);
@@ -372,6 +406,46 @@ export function findSubstitutes(
 
 // ---------- Whole-formula analysis ----------
 
+function stockOf(line: FormulaLine, stash: StashIndex, targetWeight: number) {
+    const neededG = round2((line.percentage / 100) * targetWeight);
+    const inStash = stash.has(line.ingredient.id);
+    const haveG = inStash ? stash.grams(line.ingredient.id) : null;
+    const status: StockStatus = isWater(line.ingredient) ? 'assumed' : !inStash ? 'missing' : haveG != null && haveG < neededG ? 'low' : 'have';
+    const shortfall = status === 'missing' ? neededG : status === 'low' ? neededG - (haveG ?? 0) : 0;
+    return { neededG, haveG, status, shortfall };
+}
+
+/** The lines the user is missing or short on, which are the only ones that need substitutes looked up. */
+export function linesNeedingSubstitutes(formula: FormulaLine[], stashEntries: StashEntry[], targetWeight: number): FormulaLine[] {
+    const stash = indexStash(stashEntries);
+    return formula.filter(line => {
+        const { status } = stockOf(line, stash, targetWeight);
+        return status === 'missing' || status === 'low';
+    });
+}
+
+/**
+ * Which catalog rows could possibly be a substitute for an ingredient: anything sharing one of its roles, anything
+ * sharing a qualifier like "(Soothing)" when its roles are generic, and other grades of the same ingredient.
+ * Matches every candidate `findSubstitutes` would accept, and as little else as it can, so the catalog can be
+ * narrowed on the server instead of downloaded whole.
+ */
+export function substituteFilters(original: CatalogIngredient): CatalogFilter[] {
+    const { all, qualifiers } = parseFunction(original.function);
+    const filters: CatalogFilter[] = [];
+    for (const role of all) {
+        if (GENERIC_ROLES.has(role)) continue;
+        for (const word of ROLE_KEYWORDS[role] ?? []) filters.push(fnHas(word));
+    }
+    // "Active (Soothing)" only swaps with another soothing ingredient, not with every active
+    if ([...all].some(role => GENERIC_ROLES.has(role))) {
+        for (const qualifier of qualifiers) filters.push(fnHas(qualifier));
+    }
+    const base = inciBase(original.inci_name);
+    if (base) filters.push(inci(base));
+    return filters;
+}
+
 export function analyzeFormula(
     formula: FormulaLine[],
     catalog: CatalogIngredient[],
@@ -382,17 +456,11 @@ export function analyzeFormula(
     const stash = indexStash(stashEntries);
 
     return formula.map(line => {
-        const neededG = round2((line.percentage / 100) * targetWeight);
-        const id = line.ingredient.id;
+        const { neededG, haveG, status, shortfall } = stockOf(line, stash, targetWeight);
 
-        if (isWater(line.ingredient)) {
+        if (status === 'assumed') {
             return { line, neededG, haveG: null, status: 'assumed' as const, buyG: 0, stashOptions: [], marketOptions: [] };
         }
-
-        const inStash = stash.has(id);
-        const haveG = inStash ? stash.grams(id) : null;
-        const status: StockStatus = !inStash ? 'missing' : haveG != null && haveG < neededG ? 'low' : 'have';
-        const shortfall = status === 'missing' ? neededG : status === 'low' ? neededG - (haveG ?? 0) : 0;
 
         if (status === 'have') {
             return { line, neededG, haveG, status, buyG: 0, stashOptions: [], marketOptions: [] };

@@ -1,4 +1,5 @@
 import { isWaterBase, roleOf } from './autoBalance';
+import { fnHas, fnStart, inci, inciEnds, inciHas, trade, type CatalogFilter } from './catalogFilter';
 import type { CatalogIngredient } from './substitutions';
 import type { FixCategory } from '../types/fixes';
 
@@ -51,6 +52,21 @@ const MATCHERS: Record<FixCategory, (i: CatalogIngredient) => boolean> = {
     photostabilizer: i => /octocrylene|bis-ethylhexyloxyphenol|methylene bis-benzotriazolyl/.test(lower(i.inci_name)),
     water: i => isWaterBase({ ...i, function: i.function ?? null, percentage: 0 }),
     oil: i => roleOf({ ...i, function: i.function ?? null, percentage: 0 }, 'ow') === 'lipid',
+};
+
+// What to ask the database for so the matchers above have something to choose from. Each list must cover every
+// ingredient its matcher accepts (a test checks this); being a little wider is fine, since the matcher decides.
+export const CATEGORY_FILTERS: Record<FixCategory, CatalogFilter[]> = {
+    preservative: [fnStart('preservative')],
+    emulsifier: [fnHas('emulsifier')],
+    chelator: [fnHas('chelat')],
+    antioxidant: [fnStart('antioxidant')],
+    ferulic: [inci('ferulic')],
+    soother: [fnHas('soothing'), inciHas('panthenol'), inciHas('allantoin'), inciHas('bisabolol')],
+    neutralizer: [inciHas('sodium hydroxide'), inciHas('arginine'), inciHas('triethanolamine')],
+    photostabilizer: [inciHas('octocrylene'), inciHas('bis-ethylhexyloxyphenol'), inciHas('methylene bis-benzotriazolyl')],
+    water: [inci('aqua'), inciEnds(' water'), inciHas('juice'), trade('hydrosol'), trade('distillate')],
+    oil: [fnHas('oil'), fnHas('butter'), fnHas('emollient'), fnHas('lipid'), fnHas('skin protectant')],
 };
 
 const COST_RANK: Record<string, number> = { low: 0, medium: 1, high: 2 };

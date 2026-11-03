@@ -4,10 +4,12 @@ import { displayName, formatGrams, type SourcingItem, type SubstituteOption } fr
 interface SubstitutionHintProps {
     item: SourcingItem;
     onSwap: (option: SubstituteOption) => void;
+    /** True while candidates are still being fetched, so an empty list doesn't read as "none exist". */
+    isSearching?: boolean;
 }
 
 // Shown as an extra table row under an ingredient the user is missing or short on
-export default function SubstitutionHint({ item, onSwap }: SubstitutionHintProps) {
+export default function SubstitutionHint({ item, onSwap, isSearching = false }: SubstitutionHintProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const { stashOptions, marketOptions } = item;
     const best = stashOptions[0];
@@ -41,6 +43,8 @@ export default function SubstitutionHint({ item, onSwap }: SubstitutionHintProps
                         >
                             {isExpanded ? 'Hide alternatives ▴' : `${optionCount} alternative${optionCount !== 1 ? 's' : ''} ▾`}
                         </button>
+                    ) : isSearching ? (
+                        <span className="text-gray-500 italic">Looking for substitutes...</span>
                     ) : (
                         <span className="text-gray-500 italic">No close substitutes found. Buy the original.</span>
                     )}

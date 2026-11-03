@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
     auth: { user: { id: 'u1', email: 'u@example.com' }, session: {}, username: 'tester', isLoading: false },
     phases: [] as unknown[],
     catalog: [] as unknown[],
+    /** Every query made against the ingredient catalog: its `or` filter, and whether it was narrowed at all. */
+    ingredientQueries: [] as { or?: string; narrowed: boolean }[],
     validation: { alerts: [] as unknown[], recommendations: [] as unknown[] },
 }));
 
@@ -30,7 +32,15 @@ vi.mock('../lib/supabase', () => {
     };
     const builder = (table: string): Record<string, unknown> => {
         const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'or', 'order', 'limit', 'match', 'in']) b[m] = () => b;
+        const query: { or?: string; narrowed: boolean } = { narrowed: false };
+        if (table === 'ingredients') mocks.ingredientQueries.push(query);
+        for (const m of ['select', 'eq', 'or', 'order', 'limit', 'match', 'in']) {
+            b[m] = (...args: unknown[]) => {
+                if (m === 'or') query.or = String(args[0]);
+                if (m === 'or' || m === 'eq' || m === 'in' || m === 'match') query.narrowed = true;
+                return b;
+            };
+        }
         b.single = () => Promise.resolve({ data: rows(table), error: null });
         b.then = (resolve: (v: unknown) => void) => {
             const data = rows(table);
@@ -80,6 +90,7 @@ beforeEach(() => {
         { id: 'pB', phase_letter: 'B', formulation_ingredients: [{ percentage: 0.5, is_qs: false, ingredients: VITAMIN_E }] },
     ];
     mocks.catalog = [EUXYL];
+    mocks.ingredientQueries = [];
     mocks.validation = {
         alerts: [
             { type: 'error', message: 'Heat-sensitive ingredients misplaced: Vitamin E', fix: FIXES.move },
@@ -168,6 +179,29 @@ describe('one-click fixes in the editor', () => {
 
         expect(screen.queryByRole('dialog', { name: 'Add a preservative' })).not.toBeInTheDocument();
         expect(screen.getAllByText('Euxyl PE 9010').length).toBeGreaterThan(0);
+    });
+
+    it('never downloads the whole ingredient catalog, only what could replace what is missing', async () => {
+        await openEditor();
+        // With an empty stash, glycerin and vitamin E are missing; water is assumed to be at hand
+        expect(mocks.ingredientQueries.length).toBeGreaterThan(0);
+        expect(mocks.ingredientQueries.every(q => q.narrowed), 'every catalog query is filtered').toBe(true);
+        const filters = mocks.ingredientQueries.map(q => q.or ?? '').join(' ');
+        expect(filters).toContain('humectant');
+        expect(filters).toContain('antioxidant');
+        expect(filters).not.toContain('emulsifier');
+    });
+
+    it('asks the library only for preservatives when the preservative picker opens', async () => {
+        await openEditor();
+        const before = mocks.ingredientQueries.length;
+        fireEvent.click(screen.getByRole('button', { name: /Add a preservative/ }));
+        await settle(0);
+
+        const added = mocks.ingredientQueries.slice(before);
+        expect(added.length).toBeGreaterThan(0);
+        expect(added.every(q => q.narrowed)).toBe(true);
+        expect(added.map(q => q.or)).toContain('function.ilike."preservative%"');
     });
 
     it('lets the toast go once the formula changes again', async () => {

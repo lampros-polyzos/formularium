@@ -7,7 +7,7 @@ import { apiUrl } from '../lib/api';
 import { saveFormulation } from '../lib/saveFormulation';
 import { settleQS } from '../lib/qs';
 import { applyImmediateFix, isFixApplicable } from '../lib/fixes';
-import { CATEGORY_INFO, suggestIngredients } from '../lib/fixSuggestions';
+import { CATEGORY_FILTERS, CATEGORY_INFO, suggestIngredients } from '../lib/fixSuggestions';
 import type { Fix, FixCategory } from '../types/fixes';
 import FixSuggestionModal from '../components/FixSuggestionModal';
 import FixToast from '../components/FixToast';
@@ -15,6 +15,7 @@ import MakeBatchModal from '../components/MakeBatchModal';
 import { clearDraft, formulaSnapshot, loadDraft, saveDraft, type FormulaDraft } from '../lib/draftStore';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFavorites } from '../hooks/useFavorites';
+import { useCatalogCandidates } from '../hooks/useCatalogCandidates';
 import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import AutosaveIndicator from '../components/AutosaveIndicator';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,6 +45,8 @@ import { buildExportPayload, toApiIngredient } from '../lib/formulationApi';
 import { downloadPdf, pdfFilename } from '../lib/exportPdf';
 import {
     analyzeFormula,
+    linesNeedingSubstitutes,
+    substituteFilters,
     buildSourcingPayload,
     type CatalogIngredient,
     type StashEntry,
@@ -124,10 +127,10 @@ const FormulationEditor = () => {
         return () => clearTimeout(timer);
     }, []);
 
-    // Stash check & substitutions
-    const [catalog, setCatalog] = useState<CatalogIngredient[]>([]);
+    // Stash check & substitutions. Substitute and suggestion candidates are fetched on demand, never the whole catalog.
     const [stashEntries, setStashEntries] = useState<StashEntry[]>([]);
     const [isStashLoaded, setIsStashLoaded] = useState(false);
+    const stashIds = useMemo(() => stashEntries.map(entry => entry.ingredient_id), [stashEntries]);
     const [isStashCheckHidden, setIsStashCheckHidden] = useState(() => {
         try { return localStorage.getItem(STASH_CHECK_KEY) === '1'; } catch { return false; }
     });
@@ -223,12 +226,7 @@ const FormulationEditor = () => {
         if (!user) return;
 
         const fetchSourcingData = async () => {
-            const [catalogRes, stashRes] = await Promise.all([
-                supabase.from('ingredients').select('*'),
-                supabase.from('user_stash').select('ingredient_id, amount_left_g').eq('user_id', user.id),
-            ]);
-            if (catalogRes.error) console.error("Error loading ingredient catalog:", catalogRes.error);
-            else setCatalog(catalogRes.data ?? []);
+            const stashRes = await supabase.from('user_stash').select('ingredient_id, amount_left_g').eq('user_id', user.id);
             if (stashRes.error) console.error("Error loading stash:", stashRes.error);
             else setStashEntries(stashRes.data ?? []);
             setIsStashLoaded(!stashRes.error);
@@ -343,14 +341,18 @@ const FormulationEditor = () => {
         });
     };
 
+    // Only the ingredients that can fill the chosen role are fetched, once the picker is opened
+    const fixGroups = useMemo(() => (fixPicker ? [CATEGORY_FILTERS[fixPicker]] : []), [fixPicker]);
+    const { candidates: fixCandidates, isLoading: isLoadingFixCandidates } = useCatalogCandidates(fixGroups, stashIds);
+
     const fixSuggestions = useMemo(() => (fixPicker
-        ? suggestIngredients(fixPicker, catalog, {
+        ? suggestIngredients(fixPicker, fixCandidates, {
             targetPh,
             claims: targetClaims as string[],
             inFormulaIds: new Set(formulaIngredients.map(i => i.id)),
-            stashIds: new Set(stashEntries.map(entry => entry.ingredient_id)),
+            stashIds: new Set(stashIds),
         })
-        : []), [fixPicker, catalog, targetPh, targetClaims, formulaIngredients, stashEntries]);
+        : []), [fixPicker, fixCandidates, targetPh, targetClaims, formulaIngredients, stashIds]);
 
     const fixTool = useMemo(() => {
         if (!fixPicker) return null;
@@ -516,16 +518,23 @@ const FormulationEditor = () => {
     const currentTotalPercentage = formulaIngredients.reduce((sum, item) => sum + item.percentage, 0);
 
     // Stock status + substitution suggestions for every row, keyed by its index
-    const sourcing = useMemo(() => {
-        if (!isStashLoaded || catalog.length === 0) return [];
-        const lines = formulaIngredients.map(ing => ({
-            ingredient: ing as unknown as CatalogIngredient,
-            phase: ing.phase,
-            percentage: ing.percentage || 0,
-            isQS: ing.isQS,
-        }));
-        return analyzeFormula(lines, catalog, stashEntries, targetWeight || 100, targetPh);
-    }, [formulaIngredients, catalog, stashEntries, isStashLoaded, targetWeight, targetPh]);
+    const formulaLines = useMemo(() => formulaIngredients.map(ing => ({
+        ingredient: ing as unknown as CatalogIngredient,
+        phase: ing.phase,
+        percentage: ing.percentage || 0,
+        isQS: ing.isQS,
+    })), [formulaIngredients]);
+
+    // Substitutes are only looked up for what the user is missing, and only among ingredients that could replace it
+    const substituteGroups = useMemo(() => (isStashLoaded
+        ? linesNeedingSubstitutes(formulaLines, stashEntries, targetWeight || 100).map(line => substituteFilters(line.ingredient))
+        : []), [isStashLoaded, formulaLines, stashEntries, targetWeight]);
+    const { candidates: substituteCandidates, isLoading: isSearchingSubstitutes } = useCatalogCandidates(substituteGroups, stashIds);
+
+    const sourcing = useMemo(
+        () => (isStashLoaded ? analyzeFormula(formulaLines, substituteCandidates, stashEntries, targetWeight || 100, targetPh) : []),
+        [formulaLines, substituteCandidates, stashEntries, isStashLoaded, targetWeight, targetPh]
+    );
 
     const isStashEmpty = isStashLoaded && stashEntries.length === 0;
     const showStashHints = !isStashCheckHidden && !isStashEmpty;
@@ -872,6 +881,7 @@ const FormulationEditor = () => {
                         currentTotalPercentage={currentTotalPercentage}
                         sourcing={sourcing}
                         showStashHints={showStashHints}
+                        isSearchingSubstitutes={isSearchingSubstitutes}
                         isAutoBalance={isAutoBalance}
                         onOpenDetails={(item) => { setSelectedIngredient(item); setIsModalOpen(true); }}
                         onPercentageChange={handlePercentageChange}
@@ -961,6 +971,7 @@ const FormulationEditor = () => {
                     category={fixPicker}
                     suggestions={fixSuggestions}
                     toolLink={fixTool}
+                    isLoading={isLoadingFixCandidates}
                     onPick={({ ingredient }) => {
                         handleAddIngredient(ingredient as unknown as DatabaseIngredient);
                         setFixPicker(null);

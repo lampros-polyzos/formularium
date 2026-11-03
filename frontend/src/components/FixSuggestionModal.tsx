@@ -11,9 +11,11 @@ interface FixSuggestionModalProps {
     onClose: () => void;
     /** A calculator that helps with this fix, opened in a new tab. */
     toolLink?: { label: string; href: string } | null;
+    /** True while the matching ingredients are still being fetched. */
+    isLoading?: boolean;
 }
 
-export default function FixSuggestionModal({ category, suggestions, onPick, onBrowse, onClose, toolLink }: FixSuggestionModalProps) {
+export default function FixSuggestionModal({ category, suggestions, onPick, onBrowse, onClose, toolLink, isLoading = false }: FixSuggestionModalProps) {
     const info = CATEGORY_INFO[category];
 
     useEffect(() => {
@@ -40,7 +42,9 @@ export default function FixSuggestionModal({ category, suggestions, onPick, onBr
                 </div>
 
                 <div className="overflow-y-auto p-5">
-                    {suggestions.length === 0 ? (
+                    {suggestions.length === 0 && isLoading ? (
+                        <p role="status" className="text-sm text-gray-500 italic">Looking in the library...</p>
+                    ) : suggestions.length === 0 ? (
                         <p className="text-sm text-gray-600">
                             Nothing in the library matches your target pH and claims. Search the full library, or relax a claim.
                         </p>

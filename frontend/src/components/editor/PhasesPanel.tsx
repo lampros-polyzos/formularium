@@ -21,6 +21,8 @@ interface PhasesPanelProps {
     /** Per-ingredient stock status, shown only while the stash check is visible. */
     sourcing: SourcingItem[];
     showStashHints: boolean;
+    /** True while substitute candidates are still being fetched, so "none found" is not shown too early. */
+    isSearchingSubstitutes: boolean;
     isAutoBalance: boolean;
     onOpenDetails: (item: FormulaIngredient) => void;
     onPercentageChange: (index: number, value: string) => void;
@@ -34,7 +36,7 @@ interface PhasesPanelProps {
 }
 
 export default function PhasesPanel({
-    formulaIngredients, targetWeight, currentTotalPercentage, sourcing, showStashHints, isAutoBalance,
+    formulaIngredients, targetWeight, currentTotalPercentage, sourcing, showStashHints, isSearchingSubstitutes, isAutoBalance,
     onOpenDetails, onPercentageChange, onToggleLock, onPhaseChange, onRemove, onSwap, onUndoSwap, onBalance, onToggleAutoBalance,
 }: PhasesPanelProps) {
     const getPhaseIngredients = (phase: Phase) => formulaIngredients
@@ -217,6 +219,7 @@ export default function PhasesPanel({
                                             {needsAttention && (
                                                 <SubstitutionHint
                                                     item={stock}
+                                                    isSearching={isSearchingSubstitutes}
                                                     onSwap={(option) => onSwap(item.originalIndex!, option)}
                                                 />
                                             )}
