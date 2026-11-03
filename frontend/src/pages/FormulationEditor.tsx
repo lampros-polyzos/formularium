@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
@@ -14,6 +14,7 @@ import FixToast from '../components/FixToast';
 import MakeBatchModal from '../components/MakeBatchModal';
 import { clearDraft, formulaSnapshot, loadDraft, saveDraft, type FormulaDraft } from '../lib/draftStore';
 import { useAutosave } from '../hooks/useAutosave';
+import { useFavorites } from '../hooks/useFavorites';
 import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import AutosaveIndicator from '../components/AutosaveIndicator';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,15 +27,24 @@ import ShareFormulaModal from '../components/ShareFormulaModal';
 import Header from '../components/Header';
 import GuidedTour from '../components/GuidedTour';
 import { EDITOR_TOUR_STEPS } from '../components/editorTourSteps';
-import SubstitutionHint from '../components/SubstitutionHint';
 import BalancePreviewModal from '../components/BalancePreviewModal';
-import { Lock, LockOpen, PackageCheck, Scale } from 'lucide-react';
+import IngredientDetailsModal from '../components/editor/IngredientDetailsModal';
+import IngredientSearch from '../components/editor/IngredientSearch';
+import StashCheckSummary from '../components/editor/StashCheckSummary';
+import PhasesPanel from '../components/editor/PhasesPanel';
+import FavoritesMenu from '../components/editor/FavoritesMenu';
+import ProjectTitle from '../components/editor/ProjectTitle';
+import EditorActions from '../components/editor/EditorActions';
+import DraftBanner from '../components/editor/DraftBanner';
+import FormulaSettings from '../components/editor/FormulaSettings';
 import { balanceFormula, inferKind, isWaterBase, startingPercentage, type BalanceResult } from '../lib/autoBalance';
-import { fixToolLink, toolsUrl } from '../lib/toolLinks';
+import { fixToolLink } from '../lib/toolLinks';
+import type { DatabaseIngredient, FormulaIngredient, ProfileConfig } from '../types/formulation';
+import { buildExportPayload, toApiIngredient } from '../lib/formulationApi';
+import { downloadPdf, pdfFilename } from '../lib/exportPdf';
 import {
     analyzeFormula,
     buildSourcingPayload,
-    displayName,
     type CatalogIngredient,
     type StashEntry,
     type SubstituteOption,
@@ -44,83 +54,6 @@ const TOUR_SEEN_KEY = 'formularium.editorTourSeen';
 const STASH_CHECK_KEY = 'formularium.stashCheckHidden';
 const AUTO_BALANCE_KEY = 'formularium.autoBalance';
 
-// 1. Define Types for the Database and Formula state
-type DatabaseIngredient = {
-    id: string;
-    inci_name: string;
-    trade_name: string;
-    function: string;
-    solubility: string;
-    max_heating_temp_c: number | null;
-    optimal_ph_min: number | null;
-    optimal_ph_max: number | null;
-    ionic_charge?: string | null;
-    default_min_usage?: number | null;
-    default_max_usage?: number | null;
-    min_usage_pct: number | null;
-    max_usage_pct: number | null;
-    description?: string;
-    common_uses?: string;
-    min_percentage?: number | null;
-    max_percentage?: number | null;
-    QS?: boolean;
-};
-
-type FormulaIngredient = DatabaseIngredient & {
-    phase: 'A' | 'B' | 'C';
-    percentage: number;
-    isQS: boolean;
-    originalIndex?: number;
-    is_vegan?: boolean;
-    is_sulfate?: boolean;
-    is_silicone?: boolean;
-    is_paraben?: boolean;
-    is_fragrance?: boolean;
-    cosmos_compliant?: boolean;
-    comedogenic_rating?: number;
-    cas_number?: string | null;
-    substitutedFor?: FormulaIngredient; // in-memory only, lets the user undo a swap
-    locked?: boolean; // in-memory only: balancing never changes a locked percentage
-};
-
-type ProfileConfig = {
-    id: string;
-    name: string;
-    category: string;
-    max_oil_phase_percent: number | null;
-    default_ph_min: number | null;
-    default_ph_max: number | null;
-    requires_water?: boolean;
-    requires_oil?: boolean;
-    requires_emulsifier?: boolean;
-    requires_preservative?: boolean;
-};
-
-// Shape the backend expects for validation and PDF exports
-const toApiIngredient = (i: FormulaIngredient) => ({
-    id: i.id,
-    name: `${i.inci_name || ''} ${i.trade_name || ''}`.trim() || "Unknown",
-    inciName: i.inci_name || null,
-    tradeName: i.trade_name || null,
-    casNumber: i.cas_number || null,
-    function: i.function || "None",
-    phase: i.phase || "A",
-    percentage: i.percentage || 0,
-    solubility: i.solubility || "water",
-    maxHeatingTempC: i.max_heating_temp_c ?? null,
-    minPercentage: i.min_usage_pct ?? i.min_percentage ?? null,
-    maxPercentage: i.max_usage_pct ?? i.max_percentage ?? null,
-    isVegan: i.is_vegan ?? null,
-    isSulfate: i.is_sulfate ?? null,
-    isSilicone: i.is_silicone ?? null,
-    isParaben: i.is_paraben ?? null,
-    isFragrance: i.is_fragrance ?? null,
-    cosmosCompliant: i.cosmos_compliant ?? null,
-    comedogenicRating: i.comedogenic_rating ?? null,
-    ionicCharge: i.ionic_charge ?? null,
-    optimalPhMin: i.optimal_ph_min ?? null,
-    optimalPhMax: i.optimal_ph_max ?? null
-});
 
 const FormulationEditor = () => {
     const navigate = useNavigate();
@@ -132,7 +65,6 @@ const FormulationEditor = () => {
 
     // State for inline project name editing
     const [projectName, setProjectName] = useState('New Project');
-    const [isEditingName, setIsEditingName] = useState(false);
 
     // Validation state
     const [profileId, setProfileId] = useState('');
@@ -165,7 +97,6 @@ const FormulationEditor = () => {
         message: ''
     });
 
-    const [showPrintMenu, setShowPrintMenu] = useState(false);
     const [isTourOpen, setIsTourOpen] = useState(false);
     const [isMakeBatchOpen, setIsMakeBatchOpen] = useState(false);
 
@@ -306,48 +237,7 @@ const FormulationEditor = () => {
         fetchSourcingData();
     }, [user]);
 
-    // Favorites State
-    const [favorites, setFavorites] = useState<DatabaseIngredient[]>([]);
-    const [showFavoritesMenu, setShowFavoritesMenu] = useState(false);
-
-    // Fetch favorites on load
-    useEffect(() => {
-        if (!user) return;
-
-        const fetchFavorites = async () => {
-            const { data, error } = await supabase
-                .from('favorite_ingredients')
-                .select('ingredients(*)')
-                .eq('user_id', user.id);
-
-            if (!error && data) {
-                const validFavorites = data.map((item: any) => item.ingredients).filter(Boolean);
-                setFavorites(validFavorites);
-            }
-        };
-
-        fetchFavorites();
-    }, [user]);
-
-    // Toggle favorite status
-    const toggleFavorite = async (ingredient: DatabaseIngredient) => {
-        if (!user) return;
-
-        const isFav = favorites.some(f => f.id === ingredient.id);
-
-        if (isFav) {
-            setFavorites(prev => prev.filter(f => f.id !== ingredient.id));
-            await supabase
-                .from('favorite_ingredients')
-                .delete()
-                .match({ user_id: user.id, ingredient_id: ingredient.id });
-        } else {
-            setFavorites(prev => [...prev, ingredient]);
-            await supabase
-                .from('favorite_ingredients')
-                .insert({ user_id: user.id, ingredient_id: ingredient.id });
-        }
-    };
+    const { favorites, toggleFavorite } = useFavorites(user?.id);
 
     // Debounced Database Search Effect
     useEffect(() => {
@@ -623,12 +513,6 @@ const FormulationEditor = () => {
         return () => clearTimeout(debounceTimer);
     }, [profileId, activeProfile, targetPh, targetWeight, projectName, formulaIngredients, targetClaims]);
 
-    const handleNameKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            setIsEditingName(false);
-        }
-    };
-
     const currentTotalPercentage = formulaIngredients.reduce((sum, item) => sum + item.percentage, 0);
 
     // Stock status + substitution suggestions for every row, keyed by its index
@@ -667,12 +551,6 @@ const FormulationEditor = () => {
         setFormulaIngredients(prev => prev.map((ing, i) =>
             i === index && ing.substitutedFor ? { ...ing.substitutedFor, phase: ing.phase } : ing
         ));
-    };
-
-    const getPhaseIngredients = (phase: 'A' | 'B' | 'C') => {
-        return formulaIngredients
-            .map((ing, idx) => ({ ...ing, originalIndex: idx }))
-            .filter(ing => ing.phase === phase);
     };
 
     // ---------- Saving ----------
@@ -852,50 +730,11 @@ const FormulationEditor = () => {
         }
     };
 
-    const cyclePhase = (current: 'A' | 'B' | 'C', dir: number): 'A' | 'B' | 'C' => {
-        const phases: ('A' | 'B' | 'C')[] = ['A', 'B', 'C'];
-        let idx = phases.indexOf(current) + dir;
-        if (idx < 0) idx = 2;
-        if (idx > 2) idx = 0;
-        return phases[idx];
-    };
-
     const handleExportPDF = async (documentType: 'pif' | 'batch' | 'shopping') => {
         setIsSaving(true);
-        setShowPrintMenu(false);
-
         try {
-            const payload = {
-                projectName: projectName || "Untitled Project",
-                targetWeight: targetWeight || 100,
-                profileId: profileId || "Unassigned",
-                profile: activeProfile || null,
-                targetPh: targetPh ?? null,
-                targetClaims: targetClaims,
-                ingredients: formulaIngredients.map(toApiIngredient),
-                totalPercentage: formulaIngredients.reduce((sum, item) => sum + (item.percentage || 0), 0),
-                oilPhasePercentage: formulaIngredients.filter(i => i.phase === 'B' || i.solubility === 'oil').reduce((sum, item) => sum + (item.percentage || 0), 0),
-                waterPhasePercentage: formulaIngredients.filter(i => i.phase === 'A' || i.solubility === 'water').reduce((sum, item) => sum + (item.percentage || 0), 0)
-            };
-
-            const res = await fetch(apiUrl(`/api/v1/export/${documentType}`), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) throw new Error("Failed to generate PDF");
-
-            const blob = await res.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `${projectName.replace(/\s+/g, '_')}_${documentType.toUpperCase()}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-
+            const payload = buildExportPayload({ projectName, targetWeight, profileId, activeProfile, targetPh, targetClaims, formulaIngredients });
+            await downloadPdf(`/api/v1/export/${documentType}`, payload, pdfFilename(projectName, documentType.toUpperCase()));
         } catch (error) {
             console.error("PDF Export error:", error);
             setModal({ isOpen: true, type: 'error', title: 'Export Failed', message: `Could not generate the ${documentType.toUpperCase()} document.` });
@@ -906,28 +745,9 @@ const FormulationEditor = () => {
 
     const handleExportSourcing = async () => {
         setIsSaving(true);
-        setShowPrintMenu(false);
-
         try {
             const payload = buildSourcingPayload(projectName || "Untitled Project", targetWeight || 100, targetPh, sourcing);
-            const res = await fetch(apiUrl('/api/v1/export/sourcing'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) throw new Error("Failed to generate PDF");
-
-            const blob = await res.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `${projectName.replace(/\s+/g, '_')}_SOURCING.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-
+            await downloadPdf('/api/v1/export/sourcing', payload, pdfFilename(projectName, 'SOURCING'));
         } catch (error) {
             console.error("Sourcing export error:", error);
             setModal({ isOpen: true, type: 'error', title: 'Export Failed', message: 'Could not generate the sourcing guide.' });
@@ -973,52 +793,7 @@ const FormulationEditor = () => {
                 </a>
 
                 {/* Page-Specific Action: Favorites Dropdown */}
-                <div className="relative" data-tour="favorites">
-                    <button
-                        onClick={() => setShowFavoritesMenu(!showFavoritesMenu)}
-                        className="flex items-center gap-1.5 hover:text-[#2c4c3b] transition-colors"
-                    >
-                        Favorites <span className="text-red-500 text-lg leading-none">♥</span>
-                    </button>
-
-                    {showFavoritesMenu && (
-                        <div className="absolute right-0 mt-3 w-80 bg-white border border-[#c1d1b9] rounded-lg shadow-xl z-50 flex flex-col overflow-hidden">
-                            <div className="bg-[#e9eee7] px-4 py-2.5 border-b border-[#c1d1b9] font-bold text-[#1f382a] text-sm flex justify-between items-center">
-                                Saved Ingredients
-                                <span className="text-xs font-normal text-gray-500 bg-white px-2 py-0.5 rounded-full">{favorites.length}</span>
-                            </div>
-
-                            <div className="max-h-96 overflow-y-auto">
-                                {favorites.length === 0 ? (
-                                    <div className="p-6 text-sm text-gray-500 text-center italic">
-                                        No favorites yet. Open an ingredient's details to star it!
-                                    </div>
-                                ) : (
-                                    <ul className="divide-y divide-gray-100">
-                                        {favorites.map(fav => (
-                                            <li key={fav.id} className="group flex items-center justify-between p-3 hover:bg-[#f3f5f2] transition-colors">
-                                                <button
-                                                    onClick={() => { handleAddIngredient(fav); setShowFavoritesMenu(false); }}
-                                                    className="flex-1 text-left"
-                                                >
-                                                    <div className="font-medium text-[#1f382a] text-sm truncate">{fav.trade_name || fav.inci_name}</div>
-                                                    <div className="text-xs text-gray-500 truncate">{fav.function}</div>
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); toggleFavorite(fav); }}
-                                                    className="text-gray-300 hover:text-red-500 p-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-all rounded-full hover:bg-red-50"
-                                                    title="Remove from favorites"
-                                                >
-                                                    ✖
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                <FavoritesMenu favorites={favorites} onAdd={handleAddIngredient} onRemove={toggleFavorite} />
 
                 {/* Visual divider before global links */}
                 <span className="text-gray-400">|</span>
@@ -1032,525 +807,82 @@ const FormulationEditor = () => {
 
                     {/* Title and actions share one compact row */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 w-full">
-                        <div className="min-w-0 flex-1">
-                            {isEditingName ? (
-                                <input
-                                    type="text"
-                                    value={projectName}
-                                    onChange={(e) => setProjectName(e.target.value)}
-                                    onBlur={() => setIsEditingName(false)}
-                                    onKeyDown={handleNameKeyDown}
-                                    autoFocus
-                                    aria-label="Project name"
-                                    className="w-full max-w-md text-2xl font-bold text-[#1f382a] bg-white border border-[#c1d1b9] rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
-                                />
-                            ) : (
-                                <h2 className="text-2xl font-bold text-[#1f382a] min-w-0">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsEditingName(true)}
-                                        aria-label="Edit project name"
-                                        title="Click to rename"
-                                        className="group flex items-center gap-2 max-w-full text-left"
-                                    >
-                                        <span className="truncate">{projectName}</span>
-                                        <svg className="w-4 h-4 shrink-0 text-gray-400 group-hover:text-[#2c4c3b] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                        </svg>
-                                    </button>
-                                </h2>
-                            )}
-                            <div className="mt-0.5 min-h-[1rem]">
-                                <AutosaveIndicator
-                                    status={autosave.status}
-                                    error={autosave.error}
-                                    lastSavedAt={autosave.lastSavedAt}
-                                    isSavedFormula={!!formulaId}
-                                    canAutosave={canAutosave}
-                                    hasProfile={!!profileId}
-                                    onRetry={() => { void autosave.saveNow(); }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0" data-tour="actions">
-                            <button
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className={`px-4 py-1.5 text-white rounded shadow-sm text-sm font-medium transition-colors
-                                    ${isSaving ? 'bg-[#3a5a4a] cursor-not-allowed' : 'bg-[#1f382a] hover:bg-[#2c4c3b]'}`}
-                            >
-                                {isSaving ? 'Saving...' : 'Save'}
-                            </button>
-                            <button
-                                onClick={() => setIsMakeBatchOpen(true)}
-                                disabled={isSaving || formulaIngredients.length === 0}
-                                title={formulaIngredients.length === 0 ? "Add ingredients first" : "Log a real batch of this formula, optionally using up your stash"}
-                                className={`px-3 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap
-                                    ${isSaving || formulaIngredients.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-                            >
-                                <PackageCheck size={14} aria-hidden /> Make batch
-                            </button>
-                            <button
-                                onClick={() => setIsShareModalOpen(true)}
-                                disabled={isSaving || !isHealthCheckPassed}
-                                title={!isHealthCheckPassed ? "Resolve all companion warnings to share this formula" : "Publish this recipe to the Community Hub"}
-                                className={`px-3 py-1.5 border rounded shadow-sm text-sm font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap
-                                    ${(isSaving || !isHealthCheckPassed)
-                                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
-                                        : 'bg-[#e9eee7] text-[#2c4c3b] border-[#c1d1b9] hover:bg-[#dbe3da]'}`}
-                            >
-                                <span aria-hidden>🌎</span> Share
-                            </button>
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowPrintMenu(!showPrintMenu)}
-                                    disabled={isSaving}
-                                    aria-haspopup="menu"
-                                    aria-expanded={showPrintMenu}
-                                    className="px-3 py-1.5 bg-white border border-[#c1d1b9] rounded shadow-sm text-sm font-medium hover:bg-gray-50 flex items-center gap-1 transition-colors"
-                                >
-                                    More
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                </button>
-
-                                {showPrintMenu && (
-                                    <div role="menu" className="absolute right-0 mt-1 w-60 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
-                                        <button
-                                            role="menuitem"
-                                            onClick={() => { setShowPrintMenu(false); void handleClone(); }}
-                                            disabled={!formulaId}
-                                            title={!formulaId ? "Save this project first before cloning" : "Duplicate this formula"}
-                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Clone this formula <span className="text-xs text-gray-400" aria-hidden>⎘</span>
-                                        </button>
-                                        <div className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Print &amp; export</div>
-                                        <button
-                                            role="menuitem"
-                                            onClick={() => handleExportPDF('batch')}
-                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center"
-                                        >
-                                            Lab Batch Ticket <span className="text-xs text-gray-400" aria-hidden>🖨️</span>
-                                        </button>
-                                        <button
-                                            role="menuitem"
-                                            onClick={() => handleExportPDF('shopping')}
-                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center"
-                                        >
-                                            Shopping List <span className="text-xs text-gray-400" aria-hidden>🛒</span>
-                                        </button>
-                                        <button
-                                            role="menuitem"
-                                            onClick={handleExportSourcing}
-                                            disabled={sourcing.length === 0}
-                                            title={sourcing.length === 0 ? "Add ingredients first" : "Stash check, substitutions and shopping options"}
-                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Substitutions &amp; Sourcing <span className="text-xs text-gray-400" aria-hidden>⇄</span>
-                                        </button>
-                                        <button
-                                            role="menuitem"
-                                            onClick={() => handleExportPDF('pif')}
-                                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-[#2c4c3b] hover:bg-gray-50 flex justify-between items-center"
-                                        >
-                                            Download PIF (PDF) <span className="text-xs text-[#2c4c3b]" aria-hidden>↓</span>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {visibleDraft && (
-                        <div role="alert" className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
-                            <span className="text-amber-900">
-                                We found unsaved changes from <strong>{new Date(visibleDraft.savedAt).toLocaleString()}</strong>
-                                {' '}({visibleDraft.ingredients.length} ingredient{visibleDraft.ingredients.length !== 1 && 's'}).
-                            </span>
-                            <span className="flex gap-2">
-                                <button onClick={restoreDraft} className="px-3 py-1 bg-[#1f382a] text-white rounded text-xs font-bold hover:bg-[#2c4c3b]">Restore</button>
-                                <button onClick={discardDraft} className="px-3 py-1 bg-white border border-amber-300 rounded text-xs font-bold text-amber-900 hover:bg-amber-100">Discard</button>
-                            </span>
-                        </div>
-                    )}
-
-                    <div className="flex items-center gap-4 md:gap-8 w-full bg-transparent overflow-x-auto pb-2 -mt-1" data-tour="settings">
-
-                        {/* Profile Selector */}
-                        <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
-                            <label htmlFor="profile-select" className="text-sm text-gray-600 font-medium">Profile:</label>
-                            <select
-                                id="profile-select"
-                                value={profileId}
-                                onChange={(e) => handleProfileChange(e.target.value)}
-                                className="border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm text-gray-700 w-48"
-                            >
-                                <option value="" disabled>Select product type...</option>
-                                <optgroup label="Emulsions">
-                                    <option value="ow_lotion">O/W Lotion or Cream</option>
-                                    <option value="wo_cream">W/O Rich Cream or Salve</option>
-                                </optgroup>
-                                <optgroup label="Anhydrous (Waterless)">
-                                    <option value="body_butter">Body Butter or Balm</option>
-                                    <option value="facial_oil">Facial or Body Oil</option>
-                                </optgroup>
-                                <optgroup label="Aqueous & Gels">
-                                    <option value="toner_mist">Toner or Face Mist</option>
-                                    <option value="water_serum">Water-based Serum or Gel</option>
-                                </optgroup>
-                                <optgroup label="Surfactants (Wash-off)">
-                                    <option value="body_wash">Body Wash or Gel Cleanser</option>
-                                    <option value="shampoo">Shampoo</option>
-                                </optgroup>
-                            </select>
-                        </div>
-
-                        {/* Target Weight */}
-                        <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
-                            <label className="text-sm text-gray-600 font-medium">Target Weight:</label>
-                            <div className="relative flex items-center">
-                                <input
-                                    type="number"
-                                    min="1"
-                                    step="any"
-                                    value={targetWeight || ''}
-                                    onChange={(e) => setTargetWeight(parseFloat(e.target.value) || 0)}
-                                    className="w-24 border border-[#c1d1b9] rounded px-2 py-1 pr-6 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
-                                    placeholder="100"
-                                />
-                                <span className="absolute right-2 text-xs text-gray-500 pointer-events-none">g</span>
-                            </div>
-                        </div>
-
-                        {/* Target pH */}
-                        <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
-                            <label className="text-sm text-gray-600 font-medium">Target pH:</label>
-                            <input
-                                type="number"
-                                step="0.1"
-                                min="2"
-                                max="12"
-                                value={targetPh ?? ''}
-                                onChange={(e) => setTargetPh(e.target.value === '' ? null : parseFloat(e.target.value))}
-                                className="w-20 border border-[#c1d1b9] rounded px-2 py-1 text-sm bg-white outline-none focus:ring-1 focus:ring-[#2c4c3b] shadow-sm"
-                                placeholder="5.5"
+                        <ProjectTitle projectName={projectName} onProjectNameChange={setProjectName}>
+                            <AutosaveIndicator
+                                status={autosave.status}
+                                error={autosave.error}
+                                lastSavedAt={autosave.lastSavedAt}
+                                isSavedFormula={!!formulaId}
+                                canAutosave={canAutosave}
+                                hasProfile={!!profileId}
+                                onRetry={() => { void autosave.saveNow(); }}
                             />
-                            <a
-                                href={toolsUrl('ph', { batch: targetWeight, target: targetPh })}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs font-bold text-[#2c4c3b] hover:underline"
-                                title="Work out how much acid or base to add"
-                            >
-                                Adjust pH
-                            </a>
-                        </div>
+                        </ProjectTitle>
+
+                        <EditorActions
+                            isSaving={isSaving}
+                            hasIngredients={formulaIngredients.length > 0}
+                            hasSourcing={sourcing.length > 0}
+                            isHealthCheckPassed={isHealthCheckPassed}
+                            formulaId={formulaId}
+                            onSave={handleSave}
+                            onMakeBatch={() => setIsMakeBatchOpen(true)}
+                            onShare={() => setIsShareModalOpen(true)}
+                            onClone={handleClone}
+                            onExportPDF={handleExportPDF}
+                            onExportSourcing={handleExportSourcing}
+                        />
                     </div>
 
-                    {/* Search Ingredients Bar with Dropdown Container */}
-                    <div className="relative" data-tour="search">
-                        <div className="bg-white p-3 rounded-lg border border-[#c1d1b9] shadow-sm flex items-center gap-3">
-                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search by ingredient, INCI, or function (e.g. emulsifier, active)..."
-                                className="w-full bg-transparent text-sm outline-none text-gray-700"
-                            />
-                            {isSearching && <span className="text-xs text-gray-400">Searching...</span>}
-                        </div>
+                    {visibleDraft && <DraftBanner draft={visibleDraft} onRestore={restoreDraft} onDiscard={discardDraft} />}
 
-                        {/* Dropdown Results */}
-                        {searchResults.length > 0 && (
-                            <ul className="absolute top-full left-0 right-0 bg-white border border-[#c1d1b9] mt-1 rounded-lg shadow-xl max-h-60 overflow-y-auto z-20">
-                                {searchResults.map((ingredient) => (
-                                    <li
-                                        key={ingredient.id}
-                                        onClick={() => handleAddIngredient(ingredient)}
-                                        className="px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-[#f3f5f2] cursor-pointer flex flex-col"
-                                    >
-                                        <span className="font-semibold text-[#1f382a]">{ingredient.trade_name}</span>
-                                        <span className="text-xs text-gray-500">{ingredient.inci_name} • {ingredient.function}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
+                    <FormulaSettings
+                        profileId={profileId}
+                        onProfileChange={handleProfileChange}
+                        targetWeight={targetWeight}
+                        onTargetWeightChange={setTargetWeight}
+                        targetPh={targetPh}
+                        onTargetPhChange={setTargetPh}
+                    />
 
-                    {/* Stash check summary */}
+                    <IngredientSearch
+                        searchTerm={searchTerm}
+                        onSearchTermChange={setSearchTerm}
+                        isSearching={isSearching}
+                        results={searchResults}
+                        onAdd={handleAddIngredient}
+                    />
+
                     {formulaIngredients.length > 0 && isStashLoaded && (
-                        isStashEmpty ? (
-                            <div data-tour="sourcing" className="bg-white border border-dashed border-[#c1d1b9] rounded-lg px-4 py-3 text-sm text-gray-600">
-                                🧺 Add what you own on the <button onClick={() => navigate('/stash')} className="font-semibold text-[#2c4c3b] hover:underline">Stash page</button> to see what you're missing and get substitutions from your own shelf.
-                            </div>
-                        ) : isStashCheckHidden ? (
-                            <button onClick={() => toggleStashCheck(false)} className="self-start text-xs font-medium text-[#2c4c3b] hover:underline">
-                                🧺 Show stash check
-                            </button>
-                        ) : missingCount + lowCount > 0 ? (
-                            <div data-tour="sourcing" className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
-                                <span className="text-amber-900">
-                                    🧺 For a {targetWeight || 100} g batch you're missing <strong>{missingCount}</strong> ingredient{missingCount !== 1 && 's'}
-                                    {lowCount > 0 && <> and are low on <strong>{lowCount}</strong></>}. Swap suggestions are shown under each one.
-                                </span>
-                                <span className="flex gap-2">
-                                    <button
-                                        onClick={handleExportSourcing}
-                                        disabled={isSaving}
-                                        className="px-3 py-1 bg-white border border-amber-300 rounded text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50"
-                                    >
-                                        🖨️ Print sourcing guide
-                                    </button>
-                                    <button onClick={() => toggleStashCheck(true)} className="px-2 text-xs text-amber-800 hover:underline">
-                                        Hide
-                                    </button>
-                                </span>
-                            </div>
-                        ) : (
-                            <div data-tour="sourcing" className="bg-[#e9eee7] border border-[#c1d1b9] rounded-lg px-4 py-2 text-sm text-[#1f382a] flex justify-between items-center gap-3">
-                                <span>✅ You have everything in your stash for a {targetWeight || 100} g batch.</span>
-                                <button onClick={() => toggleStashCheck(true)} className="text-xs text-gray-500 hover:underline">Hide</button>
-                            </div>
-                        )
+                        <StashCheckSummary
+                            targetWeight={targetWeight}
+                            isStashEmpty={isStashEmpty}
+                            isHidden={isStashCheckHidden}
+                            missingCount={missingCount}
+                            lowCount={lowCount}
+                            isSaving={isSaving}
+                            onToggleHidden={toggleStashCheck}
+                            onPrintSourcing={handleExportSourcing}
+                        />
                     )}
 
-                    {/* Phases Container */}
-                    <div className="bg-white border border-[#c1d1b9] rounded-lg shadow-sm overflow-hidden text-sm" data-tour="phases">
-
-                        {(['A', 'B', 'C'] as const).map((phaseLetter) => {
-                            const phaseNames = {
-                                A: 'PHASE A (Water Phase)',
-                                B: 'PHASE B (Oil Phase)',
-                                C: 'PHASE C (Cool Down Phase)'
-                            };
-                            const phaseHeaderBg = {
-                                A: 'bg-[#cbd8d0]',
-                                B: 'bg-[#e6e1cd]',
-                                C: 'bg-[#bdcdbd]'
-                            };
-
-                            const phaseItems = getPhaseIngredients(phaseLetter);
-
-                            return (
-                                <div key={phaseLetter}>
-                                    <div className={`${phaseHeaderBg[phaseLetter]} px-4 py-2 font-semibold flex justify-between border-t first:border-t-0 border-[#c1d1b9]`}>
-                                        <span>{phaseNames[phaseLetter]}</span>
-                                        <span className="text-xs font-normal text-gray-700">
-                                            {phaseItems.reduce((sum, item) => sum + item.percentage, 0).toFixed(2)}%
-                                        </span>
-                                    </div>
-
-                                    {phaseItems.length === 0 ? (
-                                        <div className="p-4 text-gray-500 text-center text-xs italic bg-gray-50 border-b border-gray-100">
-                                            No ingredients added to Phase {phaseLetter} yet.
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
-                                                <thead>
-                                                    <tr className="border-b border-gray-200 text-xs text-gray-500">
-                                                        <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
-                                                        <th className="px-4 py-2 font-medium w-[23%]">Function</th>
-                                                        <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
-                                                        <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
-                                                        <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
-                                                        <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {phaseItems.map((item) => {
-                                                        const stock = showStashHints ? sourcing[item.originalIndex!] : undefined;
-                                                        const needsAttention = stock && (stock.status === 'missing' || stock.status === 'low');
-                                                        return (
-                                                        <Fragment key={item.originalIndex}>
-                                                        <tr className={`hover:bg-gray-50 ${needsAttention ? 'bg-amber-50/40' : 'border-b border-gray-100'}`}>
-                                                            {/* 1. Ingredient Column */}
-                                                            <td className="px-4 py-2 font-medium text-[#1f382a] truncate">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedIngredient(item);
-                                                                        setIsModalOpen(true);
-                                                                    }}
-                                                                    className="hover:underline hover:text-[#2c4c3b] text-left transition-colors flex flex-col"
-                                                                    title="View ingredient details"
-                                                                >
-                                                                    <span>{item.trade_name}</span>
-                                                                    <span className="text-[10px] text-gray-500 font-normal">{item.inci_name}</span>
-                                                                </button>
-                                                                {item.substitutedFor && (
-                                                                    <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate">
-                                                                        ⇄ replaces {displayName(item.substitutedFor as unknown as CatalogIngredient)} ·{' '}
-                                                                        <button onClick={() => handleUndoSwap(item.originalIndex!)} className="text-[#2c4c3b] font-medium hover:underline">
-                                                                            Undo
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </td>
-
-                                                            {/* 2. Function Column */}
-                                                            <td className="px-4 py-2 text-gray-600 truncate">{item.function}</td>
-
-                                                            {/* 3. Target % Column (with tightened spacing) */}
-                                                            <td className="px-4 py-2">
-                                                                <div className="flex flex-col justify-center items-start">
-                                                                    <div className="flex items-center gap-1">
-                                                                    <div className="relative w-16">
-                                                                        <input
-                                                                            type="number"
-                                                                            step="0.5"
-                                                                            min="0"
-                                                                            max="100"
-                                                                            value={item.percentage === 0 ? '' : item.percentage}
-                                                                            disabled={item.isQS}
-                                                                            onChange={(e) => handlePercentageChange(item.originalIndex!, e.target.value)}
-                                                                            className={`w-full border rounded py-0.5 pl-1.5 pr-4 text-sm outline-none focus:ring-1 
-                                                                    [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
-                                                                    ${item.isQS
-                                                                                    ? 'bg-blue-50 text-blue-700 font-bold border-blue-200 cursor-not-allowed'
-                                                                                    : 'bg-white text-gray-800 border-gray-200 focus:ring-[#2c4c3b]'
-                                                                                }
-                                                                    ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
-                                                                                    ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
-                                                                                    : ''
-                                                                                }`}
-                                                                            placeholder="0"
-                                                                        />
-                                                                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
-                                                                    </div>
-                                                                    {!item.isQS && (
-                                                                        <button
-                                                                            onClick={() => toggleLock(item.originalIndex!)}
-                                                                            aria-label={item.locked ? 'Unlock percentage' : 'Lock percentage'}
-                                                                            aria-pressed={!!item.locked}
-                                                                            title={item.locked ? 'Locked: balancing keeps this value. Click to unlock.' : 'Lock this value so balancing never changes it'}
-                                                                            className={`p-0.5 rounded transition-colors ${item.locked ? 'text-[#2c4c3b]' : 'text-gray-300 hover:text-gray-500'}`}
-                                                                        >
-                                                                            {item.locked ? <Lock size={12} /> : <LockOpen size={12} />}
-                                                                        </button>
-                                                                    )}
-                                                                    </div>
-
-                                                                    <div className="mt-0.5 leading-none">
-                                                                        {item.isQS ? (
-                                                                            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Q.S. Base</span>
-                                                                        ) : (
-                                                                            (item.min_usage_pct !== null || item.max_usage_pct !== null) && (
-                                                                                <span
-                                                                                    className={`text-[9px] font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
-                                                                                        (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
-                                                                                        ? 'text-amber-600 font-semibold'
-                                                                                        : 'text-gray-400'
-                                                                                        }`}
-                                                                                    title={`Recommended range: ${item.min_usage_pct ?? 0}% - ${item.max_usage_pct ?? 100}%`}
-                                                                                >
-                                                                                    {item.min_usage_pct !== null && item.max_usage_pct !== null
-                                                                                        ? `${item.min_usage_pct}–${item.max_usage_pct}%`
-                                                                                        : item.max_usage_pct !== null
-                                                                                            ? `≤${item.max_usage_pct}%`
-                                                                                            : `≥${item.min_usage_pct}%`}
-                                                                                </span>
-                                                                            )
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-
-                                                            {/* 4. Weight Column */}
-                                                            <td className="px-4 py-2 text-gray-600">
-                                                                {item.percentage
-                                                                    ? `${((item.percentage / 100) * targetWeight).toFixed(2)}g`
-                                                                    : '0.00g'}
-                                                            </td>
-
-                                                            {/* 5. Phase Column (Moved here) */}
-                                                            <td className="px-4 py-2">
-                                                                <div className="flex items-center justify-center gap-2">
-                                                                    <button
-                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, -1))}
-                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
-                                                                    >
-                                                                        ◀
-                                                                    </button>
-                                                                    <span className="font-bold text-gray-700 w-4 text-center">{item.phase}</span>
-                                                                    <button
-                                                                        onClick={() => handlePhaseChange(item.originalIndex!, cyclePhase(item.phase, 1))}
-                                                                        className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
-                                                                    >
-                                                                        ▶
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-
-                                                            {/* 6. Action Column */}
-                                                            <td
-                                                                className="px-4 py-2 text-gray-400 cursor-pointer hover:text-red-500 text-center"
-                                                                onClick={() => removeIngredient(item.originalIndex!)}
-                                                                title="Remove ingredient"
-                                                            >
-                                                                🗑
-                                                            </td>
-                                                        </tr>
-                                                        {needsAttention && (
-                                                            <SubstitutionHint
-                                                                item={stock}
-                                                                onSwap={(option) => handleSwap(item.originalIndex!, option)}
-                                                            />
-                                                        )}
-                                                        </Fragment>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-
-                        {/* Total Footer */}
-                        <div className="bg-[#f0f4ef] px-4 py-3 text-right font-medium flex flex-wrap justify-between gap-3 items-center border-t border-[#c1d1b9]" data-tour="total">
-                            <div className="flex items-center gap-3" data-tour="balance">
-                                <button
-                                    onClick={() => setIsBalanceOpen(true)}
-                                    disabled={formulaIngredients.length === 0}
-                                    title="Suggest logical percentages and fill to 100%"
-                                    className="flex items-center gap-1.5 px-3 py-1 bg-white border border-[#c1d1b9] rounded shadow-sm text-xs font-bold text-[#2c4c3b] hover:bg-[#e9eee7] disabled:opacity-50 transition-colors"
-                                >
-                                    <Scale size={14} aria-hidden /> Balance
-                                </button>
-                                <label className="flex items-center gap-1.5 text-xs font-normal text-gray-600 cursor-pointer" title="Rebalance automatically when you add or remove ingredients. Values you type are locked.">
-                                    <input
-                                        type="checkbox"
-                                        checked={isAutoBalance}
-                                        onChange={(e) => toggleAutoBalance(e.target.checked)}
-                                        className="w-3.5 h-3.5 accent-[#2c4c3b]"
-                                    />
-                                    Auto
-                                </label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                            <span>
-                                Total: {currentTotalPercentage.toFixed(2)}% | {((currentTotalPercentage / 100) * targetWeight).toFixed(2)}g
-                                {targetWeight > 0 && ` (of ${targetWeight.toFixed(2)}g target)`}
-                            </span>
-                            {Math.abs(currentTotalPercentage - 100) > 0.001 && (
-                                <span
-                                    className="w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center text-[10px] text-white"
-                                    title="Formula total must equal 100%"
-                                >
-                                    !
-                                </span>
-                            )}
-                            </div>
-                        </div>
-                    </div>
+                    <PhasesPanel
+                        formulaIngredients={formulaIngredients}
+                        targetWeight={targetWeight}
+                        currentTotalPercentage={currentTotalPercentage}
+                        sourcing={sourcing}
+                        showStashHints={showStashHints}
+                        isAutoBalance={isAutoBalance}
+                        onOpenDetails={(item) => { setSelectedIngredient(item); setIsModalOpen(true); }}
+                        onPercentageChange={handlePercentageChange}
+                        onToggleLock={toggleLock}
+                        onPhaseChange={handlePhaseChange}
+                        onRemove={removeIngredient}
+                        onSwap={handleSwap}
+                        onUndoSwap={handleUndoSwap}
+                        onBalance={() => setIsBalanceOpen(true)}
+                        onToggleAutoBalance={toggleAutoBalance}
+                    />
                     <div data-tour="cost">
                         <FormulationCostCalculator formulaIngredients={calculatorIngredients} currencySymbol={currency} initialBatchSize={targetWeight} />
                     </div>
@@ -1558,91 +890,12 @@ const FormulationEditor = () => {
 
                 {/* Ingredient Details Modal */}
                 {isModalOpen && selectedIngredient && (
-                    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden">
-                            <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9] flex justify-between items-start">
-                                <div className="pr-4">
-                                    <h3 className="text-lg font-bold text-[#1f382a]">{selectedIngredient.trade_name}</h3>
-                                    <p className="text-xs text-gray-600 font-mono">{selectedIngredient.inci_name}</p>
-                                </div>
-                                <div className="flex items-center gap-4 pt-1">
-                                    <button
-                                        onClick={() => toggleFavorite(selectedIngredient)}
-                                        className={`text-2xl transition-colors hover:scale-110 ${favorites.some(f => f.id === selectedIngredient.id)
-                                            ? 'text-red-500 drop-shadow-sm'
-                                            : 'text-gray-300 hover:text-red-400'
-                                            }`}
-                                        title={favorites.some(f => f.id === selectedIngredient.id) ? "Remove from favorites" : "Add to favorites"}
-                                    >
-                                        {favorites.some(f => f.id === selectedIngredient.id) ? '♥' : '♡'}
-                                    </button>
-                                    <button
-                                        onClick={() => setIsModalOpen(false)}
-                                        className="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none -mt-1"
-                                    >
-                                        &times;
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="p-6 text-sm text-gray-700 space-y-4">
-                                <div>
-                                    <h4 className="font-semibold text-gray-900 mb-1">Summary</h4>
-                                    <p>{selectedIngredient.description || 'No summary available.'}</p>
-                                </div>
-
-                                <div>
-                                    <h4 className="font-semibold text-gray-900 mb-1">Common Uses</h4>
-                                    <p>{selectedIngredient.common_uses || 'No common uses specified.'}</p>
-                                </div>
-
-                                <div>
-                                    <h4 className="font-semibold text-gray-900 mb-2">Key Attributes</h4>
-                                    <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded border border-gray-100 text-xs">
-                                        <div>
-                                            <span className="text-gray-500 block mb-0.5">Function</span>
-                                            <span className="font-medium">{selectedIngredient.function}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 block mb-0.5">Solubility</span>
-                                            <span className="font-medium capitalize">{selectedIngredient.solubility}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 block mb-0.5">Usage Rate</span>
-                                            <span className="font-medium">
-                                                {selectedIngredient.min_usage_pct ?? 0}% – {selectedIngredient.max_usage_pct ?? 100}%
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 block mb-0.5">Optimal pH</span>
-                                            <span className="font-medium">
-                                                {selectedIngredient.optimal_ph_min && selectedIngredient.optimal_ph_max
-                                                    ? `${selectedIngredient.optimal_ph_min} – ${selectedIngredient.optimal_ph_max}`
-                                                    : 'Broad / Not specified'}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 block mb-0.5">Heat Tolerance</span>
-                                            <span className="font-medium">
-                                                {selectedIngredient.max_heating_temp_c
-                                                    ? `≤ ${selectedIngredient.max_heating_temp_c}°C`
-                                                    : 'Heat stable'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 bg-[#2c4c3b] text-white text-sm rounded hover:bg-[#1f382a] transition-colors"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <IngredientDetailsModal
+                        ingredient={selectedIngredient}
+                        isFavorite={favorites.some(f => f.id === selectedIngredient.id)}
+                        onToggleFavorite={() => toggleFavorite(selectedIngredient)}
+                        onClose={() => setIsModalOpen(false)}
+                    />
                 )}
 
                 {/* Right Column: Sidebar */}
