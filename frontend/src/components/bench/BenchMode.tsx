@@ -4,6 +4,7 @@ import BenchRow from './BenchRow';
 import BenchTimers from './BenchTimers';
 import { useBenchSession } from '../../hooks/useBenchSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
+import { useDialog } from '../../hooks/useDialog';
 import {
     allAdded, allWeighed, gramsText, groupByPhase, phaseGuide, phasesOf, stillToAdd, stillToWeigh, toBenchLines, totalGrams, weighedGrams,
     type BenchMode as Mode,
@@ -26,6 +27,7 @@ export default function BenchMode({ batch, lines: batchLines, onExit }: BenchMod
     const lines = useMemo(() => toBenchLines(batchLines), [batchLines]);
     const bench = useBenchSession(batch.id, lines);
     useWakeLock(true);
+    const { confirm } = useDialog();
 
     const { session } = bench;
     const phases = phasesOf(lines);
@@ -46,8 +48,9 @@ export default function BenchMode({ batch, lines: batchLines, onExit }: BenchMod
         { id: 'timers', label: 'Timers' },
     ];
 
-    const confirmStartOver = () => {
-        if (window.confirm('Start over? This clears every tick and resets the timers for this batch.')) bench.startOver();
+    const confirmStartOver = async () => {
+        const ok = await confirm('This clears every tick and resets the timers for this batch.', { title: 'Start over?', confirmLabel: 'Start over', tone: 'danger' });
+        if (ok) bench.startOver();
     };
 
     return (
@@ -180,7 +183,7 @@ export default function BenchMode({ batch, lines: batchLines, onExit }: BenchMod
 
                 {lines.length > 0 && (
                     <div className="mt-10 text-center">
-                        <button type="button" onClick={confirmStartOver} className="text-sm text-gray-500 underline underline-offset-2">Start over</button>
+                        <button type="button" onClick={() => void confirmStartOver()} className="text-sm text-gray-500 underline underline-offset-2">Start over</button>
                     </div>
                 )}
             </main>

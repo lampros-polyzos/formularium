@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useDialog } from '../hooks/useDialog';
 import { useSettings } from '../contexts/SettingsContext';
 import StarRating from './StarRating';
 
@@ -65,6 +66,7 @@ const MAX_REVIEW_LENGTH = 1000;
 
 export default function RecipeRatings({ postId, authorId, versions, activeVersion }: RecipeRatingsProps) {
     const { user, username } = useAuth();
+    const { confirm } = useDialog();
     const { formatDate } = useSettings();
 
     const [ratings, setRatings] = useState<RecipeRating[]>([]);
@@ -190,7 +192,8 @@ export default function RecipeRatings({ postId, authorId, versions, activeVersio
     };
 
     const handleRemove = async () => {
-        if (!myRating || !window.confirm("Remove your rating for this recipe?")) return;
+        if (!myRating) return;
+        if (!(await confirm("Remove your rating for this recipe?", { title: "Remove your rating?", confirmLabel: "Remove rating", tone: "danger" }))) return;
 
         setIsSaving(true);
         setError('');

@@ -13,6 +13,8 @@ import { costPerContainer, formatMoney } from '../lib/batchCost';
 import { downloadBatchRecord } from '../lib/batchRecord';
 import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import { useSettings } from '../contexts/SettingsContext';
+import { useDialog } from '../hooks/useDialog';
+import type { ConfirmOptions } from '../contexts/dialogApi';
 import { OBSERVATION_LABELS, RESULT_LABELS, STATUS_LABEL, type BatchCheck, type BatchStatus } from '../types/batches';
 
 const RESULT_CHIP = {
@@ -26,6 +28,7 @@ const grams = (v: number) => `${Number(Number(v).toFixed(2))} g`;
 export default function BatchDetailPage() {
     const { id } = useParams();
     const { formatDate, currency } = useSettings();
+    const { confirm } = useDialog();
     const [detail, setDetail] = useState<BatchDetail | null>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -145,8 +148,8 @@ export default function BatchDetailPage() {
 
     const setStatus = (next: BatchStatus, message: string) => run(() => updateBatch(batch.id, { status: next }), message);
 
-    const confirmThen = (message: string, action: () => Promise<void>, success: string) => {
-        if (window.confirm(message)) void run(action, success);
+    const confirmThen = async (message: string, action: () => Promise<void>, success: string, options: ConfirmOptions) => {
+        if (await confirm(message, options)) void run(action, success);
     };
 
     const saveMeasurements = () => run(() => updateBatch(batch.id, {
@@ -433,7 +436,7 @@ export default function BatchDetailPage() {
                         )}
                         {isActive && (
                             <button
-                                onClick={() => confirmThen('Mark this batch as discarded? Its remaining check-ins will stop reminding you.', () => updateBatch(batch.id, { status: 'discarded' }), 'Batch marked as discarded.')}
+                                onClick={() => confirmThen('Mark this batch as discarded? Its remaining check-ins will stop reminding you.', () => updateBatch(batch.id, { status: 'discarded' }), 'Batch marked as discarded.', { title: 'Discard this batch?', confirmLabel: 'Discard batch', tone: 'danger' })}
                                 disabled={busy} className="px-4 py-2 border border-red-200 text-sm font-medium text-red-700 rounded hover:bg-red-50 disabled:opacity-50"
                             >
                                 Discard
@@ -441,7 +444,7 @@ export default function BatchDetailPage() {
                         )}
                         {batch.stash_deducted && batch.status !== 'voided' && (
                             <button
-                                onClick={() => confirmThen(`Undo this batch? It will be marked as undone and ${grams(stashTaken)} will be put back into your stash. Do this only if the batch was never actually made.`, () => voidBatch(batch.id), 'Batch undone. Your stash was restored.')}
+                                onClick={() => confirmThen(`Undo this batch? It will be marked as undone and ${grams(stashTaken)} will be put back into your stash. Do this only if the batch was never actually made.`, () => voidBatch(batch.id), 'Batch undone. Your stash was restored.', { title: 'Undo this batch?', confirmLabel: 'Undo batch', tone: 'danger' })}
                                 disabled={busy} className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50"
                             >
                                 Undo batch and restore stash
@@ -449,7 +452,7 @@ export default function BatchDetailPage() {
                         )}
                         {batch.status !== 'voided' && !batch.stash_deducted && isActive && (
                             <button
-                                onClick={() => confirmThen('Mark this batch as undone? It was never taken from your stash, so nothing else changes.', () => voidBatch(batch.id), 'Batch undone.')}
+                                onClick={() => confirmThen('Mark this batch as undone? It was never taken from your stash, so nothing else changes.', () => voidBatch(batch.id), 'Batch undone.', { title: 'Mark as never made?', confirmLabel: 'Mark as never made', tone: 'danger' })}
                                 disabled={busy} className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50"
                             >
                                 Mark as never made

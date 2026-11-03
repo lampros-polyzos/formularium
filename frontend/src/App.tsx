@@ -21,6 +21,7 @@ import LegalPage from './pages/LegalPage';
 import BatchesPage from './pages/BatchesPage';
 import BatchDetailPage from './pages/BatchDetailPage';
 import BenchModePage from './pages/BenchModePage';
+import { DialogProvider } from './contexts/DialogContext';
 import { PRIVACY_POLICY, TERMS_OF_USE } from './content/legal';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
   return (
     <AuthProvider>
       <SettingsProvider>
+        <DialogProvider>
         <BrowserRouter>
           <ScrollManager />
           <Routes>
@@ -57,6 +59,7 @@ function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+        </DialogProvider>
       </SettingsProvider>
     </AuthProvider>
   )

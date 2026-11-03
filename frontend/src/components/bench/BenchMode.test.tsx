@@ -180,21 +180,26 @@ describe('remembering', () => {
         expect(screen.getByText('Added 1 of 6')).toBeInTheDocument();
     });
 
-    it('starts over when asked, after checking', () => {
+    // (Without the app's dialogs around it, asking falls back to the browser's, which the test stubs; it answers a moment later)
+    const answered = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    it('starts over when asked, after checking', async () => {
         open();
         weighAll();
         fireEvent.click(screen.getByRole('button', { name: 'Start over' }));
+        await answered();
         expect(confirm).toHaveBeenCalled();
         expect(tab(/Weigh/)).toHaveAttribute('aria-selected', 'true'); // it was on the checker; a fresh start means weighing again
         fireEvent.click(tab(/Weigh/));
         expect(screen.getByLabelText('Weighed total')).toHaveTextContent('0 g');
     });
 
-    it('does not start over if you change your mind', () => {
+    it('does not start over if you change your mind', async () => {
         vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
         open();
         weighAll();
         fireEvent.click(screen.getByRole('button', { name: 'Start over' }));
+        await answered();
         expect(tab(/Add to mix/)).toHaveAttribute('aria-selected', 'true');
     });
 });

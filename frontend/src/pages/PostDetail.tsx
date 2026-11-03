@@ -7,6 +7,7 @@ import { RemixedFrom, RemixList } from '../components/PostRemixes';
 import { withLineage } from '../lib/lineage';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { useDialog } from '../hooks/useDialog';
 
 interface Snapshot {
     version: number;
@@ -27,6 +28,7 @@ export default function PostDetail() {
     const navigate = useNavigate();
     const { user, username } = useAuth(); // Destructure username for comments
     const { formatDate } = useSettings();
+    const { alert, confirm } = useDialog();
 
     const [post, setPost] = useState<any>(null);
     const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
@@ -131,8 +133,8 @@ export default function PostDetail() {
 
     // Rating Logic
     const handleVote = async (value: number) => {
-        if (!user) return alert("You must be logged in to vote.");
-        if (post && user.id === post.author_id) return alert("You cannot rate your own post.");
+        if (!user) return alert("You must be logged in to vote.", { title: "Sign in to vote" });
+        if (post && user.id === post.author_id) return alert("You cannot rate your own post.", { title: "That's your post" });
         if (isVoting) return; // Prevent spam clicking
 
         setIsVoting(true);
@@ -167,7 +169,7 @@ export default function PostDetail() {
     // Comment Logic
     const handleAddComment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user) return alert("You must be logged in to comment.");
+        if (!user) return alert("You must be logged in to comment.", { title: "Sign in to comment" });
         if (!newComment.trim()) return;
 
         setIsSubmittingComment(true);
@@ -198,15 +200,15 @@ export default function PostDetail() {
             }
 
         } catch (error: any) {
-            alert(`Failed to post comment: ${error.message}`);
+            void alert(`Failed to post comment: ${error.message}`, { tone: "error", title: "Couldn't post your comment" });
         } finally {
             setIsSubmittingComment(false);
         }
     };
 
     const handleCloneRecipe = async () => {
-        if (!user) return alert("You must be logged in to clone a recipe.");
-        if (!recipe || recipe.length === 0) return alert("No recipe data available to clone.");
+        if (!user) return alert("You must be logged in to clone a recipe.", { title: "Sign in to clone" });
+        if (!recipe || recipe.length === 0) return alert("No recipe data available to clone.", { title: "Nothing to clone" });
 
         setIsCloning(true);
         try {
@@ -267,14 +269,14 @@ export default function PostDetail() {
 
         } catch (error: any) {
             console.error("Error cloning:", error);
-            alert(`Failed to clone: ${error.message}`);
+            void alert(`Failed to clone: ${error.message}`, { tone: "error", title: "Couldn't clone the recipe" });
         } finally {
             setIsCloning(false);
         }
     };
 
     const handleDeletePost = async () => {
-        if (!window.confirm("Are you sure you want to delete this post? This cannot be undone.")) return;
+        if (!(await confirm("Are you sure you want to delete this post? This cannot be undone.", { title: "Delete this post?", confirmLabel: "Delete post", tone: "danger" }))) return;
 
         setIsDeleting(true);
         try {
@@ -290,7 +292,7 @@ export default function PostDetail() {
             navigate('/community');
         } catch (error: any) {
             console.error("Error deleting post:", error);
-            alert(`Failed to delete post: ${error.message}`);
+            void alert(`Failed to delete post: ${error.message}`, { tone: "error", title: "Couldn't delete the post" });
             setIsDeleting(false);
         }
     };

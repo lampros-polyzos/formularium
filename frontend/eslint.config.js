@@ -15,6 +15,10 @@ export default defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    rules: {
+      // The browser's own alert, confirm and prompt look out of place: use useDialog() from hooks/useDialog
+      'no-alert': 'error',
+    },
     languageOptions: {
       globals: globals.browser,
     },

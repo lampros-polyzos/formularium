@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useDialog } from '../hooks/useDialog';
 import { supabase } from '../lib/supabase';
 import AccountDataSection from './AccountDataSection';
 
@@ -12,6 +13,7 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const { currency, setCurrency, dateFormat, setDateFormat, warningDays, setWarningDays } = useSettings();
     const { user, username } = useAuth();
+    const { alert } = useDialog();
 
     const [displayName, setDisplayName] = useState(username || '');
     const [isSaving, setIsSaving] = useState(false);
@@ -33,7 +35,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
             if (error) {
                 console.error("Error saving profile:", error);
-                alert("Failed to save display name.");
+                setIsSaving(false);
+                // Stay here, with what was typed, so it can be tried again
+                await alert("Failed to save display name.", { tone: "error", title: "Couldn't save your name" });
+                return;
             }
             setIsSaving(false);
 
