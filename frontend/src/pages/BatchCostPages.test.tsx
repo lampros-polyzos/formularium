@@ -135,6 +135,21 @@ describe('a batch: the printed record', () => {
         expect(screen.getByRole('heading', { name: 'Day Cream' })).toBeInTheDocument();
     });
 
+    it('offers bench mode for a batch in progress, linking to it', async () => {
+        await renderDetail();
+        expect(screen.getByRole('link', { name: /Bench mode/ })).toHaveAttribute('href', '/batches/b1/bench');
+    });
+
+    it.each(['archived', 'voided', 'discarded'])('does not offer bench mode for a batch that is %s', async (status) => {
+        await renderDetail(detail({ status }));
+        expect(screen.queryByRole('link', { name: /Bench mode/ })).not.toBeInTheDocument();
+    });
+
+    it('does not offer bench mode for a batch with nothing in it', async () => {
+        await renderDetail(detail({}, []));
+        expect(screen.queryByRole('link', { name: /Bench mode/ })).not.toBeInTheDocument();
+    });
+
     it('can be printed for an undone batch too, as a record of the attempt', async () => {
         await renderDetail(detail({ status: 'voided' }));
         expect(screen.getByRole('button', { name: /Print record/ })).toBeEnabled();

@@ -20,6 +20,7 @@ import ToolsPage from './pages/ToolsPage';
 import LegalPage from './pages/LegalPage';
 import BatchesPage from './pages/BatchesPage';
 import BatchDetailPage from './pages/BatchDetailPage';
+import BenchModePage from './pages/BenchModePage';
 import { PRIVACY_POLICY, TERMS_OF_USE } from './content/legal';
 
 function App() {
@@ -48,6 +49,7 @@ function App() {
               <Route path="/stash" element={<StashPage />} />
               <Route path="/batches" element={<BatchesPage />} />
               <Route path="/batches/:id" element={<BatchDetailPage />} />
+              <Route path="/batches/:id/bench" element={<BenchModePage />} />
               <Route path="/containers" element={<ContainersPage />} />
               <Route path="/library" element={<IngredientsLibraryPage />} />
               <Route path="/community" element={<CommunityFeed />} />

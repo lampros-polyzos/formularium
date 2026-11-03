@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarPlus, Check, Plus, Printer, RotateCcw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Check, Plus, Printer, RotateCcw, Smartphone, TriangleAlert } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
 import CheckInForm from '../components/CheckInForm';
 import ObservationHelp from '../components/ObservationHelp';
@@ -185,6 +185,11 @@ export default function BatchDetailPage() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        {isActive && lines.length > 0 && (
+                            <Link to={`/batches/${batch.id}/bench`} className="inline-flex items-center gap-2 px-4 py-2 bg-[#1f382a] text-white text-sm font-bold rounded-full hover:bg-[#2c4c3b]">
+                                <Smartphone size={14} aria-hidden /> Bench mode
+                            </Link>
+                        )}
                         <button
                             onClick={printRecord} disabled={isPrinting}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#c1d1b9] text-[#2c4c3b] text-sm font-bold rounded-full hover:bg-[#e9eee7] disabled:opacity-50"
