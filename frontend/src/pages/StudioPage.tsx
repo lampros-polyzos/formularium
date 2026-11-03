@@ -7,6 +7,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { SettingsModal } from '../components/SettingsModal';
 import Header from '../components/Header';
 import DueBadge from '../components/DueBadge';
+import CheckInPrompt from '../components/CheckInPrompt';
 
 // Define the formula type based on your database schema
 type SavedFormula = {
@@ -176,6 +177,7 @@ const StudioPage = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 p-10">
+          <CheckInPrompt />
           <header className="flex justify-between items-center mb-10">
             <h1 className="text-3xl font-bold text-[#1f382a]">My Formulations</h1>
             <button

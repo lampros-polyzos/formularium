@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Plus, Printer, RotateCcw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Check, Plus, Printer, RotateCcw, TriangleAlert } from 'lucide-react';
 import Header from '../components/Header';
 import CheckInForm from '../components/CheckInForm';
+import ObservationHelp from '../components/ObservationHelp';
+import { buildCheckCalendar, calendarFilename } from '../lib/checkCalendar';
+import { downloadTextFile } from '../lib/accountData';
 import { usePageTitle } from '../components/content/usePageTitle';
 import { addCheck, completeCheck, getBatch, isoDate, updateBatch, voidBatch, type BatchDetail, type CheckInInput } from '../lib/batches';
 import { checkProgress, checkState, describeDue } from '../lib/batchPlan';
@@ -136,6 +139,12 @@ export default function BatchDetailPage() {
         }
     };
 
+    // Reminders outside the app: the check-ins still to do, as a file any calendar can import
+    const calendar = isActive ? buildCheckCalendar(batch, checks, window.location.origin) : null;
+    const addToCalendar = () => {
+        if (calendar) downloadTextFile(calendarFilename(batch), calendar, 'text/calendar');
+    };
+
     const setStatus = (next: BatchStatus, message: string) => run(() => updateBatch(batch.id, { status: next }), message);
 
     const confirmThen = (message: string, action: () => Promise<void>, success: string) => {
@@ -214,7 +223,18 @@ export default function BatchDetailPage() {
                 <section aria-labelledby="checks-title" className="bg-white border border-[#c1d1b9] rounded-2xl p-6 mb-6">
                     <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
                         <h2 id="checks-title" className="text-lg font-bold text-[#1f382a]">Stability check-ins</h2>
-                        <span className="text-xs text-gray-500">{progress.done} of {progress.total} done</span>
+                        <span className="flex items-center gap-3">
+                            <span className="text-xs text-gray-500">{progress.done} of {progress.total} done</span>
+                            {calendar && (
+                                <button
+                                    onClick={addToCalendar}
+                                    title="Download a calendar file with a reminder for each check-in still to do"
+                                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#2c4c3b] border border-[#c1d1b9] rounded-full px-3 py-1 hover:bg-[#e9eee7]"
+                                >
+                                    <CalendarPlus size={13} aria-hidden /> Add to my calendar
+                                </button>
+                            )}
+                        </span>
                     </div>
                     <p className="text-sm text-gray-600 mb-4">Look at the batch at each stage and record what you see. Changes in texture, smell or colour are the first signs of a problem.</p>
 
@@ -249,6 +269,7 @@ export default function BatchDetailPage() {
                                     {state === 'done' && openCheck !== check.id && (
                                         <div className="mt-1.5 text-sm text-gray-600 space-y-0.5">
                                             {check.observations.length > 0 && <p>Noticed: {check.observations.map(o => OBSERVATION_LABELS[o] ?? o).join(', ').toLowerCase()}</p>}
+                                            <ObservationHelp observations={check.observations} />
                                             {check.measured_ph !== null && <p>pH {check.measured_ph}</p>}
                                             {check.notes && <p className="italic">{check.notes}</p>}
                                         </div>

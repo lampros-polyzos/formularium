@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const base = import.meta.glob('./fixtures/20261105000000_batch_log.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 // A glob (rather than an import) so the test skips, instead of breaking the whole run, if the file was removed
-const next = import.meta.glob('../../../supabase/migrations/20261108000000_batch_costs_and_containers.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const next = import.meta.glob('./fixtures/20261108000000_batch_costs_and_containers.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const BASE_SQL = Object.values(base)[0];
 const NEXT_SQL = Object.values(next)[0];
 const A = '11111111-1111-1111-1111-111111111111';

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { completeCheck, countDueChecks, createBatch, friendlyError, getBatch, isoDate, lotNumbersLike, voidBatch } from './batches';
+import { completeCheck, countDueChecks, createBatch, friendlyError, getBatch, isoDate, listDueChecks, lotNumbersLike, voidBatch } from './batches';
 
 // The tests pass their own fake client, so the real one (which needs the .env.local keys) must never load
 vi.mock('./supabase', () => ({ supabase: {} }));
@@ -8,7 +8,7 @@ vi.mock('./supabase', () => ({ supabase: {} }));
 function fakeClient(result: unknown = { data: [], error: null }, rpcResult: unknown = { data: 'batch-1', error: null }) {
     const calls: { method: string; args: unknown[] }[] = [];
     const chain: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'lte', 'like', 'order', 'update', 'insert']) {
+    for (const method of ['select', 'eq', 'is', 'lte', 'like', 'order', 'limit', 'update', 'insert']) {
         chain[method] = (...args: unknown[]) => { calls.push({ method, args }); return chain; };
     }
     chain.single = async () => result;
@@ -150,5 +150,38 @@ describe('friendlyError', () => {
     it('keeps unknown messages and has a fallback', () => {
         expect(friendlyError({ code: 'XX000', message: 'odd' }).message).toBe('odd');
         expect(friendlyError(null, 'fallback').message).toBe('fallback');
+    });
+});
+
+describe('listDueChecks', () => {
+    const row = (id: string, batches: unknown) => ({ id, batch_id: `b-${id}`, label: '1 week', due_on: '2026-11-08', checked_at: null, result: null, observations: [], measured_ph: null, notes: null, batches });
+    const owner = { id: 'b1', name: 'Day Cream', lot_number: '261101-1', target_ph: 5.5, status: 'active' };
+
+    it('asks for unanswered check-ins that are due, on batches in progress, oldest first', async () => {
+        const { client, calls } = fakeClient({ data: [], error: null });
+        await listDueChecks(client, new Date(2026, 10, 8), 3);
+        const steps = Object.fromEntries(calls.map(c => [c.method, c.args]));
+        expect(steps.from).toEqual(['batch_checks']);
+        expect(steps.is).toEqual(['checked_at', null]);
+        expect(steps.lte).toEqual(['due_on', '2026-11-08']);
+        expect(steps.eq).toEqual(['batches.status', 'active']);
+        expect(steps.order).toEqual(['due_on']);
+        expect(steps.limit).toEqual([3]);
+    });
+
+    it('attaches the batch, whether it comes back as an object or a one-item list, and drops its status', async () => {
+        const { client } = fakeClient({ data: [row('1', owner), row('2', [owner])], error: null });
+        const due = await listDueChecks(client);
+        expect(due).toHaveLength(2);
+        for (const check of due) {
+            expect(check.batch).toEqual({ id: 'b1', name: 'Day Cream', lot_number: '261101-1', target_ph: 5.5 });
+            expect(check).not.toHaveProperty('batches');
+        }
+        expect(due[0]).toMatchObject({ id: '1', label: '1 week', due_on: '2026-11-08' });
+    });
+
+    it('gives an empty list when nothing is due, and a plain error when it fails', async () => {
+        expect(await listDueChecks(fakeClient({ data: null, error: null }).client)).toEqual([]);
+        await expect(listDueChecks(fakeClient({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } }).client)).rejects.toThrow(/isn't set up in your database yet/);
     });
 });

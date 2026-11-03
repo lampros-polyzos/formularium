@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
+import ObservationHelp from './ObservationHelp';
 import { OBSERVATIONS, RESULT_LABELS, type BatchCheck, type CheckResult } from '../types/batches';
 import type { CheckInInput } from '../lib/batches';
 
@@ -73,6 +74,7 @@ export default function CheckInForm({ check, targetPh, onSave, onCancel }: Check
                         </label>
                     ))}
                 </div>
+                <div className="mt-2"><ObservationHelp observations={observations} /></div>
             </fieldset>
 
             {critical.length > 0 && (

@@ -65,15 +65,16 @@ export interface BatchCheck {
 }
 
 /** What a stability check-in can record. `critical` ones mean the batch should not be used. */
-export const OBSERVATIONS: { id: string; label: string; critical?: boolean }[] = [
-    { id: 'separation', label: 'Separation or oil on top' },
-    { id: 'grainy', label: 'Grainy or gritty' },
-    { id: 'texture', label: 'Texture changed (thinner or thicker)' },
-    { id: 'color', label: 'Colour changed' },
-    { id: 'odor', label: 'Smell changed' },
-    { id: 'ph-drift', label: 'pH drifted' },
-    { id: 'mold', label: 'Mold, spots or fuzz', critical: true },
-    { id: 'irritation', label: 'Irritated my skin', critical: true },
+/** `learn` is what to search the Learn hub for to find out why this happens and how to fix it. */
+export const OBSERVATIONS: { id: string; label: string; critical?: boolean; learn: string }[] = [
+    { id: 'separation', label: 'Separation or oil on top', learn: 'separates' },
+    { id: 'grainy', label: 'Grainy or gritty', learn: 'grainy' },
+    { id: 'texture', label: 'Texture changed (thinner or thicker)', learn: 'thin' },
+    { id: 'color', label: 'Colour changed', learn: 'colour' },
+    { id: 'odor', label: 'Smell changed', learn: 'smells' },
+    { id: 'ph-drift', label: 'pH drifted', learn: 'ph changed' },
+    { id: 'mold', label: 'Mold, spots or fuzz', critical: true, learn: 'mold' },
+    { id: 'irritation', label: 'Irritated my skin', critical: true, learn: 'stings' },
 ];
 
 export const OBSERVATION_LABELS: Record<string, string> = Object.fromEntries(OBSERVATIONS.map(o => [o.id, o.label]));

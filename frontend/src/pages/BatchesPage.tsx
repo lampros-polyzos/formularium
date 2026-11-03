@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BellRing, FlaskConical } from 'lucide-react';
 import Header from '../components/Header';
+import DueCheckRow from '../components/DueCheckRow';
 import { usePageTitle } from '../components/content/usePageTitle';
 import { listBatches, type BatchListItem } from '../lib/batches';
-import { checkProgress, checkState, describeDue } from '../lib/batchPlan';
+import { checkProgress, checkState } from '../lib/batchPlan';
 import { formatMoney } from '../lib/batchCost';
 import { useSettings } from '../contexts/SettingsContext';
 import { STATUS_LABEL } from '../types/batches';
@@ -26,14 +27,16 @@ export default function BatchesPage() {
     const [batches, setBatches] = useState<BatchListItem[] | null>(null);
     const [error, setError] = useState('');
     const [tab, setTab] = useState<Tab>('active');
+    // Bumped after a check-in is answered here, so the list and the progress dots catch up
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
         listBatches()
-            .then(data => { if (!cancelled) setBatches(data); })
+            .then(data => { if (!cancelled) { setBatches(data); setError(''); } })
             .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : 'Could not load your batches.'); setBatches([]); } });
         return () => { cancelled = true; };
-    }, []);
+    }, [reloadKey]);
 
     const due = useMemo(() => (batches ?? [])
         .filter(b => b.status === 'active')
@@ -74,14 +77,7 @@ export default function BatchesPage() {
                         </h2>
                         <ul className="divide-y divide-amber-100">
                             {due.map(({ batch, check }) => (
-                                <li key={check.id}>
-                                    <Link to={`/batches/${batch.id}`} className="flex flex-wrap items-center justify-between gap-2 py-2.5 hover:bg-amber-100/60 -mx-2 px-2 rounded">
-                                        <span className="text-sm text-gray-800">
-                                            <strong>{batch.name}</strong> <span className="text-gray-500">({batch.lot_number})</span> · {check.label} check
-                                        </span>
-                                        <span className={`text-xs font-bold ${checkState(check) === 'overdue' ? 'text-red-700' : 'text-amber-800'}`}>{describeDue(check.due_on)}</span>
-                                    </Link>
-                                </li>
+                                <DueCheckRow key={check.id} batch={batch} check={check} onAnswered={() => setReloadKey(k => k + 1)} />
                             ))}
                         </ul>
                     </section>

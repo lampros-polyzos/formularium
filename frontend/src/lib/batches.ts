@@ -151,6 +151,26 @@ export async function countDueChecks(client: Client = supabase, today: Date = ne
     return count ?? 0;
 }
 
+/** A check-in that is due or overdue, with the batch it belongs to, so it can be answered without opening the batch. */
+export type DueCheck = BatchCheck & { batch: Pick<Batch, 'id' | 'name' | 'lot_number' | 'target_ph'> };
+
+/** The oldest due or overdue check-ins on batches still in progress. */
+export async function listDueChecks(client: Client = supabase, today: Date = new Date(), limit = 3): Promise<DueCheck[]> {
+    const { data, error } = await client
+        .from('batch_checks')
+        .select('id, batch_id, label, due_on, checked_at, result, observations, measured_ph, notes, batches!inner(id, name, lot_number, target_ph, status)')
+        .is('checked_at', null)
+        .lte('due_on', isoDate(today))
+        .eq('batches.status', 'active')
+        .order('due_on')
+        .limit(limit);
+    if (error) throw friendlyError(error);
+    return ((data ?? []) as unknown as (BatchCheck & { batches: DueCheck['batch'] | DueCheck['batch'][] })[]).map(({ batches, ...check }) => {
+        const owner = Array.isArray(batches) ? batches[0] : batches;
+        return { ...check, batch: { id: owner.id, name: owner.name, lot_number: owner.lot_number, target_ph: owner.target_ph } };
+    });
+}
+
 // ---------- Editing ----------
 
 export async function updateBatch(

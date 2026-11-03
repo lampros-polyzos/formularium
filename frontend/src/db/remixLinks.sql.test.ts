@@ -8,7 +8,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // A glob (rather than an import) so the test skips, instead of breaking the whole run, if the file was removed
-const migrations = import.meta.glob('../../../supabase/migrations/20261107000000_remix_links.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const migrations = import.meta.glob('./fixtures/20261107000000_remix_links.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const MIGRATION_SQL = Object.values(migrations)[0];
 
 const ID = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
