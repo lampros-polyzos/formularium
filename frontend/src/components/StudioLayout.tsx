@@ -35,6 +35,7 @@ export default function StudioLayout({ active, title, children, fixedHeight = fa
             aria-label="Open menu"
             aria-expanded={isMenuOpen}
             aria-controls="studio-sidebar"
+            data-tour="studio-menu"
             className="lg:hidden -ml-2 p-2 rounded-lg text-[#3a5a4a] hover:bg-[#cbd8c8] hover:text-[#1f382a] transition-colors"
         >
             <Menu size={22} aria-hidden />

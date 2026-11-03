@@ -5,6 +5,8 @@ import CustomModal from '../components/CustomModal';
 import { useSettings } from '../contexts/SettingsContext';
 import CheckInPrompt from '../components/CheckInPrompt';
 import StudioLayout from '../components/StudioLayout';
+import GuidedTour from '../components/GuidedTour';
+import { STUDIO_TOUR_SEEN_KEY, STUDIO_WIDE_BREAKPOINT, studioTourSteps } from '../components/studioTourSteps';
 
 // Define the formula type based on your database schema
 type SavedFormula = {
@@ -21,6 +23,7 @@ const StudioPage = () => {
 
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   const { formatDate } = useSettings();
 
@@ -52,6 +55,23 @@ const StudioPage = () => {
     fetchFormulas();
   }, []);
 
+
+  // Show the guided tour automatically on a first visit, once the formulas are on screen to point at
+  useEffect(() => {
+    if (isLoading) return;
+    try {
+      if (localStorage.getItem(STUDIO_TOUR_SEEN_KEY)) return;
+    } catch {
+      return; // storage blocked; don't nag on every visit
+    }
+    const timer = setTimeout(() => setIsTourOpen(true), 400); // let the layout settle first
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
+  const closeTour = () => {
+    setIsTourOpen(false);
+    try { localStorage.setItem(STUDIO_TOUR_SEEN_KEY, '1'); } catch { /* ignore */ }
+  };
 
   const requestDelete = (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation();
@@ -97,12 +117,23 @@ const StudioPage = () => {
           <CheckInPrompt />
           <header className="flex justify-between items-center mb-10">
             <h1 className="text-3xl font-bold text-[#1f382a]">My Formulations</h1>
-            <button
-              onClick={() => navigate('/studio/start')}
-              className="py-3 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
-            >
-              + New Formulation
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsTourOpen(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-[#3a5a4a] hover:text-[#1f382a] transition-colors"
+                title="Take a guided tour of the Studio"
+              >
+                <span className="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center text-[11px] font-bold leading-none" aria-hidden>?</span>
+                Tour
+              </button>
+              <button
+                data-tour="studio-new"
+                onClick={() => navigate('/studio/start')}
+                className="py-3 px-6 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] transition-colors"
+              >
+                + New Formulation
+              </button>
+            </div>
           </header>
 
           {isLoading ? (
@@ -110,7 +141,7 @@ const StudioPage = () => {
               Loading projects...
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div data-tour="studio-formulas" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
               {/* New Project Card */}
               <button
@@ -192,6 +223,8 @@ const StudioPage = () => {
 
             </div>
           )}
+
+          {isTourOpen && <GuidedTour steps={studioTourSteps(window.innerWidth >= STUDIO_WIDE_BREAKPOINT)} onClose={closeTour} finishLabel="Got it" />}
 
           <CustomModal
             isOpen={modal.isOpen}

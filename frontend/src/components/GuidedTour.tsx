@@ -10,6 +10,8 @@ export interface TourStep {
 interface GuidedTourProps {
     steps: TourStep[];
     onClose: () => void;
+    /** What the last step's button says. */
+    finishLabel?: string;
 }
 
 interface Rect { top: number; left: number; width: number; height: number; }
@@ -22,7 +24,7 @@ const MOBILE_BREAKPOINT = 640;
 const findTarget = (target?: string) =>
     target ? document.querySelector<HTMLElement>(`[data-tour="${target}"]`) : null;
 
-export default function GuidedTour({ steps, onClose }: GuidedTourProps) {
+export default function GuidedTour({ steps, onClose, finishLabel = 'Start formulating' }: GuidedTourProps) {
     const [index, setIndex] = useState(0);
     const [rect, setRect] = useState<Rect | null>(null);
     const [cardHeight, setCardHeight] = useState(0);
@@ -159,7 +161,7 @@ export default function GuidedTour({ steps, onClose }: GuidedTourProps) {
                             onClick={next}
                             className="px-4 py-1.5 text-sm font-bold text-white bg-[#1f382a] rounded hover:bg-[#2c4c3b] transition-colors"
                         >
-                            {isLast ? 'Start formulating' : isFirst ? "Let's go" : 'Next'}
+                            {isLast ? finishLabel : isFirst ? "Let's go" : 'Next'}
                         </button>
                     </div>
                 </div>

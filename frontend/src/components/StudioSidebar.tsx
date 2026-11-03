@@ -81,6 +81,7 @@ export default function StudioSidebar({ active, isOpen = false, onClose }: Studi
             {isOpen && <div data-studio-backdrop onClick={onClose} aria-hidden className="lg:hidden fixed inset-0 z-[45] bg-[#1f382a]/40" />}
         <aside
             id="studio-sidebar"
+            data-tour="studio-sidebar"
             data-open={isOpen}
             className={`print:hidden w-64 shrink-0 bg-white border-r border-[#c1d1b9] p-6 flex flex-col h-screen overflow-y-auto transition-[transform,visibility] duration-200 fixed inset-y-0 left-0 z-50 ${placement} lg:sticky lg:top-0 lg:bottom-auto lg:left-auto lg:z-auto lg:translate-x-0 lg:visible lg:self-start`}
         >
