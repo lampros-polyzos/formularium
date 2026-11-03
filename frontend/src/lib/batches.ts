@@ -94,6 +94,18 @@ export async function voidBatch(batchId: string, client: Client = supabase): Pro
     if (error) throw friendlyError(error, 'Could not undo the batch.');
 }
 
+/**
+ * Removes a batch for good: its ingredients, stash usage and check-ins go with it, so it disappears from the history
+ * and from the metrics. With `restoreStash`, what it took from the stash is put back first (by undoing it), so the
+ * worst that can happen if the removal then fails is that the batch is left marked as undone.
+ */
+export async function deleteBatch(batchId: string, { restoreStash = false }: { restoreStash?: boolean } = {}, client: Client = supabase): Promise<void> {
+    if (restoreStash) await voidBatch(batchId, client);
+    const { data, error } = await client.from('batches').delete().eq('id', batchId).select('id');
+    if (error) throw friendlyError(error, 'Could not delete the batch.');
+    if (!data || data.length === 0) throw new Error('Batch not found, or it was already deleted.');
+}
+
 // ---------- Reading ----------
 
 export type BatchListItem = Batch & { batch_checks: Pick<BatchCheck, 'id' | 'label' | 'due_on' | 'checked_at' | 'result' | 'observations'>[] };

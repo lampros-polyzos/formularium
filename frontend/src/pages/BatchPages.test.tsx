@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     completeCheck: vi.fn(),
     updateBatch: vi.fn(),
     voidBatch: vi.fn(),
+    deleteBatch: vi.fn(),
     addCheck: vi.fn(),
 }));
 
@@ -22,6 +23,7 @@ vi.mock('../lib/batches', async (importOriginal) => ({
     completeCheck: mocks.completeCheck,
     updateBatch: mocks.updateBatch,
     voidBatch: mocks.voidBatch,
+    deleteBatch: mocks.deleteBatch,
     addCheck: mocks.addCheck,
     countDueChecks: vi.fn().mockResolvedValue(0),
 }));
@@ -56,6 +58,7 @@ beforeEach(() => {
     mocks.completeCheck.mockResolvedValue(undefined);
     mocks.updateBatch.mockResolvedValue(undefined);
     mocks.voidBatch.mockResolvedValue(undefined);
+    mocks.deleteBatch.mockResolvedValue(undefined);
     mocks.addCheck.mockResolvedValue(undefined);
 });
 afterEach(cleanup);
@@ -141,7 +144,10 @@ async function renderDetail(data = detail()) {
     mocks.getBatch.mockResolvedValue(data);
     render(
         <MemoryRouter initialEntries={['/batches/b1']}>
-            <Routes><Route path="/batches/:id" element={<BatchDetailPage />} /></Routes>
+            <Routes>
+                <Route path="/batches/:id" element={<BatchDetailPage />} />
+                <Route path="/batches" element={<p>BATCH LIST</p>} />
+            </Routes>
         </MemoryRouter>
     );
     await act(async () => { await Promise.resolve(); });
@@ -274,5 +280,86 @@ describe('BatchDetailPage', () => {
         mocks.getBatch.mockRejectedValue(new Error('Could not load this batch.'));
         render(<MemoryRouter initialEntries={['/batches/zz']}><Routes><Route path="/batches/:id" element={<BatchDetailPage />} /></Routes></MemoryRouter>);
         expect(await screen.findByRole('alert')).toHaveTextContent('Could not load this batch.');
+    });
+});
+
+describe('deleting a batch', () => {
+    it('asks first, and does nothing if you say no', async () => {
+        await renderDetail(detail({ batch: { stash_deducted: false }, usage: [] }));
+        confirmDialog.mockReturnValue(false);
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        expect(confirmDialog).toHaveBeenCalledWith(expect.stringContaining('disappears from your history and from your metrics'));
+        expect(mocks.deleteBatch).not.toHaveBeenCalled();
+        expect(screen.queryByText('BATCH LIST')).not.toBeInTheDocument();
+    });
+
+    it('deletes a batch that took no stash and goes back to the list', async () => {
+        await renderDetail(detail({ batch: { stash_deducted: false }, usage: [] }));
+        confirmDialog.mockReturnValue(true);
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        await waitFor(() => expect(mocks.deleteBatch).toHaveBeenCalledWith('b1', { restoreStash: false }));
+        expect(await screen.findByText('BATCH LIST')).toBeInTheDocument();
+    });
+
+    it('can delete a batch that was already undone, since its stash is back already', async () => {
+        await renderDetail(detail({ batch: { status: 'voided', stash_deducted: true } }));
+        confirmDialog.mockReturnValue(true);
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        await waitFor(() => expect(mocks.deleteBatch).toHaveBeenCalledWith('b1', { restoreStash: false }));
+        expect(screen.queryByRole('dialog', { name: /Delete this batch/ })).not.toBeInTheDocument();
+    });
+
+    it('can delete an archived or discarded batch, asking about the stash it took', async () => {
+        for (const status of ['archived', 'discarded']) {
+            cleanup();
+            mocks.deleteBatch.mockClear();
+            await renderDetail(detail({ batch: { status, stash_deducted: true } }));
+            fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+            fireEvent.click(screen.getByRole('button', { name: /leave my stash as it is/ }));
+            await waitFor(() => expect(mocks.deleteBatch).toHaveBeenCalledWith('b1', { restoreStash: false }));
+        }
+    });
+
+    it('asks what to do with the stash when the batch took some', async () => {
+        await renderDetail();
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        const dialog = screen.getByRole('dialog', { name: /Delete this batch/ });
+        expect(dialog).toHaveTextContent('It took 5 g from your stash');
+        expect(confirmDialog).not.toHaveBeenCalled();
+        expect(within(dialog).getByRole('button', { name: /put 5 g back in my stash/ })).toBeInTheDocument();
+        expect(within(dialog).getByRole('button', { name: /leave my stash as it is/ })).toBeInTheDocument();
+    });
+
+    it('puts the stash back when you choose to', async () => {
+        await renderDetail();
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        fireEvent.click(screen.getByRole('button', { name: /put 5 g back in my stash/ }));
+        await waitFor(() => expect(mocks.deleteBatch).toHaveBeenCalledWith('b1', { restoreStash: true }));
+        expect(await screen.findByText('BATCH LIST')).toBeInTheDocument();
+    });
+
+    it('leaves the stash as it is when you choose that', async () => {
+        await renderDetail();
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        fireEvent.click(screen.getByRole('button', { name: /leave my stash as it is/ }));
+        await waitFor(() => expect(mocks.deleteBatch).toHaveBeenCalledWith('b1', { restoreStash: false }));
+    });
+
+    it('can be cancelled from the stash question without deleting anything', async () => {
+        await renderDetail();
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(screen.queryByRole('dialog', { name: /Delete this batch/ })).not.toBeInTheDocument();
+        expect(mocks.deleteBatch).not.toHaveBeenCalled();
+    });
+
+    it('stays on the batch and says what went wrong when it cannot be deleted', async () => {
+        mocks.deleteBatch.mockRejectedValue(new Error('Could not delete the batch.'));
+        await renderDetail(detail({ batch: { stash_deducted: false }, usage: [] }));
+        confirmDialog.mockReturnValue(true);
+        fireEvent.click(screen.getByRole('button', { name: 'Delete batch' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not delete the batch.');
+        expect(screen.queryByText('BATCH LIST')).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Day Cream' })).toBeInTheDocument();
     });
 });

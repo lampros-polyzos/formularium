@@ -187,6 +187,59 @@ describe.skipIf(!present)('batch log migration (real Postgres)', () => {
         });
     });
 
+    describe('deleting a batch', () => {
+        const rowsFor = async (batchId: string) => ({
+            batch: Number((await db.query<{ n: number }>(`select count(*)::int as n from public.batches where id = '${batchId}'`)).rows[0].n),
+            ingredients: Number((await db.query<{ n: number }>(`select count(*)::int as n from public.batch_ingredients where batch_id = '${batchId}'`)).rows[0].n),
+            usage: Number((await db.query<{ n: number }>(`select count(*)::int as n from public.batch_stash_usage where batch_id = '${batchId}'`)).rows[0].n),
+            checks: Number((await db.query<{ n: number }>(`select count(*)::int as n from public.batch_checks where batch_id = '${batchId}'`)).rows[0].n),
+        });
+
+        it('removes the batch together with its ingredients, stash usage and check-ins', async () => {
+            await root();
+            const stashLot = await lot(A, glycerin, 50);
+            await as(A);
+            const { rows } = await start(newLot(), [line(glycerin, 'Glycerin', 10, [{ stash_id: stashLot, grams: 10, label: 'g' }]), line(shea, 'Shea Butter', 5)]);
+            const id = rows[0].id;
+            expect(await rowsFor(id)).toEqual({ batch: 1, ingredients: 2, usage: 1, checks: 4 });
+            const deleted = await db.query(`delete from public.batches where id = '${id}' returning id`);
+            expect(deleted.rows).toHaveLength(1);
+            expect(await rowsFor(id)).toEqual({ batch: 0, ingredients: 0, usage: 0, checks: 0 });
+        });
+
+        it('leaves the stash exactly as it is when the batch is simply deleted', async () => {
+            await root();
+            const stashLot = await lot(A, glycerin, 50);
+            await as(A);
+            const { rows } = await start(newLot(), [line(glycerin, 'Glycerin', 10, [{ stash_id: stashLot, grams: 10, label: 'g' }])]);
+            await db.query(`delete from public.batches where id = '${rows[0].id}'`);
+            await root();
+            expect(await stash(stashLot)).toBe(40);
+        });
+
+        it('puts the stash back when the batch is undone first, as the app does, and then leaves nothing behind', async () => {
+            await root();
+            const stashLot = await lot(A, glycerin, 50);
+            await as(A);
+            const { rows } = await start(newLot(), [line(glycerin, 'Glycerin', 10, [{ stash_id: stashLot, grams: 10, label: 'g' }])]);
+            await db.query('select public.void_batch($1)', [rows[0].id]);
+            await db.query(`delete from public.batches where id = '${rows[0].id}'`);
+            await root();
+            expect(await stash(stashLot)).toBe(50);
+            expect(await rowsFor(rows[0].id)).toEqual({ batch: 0, ingredients: 0, usage: 0, checks: 0 });
+        });
+
+        it('cannot delete another user\'s batch', async () => {
+            await as(A);
+            const { rows } = await start(newLot(), [line(glycerin, 'Glycerin', 1)]);
+            await as(B);
+            const attempt = await db.query(`delete from public.batches where id = '${rows[0].id}' returning id`);
+            expect(attempt.rows).toHaveLength(0);
+            await root();
+            expect((await rowsFor(rows[0].id)).batch).toBe(1);
+        });
+    });
+
     describe('privacy', () => {
         it('shows each user only their own batches, ingredients, stash usage and check-ins', async () => {
             await as(A);

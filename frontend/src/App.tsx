@@ -10,6 +10,7 @@ import StartPage from './pages/StartPage';
 import FormulationEditor from './pages/FormulationEditor';
 import StashPage from './pages/StashPage';
 import FormulaHistoryPage from './pages/FormulaHistoryPage';
+import MetricsPage from './pages/MetricsPage';
 import ShoppingListPage from './pages/ShoppingListPage';
 import WhatCanIMakePage from './pages/WhatCanIMakePage';
 import ContainersPage from './pages/ContainersPage';
@@ -54,6 +55,7 @@ function App() {
               <Route path="/studio/:id/history" element={<FormulaHistoryPage />} />
               <Route path="/stash" element={<StashPage />} />
               <Route path="/what-can-i-make" element={<WhatCanIMakePage />} />
+              <Route path="/metrics" element={<MetricsPage />} />
               <Route path="/shopping" element={<ShoppingListPage />} />
               <Route path="/batches" element={<BatchesPage />} />
               <Route path="/batches/:id" element={<BatchDetailPage />} />

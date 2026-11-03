@@ -72,6 +72,7 @@ describe('the Studio sidebar', () => {
             ['Shopping List', '/shopping'],
             ['Containers', '/containers'],
             ['Calculators', '/tools'],
+            ['Metrics', '/metrics'],
             ['Ingredients Library', '/library'],
         ]);
         expect(within(nav).getByRole('button', { name: 'Settings' })).toBeInTheDocument();
@@ -87,7 +88,7 @@ describe('the Studio sidebar', () => {
 
     it.each([
         ['formulations', 'My Formulations'], ['batches', 'Batches'], ['stash', 'My Stash'], ['pantry', 'What can I make?'], ['shopping', 'Shopping List'],
-        ['containers', 'Containers'], ['tools', 'Calculators'], ['library', 'Ingredients Library'],
+        ['containers', 'Containers'], ['tools', 'Calculators'], ['metrics', 'Metrics'], ['library', 'Ingredients Library'],
     ] as const)('shows when you are on %s, and only there', async (section, label) => {
         await renderSidebar(section);
         const current = screen.getAllByRole('link').filter(a => a.getAttribute('aria-current') === 'page');

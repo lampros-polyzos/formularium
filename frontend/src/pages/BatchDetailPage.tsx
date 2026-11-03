@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarPlus, Check, Plus, Printer, RotateCcw, Smartphone, TriangleAlert } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, CalendarPlus, Check, Plus, Printer, RotateCcw, Smartphone, Trash2, TriangleAlert } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
 import CheckInForm from '../components/CheckInForm';
+import DeleteBatchModal from '../components/DeleteBatchModal';
 import ObservationHelp from '../components/ObservationHelp';
 import { buildCheckCalendar, calendarFilename } from '../lib/checkCalendar';
 import { downloadTextFile } from '../lib/accountData';
 import { usePageTitle } from '../components/content/usePageTitle';
-import { addCheck, completeCheck, getBatch, isoDate, updateBatch, voidBatch, type BatchDetail, type CheckInInput } from '../lib/batches';
+import { addCheck, completeCheck, deleteBatch, getBatch, isoDate, updateBatch, voidBatch, type BatchDetail, type CheckInInput } from '../lib/batches';
 import { checkProgress, checkState, describeDue } from '../lib/batchPlan';
 import { costPerContainer, formatMoney } from '../lib/batchCost';
 import { downloadBatchRecord } from '../lib/batchRecord';
@@ -29,6 +30,8 @@ export default function BatchDetailPage() {
     const { id } = useParams();
     const { formatDate, currency } = useSettings();
     const { confirm } = useDialog();
+    const navigate = useNavigate();
+    const [isDeleting, setIsDeleting] = useState(false);
     const [detail, setDetail] = useState<BatchDetail | null>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -150,6 +153,35 @@ export default function BatchDetailPage() {
 
     const confirmThen = async (message: string, action: () => Promise<void>, success: string, options: ConfirmOptions) => {
         if (await confirm(message, options)) void run(action, success);
+    };
+
+    /** Deletes the batch for good and goes back to the list. */
+    const removeBatch = async (restoreStash: boolean) => {
+        setBusy(true);
+        setNotice('');
+        setError('');
+        try {
+            await deleteBatch(batch.id, { restoreStash });
+            notifyBatchesChanged();
+            navigate('/batches');
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Something went wrong.';
+            setIsDeleting(false);
+            // The batch may now be marked undone (if the stash was put back first), so show it as it is. Reloading
+            // clears messages, so the message goes up afterwards
+            await load();
+            setError(message);
+            setBusy(false);
+        }
+    };
+
+    /** Asks first; offers to put the stash back when the batch took some. */
+    const startDelete = async () => {
+        if (batch.stash_deducted && batch.status !== 'voided') {
+            setIsDeleting(true);
+        } else if (await confirm('Delete this batch for good? It disappears from your history and from your metrics, along with its check-ins. This cannot be undone.', { title: 'Delete this batch?', confirmLabel: 'Delete batch', tone: 'danger' })) {
+            await removeBatch(false);
+        }
     };
 
     const saveMeasurements = () => run(() => updateBatch(batch.id, {
@@ -458,9 +490,26 @@ export default function BatchDetailPage() {
                                 Mark as never made
                             </button>
                         )}
+                        <button
+                            onClick={() => void startDelete()}
+                            disabled={busy}
+                            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 border border-red-200 text-sm font-medium text-red-700 rounded hover:bg-red-50 disabled:opacity-50"
+                        >
+                            <Trash2 size={14} aria-hidden /> Delete batch
+                        </button>
                     </div>
                 </section>
             </main>
+
+            {isDeleting && (
+                <DeleteBatchModal
+                    batchName={batch.name}
+                    stashG={stashTaken}
+                    busy={busy}
+                    onDelete={restore => void removeBatch(restore)}
+                    onClose={() => setIsDeleting(false)}
+                />
+            )}
         </StudioLayout>
     );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { completeCheck, countDueChecks, createBatch, friendlyError, getBatch, isoDate, listDueChecks, lotNumbersLike, voidBatch } from './batches';
+import { completeCheck, countDueChecks, createBatch, friendlyError, getBatch, isoDate, listDueChecks, lotNumbersLike, voidBatch, deleteBatch } from './batches';
 
 // The tests pass their own fake client, so the real one (which needs the .env.local keys) must never load
 vi.mock('./supabase', () => ({ supabase: {} }));
@@ -8,7 +8,7 @@ vi.mock('./supabase', () => ({ supabase: {} }));
 function fakeClient(result: unknown = { data: [], error: null }, rpcResult: unknown = { data: 'batch-1', error: null }) {
     const calls: { method: string; args: unknown[] }[] = [];
     const chain: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'lte', 'like', 'order', 'limit', 'update', 'insert']) {
+    for (const method of ['select', 'eq', 'is', 'lte', 'like', 'order', 'limit', 'update', 'insert', 'delete']) {
         chain[method] = (...args: unknown[]) => { calls.push({ method, args }); return chain; };
     }
     chain.single = async () => result;
@@ -183,5 +183,39 @@ describe('listDueChecks', () => {
     it('gives an empty list when nothing is due, and a plain error when it fails', async () => {
         expect(await listDueChecks(fakeClient({ data: null, error: null }).client)).toEqual([]);
         await expect(listDueChecks(fakeClient({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } }).client)).rejects.toThrow(/isn't set up in your database yet/);
+    });
+});
+
+describe('deleteBatch', () => {
+    it('deletes just that batch and reports it gone', async () => {
+        const { client, calls, rpc } = fakeClient({ data: [{ id: 'b1' }], error: null });
+        await deleteBatch('b1', {}, client);
+        expect(calls.map(c => c.method)).toEqual(['from', 'delete', 'eq', 'select']);
+        expect(calls[0].args).toEqual(['batches']);
+        expect(calls[2].args).toEqual(['id', 'b1']);
+        expect(rpc).not.toHaveBeenCalled(); // the stash is left alone unless asked
+    });
+
+    it('puts the stash back first when asked, and only then deletes', async () => {
+        const { client, calls } = fakeClient({ data: [{ id: 'b1' }], error: null }, { data: null, error: null });
+        await deleteBatch('b1', { restoreStash: true }, client);
+        const order = calls.map(c => c.method);
+        expect(order[0]).toBe('rpc:void_batch');
+        expect(order.indexOf('delete')).toBeGreaterThan(0);
+        expect(calls[0].args).toEqual([{ p_batch_id: 'b1' }]);
+    });
+
+    it('does not delete anything if the stash could not be put back', async () => {
+        const { client, calls } = fakeClient({ data: [{ id: 'b1' }], error: null }, { data: null, error: { message: 'Batch not found, or it was already undone.' } });
+        await expect(deleteBatch('b1', { restoreStash: true }, client)).rejects.toThrow('already undone');
+        expect(calls.map(c => c.method)).not.toContain('delete');
+    });
+
+    it('says so when there was nothing to delete (not yours, or already gone)', async () => {
+        await expect(deleteBatch('b1', {}, fakeClient({ data: [], error: null }).client)).rejects.toThrow('Batch not found, or it was already deleted.');
+    });
+
+    it('turns a database error into something readable', async () => {
+        await expect(deleteBatch('b1', {}, fakeClient({ data: null, error: { code: '42P01', message: 'relation does not exist' } }).client)).rejects.toThrow();
     });
 });

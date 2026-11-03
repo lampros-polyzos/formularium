@@ -1,14 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Calculator, ChefHat, ClipboardCheck, FlaskConical, Settings, ShoppingCart, X } from 'lucide-react';
+import { BarChart3, BookOpen, Calculator, ChefHat, ClipboardCheck, FlaskConical, Settings, ShoppingCart, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import DueBadge from './DueBadge';
 import { SettingsModal } from './SettingsModal';
 
 /** The pages that live in the Studio, so the sidebar can show where you are. */
-export type StudioSection = 'formulations' | 'batches' | 'stash' | 'pantry' | 'shopping' | 'containers' | 'tools' | 'library';
+export type StudioSection = 'formulations' | 'batches' | 'stash' | 'pantry' | 'shopping' | 'containers' | 'tools' | 'metrics' | 'library';
 
 const ROW = 'w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors';
 const ACTIVE = 'bg-[#e8f0e5] text-[#1f382a]';
@@ -37,6 +37,7 @@ const MAIN: Item[] = [
     { id: 'shopping', label: 'Shopping List', to: '/shopping', icon: <ShoppingCart size={20} aria-hidden /> },
     { id: 'containers', label: 'Containers', to: '/containers', icon: <ContainersIcon /> },
     { id: 'tools', label: 'Calculators', to: '/tools', icon: <Calculator size={20} aria-hidden /> },
+    { id: 'metrics', label: 'Metrics', to: '/metrics', icon: <BarChart3 size={20} aria-hidden /> },
 ];
 
 interface StudioSidebarProps {
