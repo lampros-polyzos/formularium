@@ -30,7 +30,7 @@ public final class StructureChecks {
         if (c.has(CATIONIC_CONDITIONER) && c.has(ANIONIC_THICKENER)) {
             c.conflict("Cationic Conditioner + Anionic Thickener",
                     c.names(ANIONIC_THICKENER) + " is negatively charged and will clump or lose its thickening power next to " + c.names(CATIONIC_CONDITIONER) + ".",
-                    "Use a non-ionic thickener: hydroxyethylcellulose (HEC), HPMC, guar gum or sclerotium gum.");
+                    "Use a non-ionic thickener: hydroxyethylcellulose (HEC), HPMC, guar gum, locust bean gum, konjac or sclerotium gum.");
         }
         if (c.has(SHAMPOO_SAFE_CATIONIC) && c.has(ANIONIC_SURFACTANT)) {
             c.synergy("2-in-1 Conditioning",
@@ -45,6 +45,16 @@ public final class StructureChecks {
             c.conflict("Electrolytes Will Thin Your Gel",
                     FormulaContext.list(electrolytes) + " contains salts that collapse " + c.names(ELECTROLYTE_SENSITIVE) + ", so the product can turn watery.",
                     "Switch to a salt-tolerant thickener (sclerotium gum, Sepimax Zen, HEC) or reduce the electrolytes.");
+        }
+        if (c.has(XANTHAN) && c.hasAny(GALACTOMANNAN, KONJAC)) {
+            c.synergy("Natural Gum Synergy",
+                    c.names(XANTHAN) + " combined with " + c.names(GALACTOMANNAN, KONJAC) + " usually gives more viscosity, or an elastic gel, than either gum alone.",
+                    "Start with a total of 0.3-0.5% gums and increase slowly. Above about 1% the texture turns stringy.");
+        }
+        if (c.has(XANTHAN) && c.has(CARBOMER)) {
+            c.synergy("Carbomer + Xanthan",
+                    c.names(CARBOMER) + " gives the gel strength and clarity while " + c.names(XANTHAN) + " adds tolerance to salts.",
+                    "A small amount of xanthan (0.1-0.3%) keeps the gel from thinning when electrolytes are present.");
         }
         if (c.has(CARBOMER) && !c.has(NEUTRALIZER)) {
             c.tip("Carbomer Needs Neutralizing",

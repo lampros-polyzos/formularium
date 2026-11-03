@@ -26,8 +26,8 @@ public final class IngredientClassifier {
     private static final Pattern STRONG_RETINOID_P = p("\\bretinol\\b|\\bretinal\\b");
     private static final Pattern SHAMPOO_SAFE_CATIONIC_P = p("polyquaternium-(10|7)\\b|guar hydroxypropyltrimonium");
     private static final Pattern ELECTROLYTE_SENSITIVE_P = p("^carbomer|acrylates/c10-30|acryloyldimethyltaurate|sodium polyacrylate$|glyceryl stearate se");
-    private static final Pattern ELECTROLYTE_P = p("sodium chloride|magnesium sulfate|sodium pca|zinc pca|sodium lactate|sodium citrate|ascorbyl phosphate|sodium polyglutamate|azeloyl diglycinate|aloe barbadensis leaf extract");
-    private static final Pattern POWDER_THICKENER_P = p("xanthan|guar gum|cyamopsis|sclerotium|gellan|cellulose|carbomer|acrylates/c10-30|polyacrylate|acryloyldimethyltaurate|magnesium aluminum silicate|^sodium hyaluronate(?! crosspolymer)");
+    private static final Pattern ELECTROLYTE_P = p("sodium chloride|magnesium sulfate|sodium pca|zinc pca|sodium lactate|sodium citrate|ascorbyl phosphate|sodium polyglutamate|azeloyl diglycinate|aloe barbadensis leaf extract|potassium alum");
+    private static final Pattern POWDER_THICKENER_P = p("xanthan|guar gum|cyamopsis|sclerotium|gellan|cellulose|carbomer|acrylates/c10-30|polyacrylate|acryloyldimethyltaurate|magnesium aluminum silicate|^sodium hyaluronate(?! crosspolymer)|carrageenan|^algin|amorphophallus|ceratonia|^pectin|^agar$|pullulan|acacia senegal|hectorite");
     private static final Pattern NEUTRALIZER_P = p("sodium hydroxide|potassium hydroxide|triethanolamine|^arginine|aminomethyl propanol|tromethamine");
     private static final Pattern LOW_HLB_P = p("dipolyhydroxystearate|polyricinoleate|steareth-2$|steareth-2 |sorbitan (sesqui)?oleate|peg/ppg-10/1 dimethicone");
     private static final Pattern LIQUID_HUMECTANT_P = p("^glycerin|propanediol|butylene glycol|propylene glycol|sorbitol|pentylene glycol");
@@ -35,12 +35,15 @@ public final class IngredientClassifier {
     private static final Pattern CHELATOR_P = p("edta|phytate|phytic|glutamate diacetate|gluconate");
     private static final Pattern CLAY_P = p("kaolin|bentonite|^illite|moroccan lava|magnesium aluminum silicate|rhassoul");
     private static final Pattern OIL_ANTIOXIDANT_P = p("^tocopherol$|^tocopherol |rosmarinus officinalis.*leaf extract|ascorbyl palmitate|^bht$");
-    private static final Pattern FRAGILE_OIL_P = p("cannabis sativa|rosa canina|oenothera|vitis vinifera|triticum vulgare|\\bsqualene\\b|linum usitatissimum|borago|hippophae|rubus idaeus");
-    private static final Pattern PHOTOTOXIC_P = p("citrus (limon|aurantifolia|paradisi|bergamia)|aurantium amara");
-    private static final Pattern SOOTHER_P = p("panthenol|allantoin|bisabolol|madecassoside|centella|avena sativa|beta-glucan|calendula|chamomil|anthemis|aloe barbadensis|ectoin|hydrolyzed oat|cucumis");
+    private static final Pattern FRAGILE_OIL_P = p("cannabis sativa|rosa canina|oenothera|vitis vinifera|triticum vulgare|\\bsqualene\\b|linum usitatissimum|borago|hippophae|rubus idaeus|carthamus tinctorius|punica granatum|nigella sativa|cucurbita pepo|opuntia ficus|aleurites moluccana");
+    private static final Pattern PHOTOTOXIC_P = p("citrus (limon|aurantifolia|paradisi|bergamia)|aurantium amara (peel|fruit)");
+    private static final Pattern SOOTHER_P = p("panthenol|allantoin|bisabolol|madecassoside|centella|avena sativa|beta-glucan|calendula|chamomil|anthemis|aloe barbadensis|ectoin|hydrolyzed oat|cucumis|althaea");
     private static final Pattern BOTANICAL_P = p(" extract|juice| water$|hydrosol|distillate");
     private static final Pattern FATTY_ACID_P = p("^stearic acid|linoleic acid|palmitic acid");
     private static final Pattern PHOTOSTABILIZER_P = p("octocrylene|bis-ethylhexyloxyphenol|methylene bis-benzotriazolyl");
+    // Filters that cover UVA (long wave, ageing), and UVB (short wave, burning). Zinc oxide and the Tinosorbs cover both
+    private static final Pattern UVA_P = p("butyl methoxydibenzoylmethane|diethylamino hydroxybenzoyl hexyl benzoate|bis-ethylhexyloxyphenol|methylene bis-benzotriazolyl|^zinc oxide");
+    private static final Pattern UVB_P = p("octocrylene|homosalate|ethylhexyl salicylate|ethylhexyl triazone|ethylhexyl methoxycinnamate|bis-ethylhexyloxyphenol|methylene bis-benzotriazolyl|^zinc oxide|^titanium dioxide");
     private static final Pattern EMULSIFIER_P = p("(^|[^-])emulsifier");
 
     public static Set<Tag> classify(FormulaIngredient ing) {
@@ -78,6 +81,7 @@ public final class IngredientClassifier {
         if (RETINOID_P.matcher(inci).find()) t.add(RETINOID);
         if (STRONG_RETINOID_P.matcher(inci).find()) t.add(STRONG_RETINOID);
         if (inci.contains("bakuchiol")) t.add(BAKUCHIOL);
+        if (inci.contains("ascorbyl palmitate")) t.add(ASCORBYL_PALMITATE);
         boolean peptide = inci.contains("peptide") || trade.contains("matrixyl") || trade.contains("argireline");
         if (peptide && inci.contains("copper")) t.add(COPPER_PEPTIDE);
         else if (peptide) t.add(PEPTIDE);
@@ -113,6 +117,9 @@ public final class IngredientClassifier {
         if (ELECTROLYTE_SENSITIVE_P.matcher(inci).find()) t.add(ELECTROLYTE_SENSITIVE);
         if (ELECTROLYTE_P.matcher(inci).find()) t.add(ELECTROLYTE);
         if (POWDER_THICKENER_P.matcher(inci).find()) t.add(POWDER_THICKENER);
+        if (inci.startsWith("xanthan gum")) t.add(XANTHAN);
+        if (inci.contains("cyamopsis") || inci.contains("ceratonia") || inci.contains("caesalpinia spinosa")) t.add(GALACTOMANNAN);
+        if (inci.contains("amorphophallus")) t.add(KONJAC);
         if (inci.startsWith("carbomer") || inci.contains("acrylates/c10-30")) t.add(CARBOMER);
         if (NEUTRALIZER_P.matcher(inci).find()) t.add(NEUTRALIZER);
         if (inci.startsWith("magnesium sulfate")) t.add(MAGNESIUM_SULFATE);
@@ -129,7 +136,7 @@ public final class IngredientClassifier {
             boolean sorbateAlone = (inci.contains("sorbate") || inci.contains("sorbic")) && !antibacterialPartner;
             boolean dehydroacetateAlone = inci.contains("dehydroacet") && !inci.contains("benzyl alcohol");
             if (sorbateAlone || dehydroacetateAlone || inci.contains("anisate") || inci.contains("levulinate")) t.add(ANTIFUNGAL_ONLY);
-            if (inci.contains("leuconostoc")) t.add(ANTIBACTERIAL_ONLY);
+            if (inci.contains("leuconostoc") || inci.equals("benzyl alcohol")) t.add(ANTIBACTERIAL_ONLY);
         }
         if (fn.contains("booster")) t.add(PRESERVATIVE_BOOSTER);
         if (fn.contains("chelat") || CHELATOR_P.matcher(inci).find()) t.add(CHELATOR);
@@ -152,6 +159,8 @@ public final class IngredientClassifier {
         // ---------- Sun care ----------
         if (fn.contains("uv filter")) t.add(UV_FILTER);
         if (inci.contains("butyl methoxydibenzoylmethane")) t.add(AVOBENZONE);
+        if (UVA_P.matcher(inci).find()) t.add(UVA_PROTECTION);
+        if (UVB_P.matcher(inci).find()) t.add(UVB_PROTECTION);
         if (PHOTOSTABILIZER_P.matcher(inci).find()) t.add(PHOTOSTABILIZER);
         if (inci.startsWith("zinc oxide")) { t.add(ZINC_OXIDE); t.add(MINERAL_UV); }
         if (inci.startsWith("titanium dioxide")) t.add(MINERAL_UV);

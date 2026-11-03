@@ -25,12 +25,44 @@ const CATALOG: CatalogIngredient[] = [
     ing('jojoba', 'Simmondsia Chinensis Seed Oil', 'Jojoba Oil', 'Carrier Oil', { solubility: 'oil' }),
 ];
 
+// Ingredients added to the library later on; only the tests about them use these
+const ADDED: CatalogIngredient[] = [
+    ing('phenoxy', 'Phenoxyethanol', 'Phenoxyethanol', 'Preservative', { min_usage_pct: 0.3, max_usage_pct: 1, optimal_ph_min: 3, optimal_ph_max: 10, cost_category: 'low', is_vegan: true, cosmos_compliant: false }),
+    ing('benzyl', 'Benzyl Alcohol', 'Benzyl Alcohol', 'Preservative', { optimal_ph_min: 3, optimal_ph_max: 8, cost_category: 'low' }),
+    ing('sorbic', 'Sorbic Acid', 'Sorbic Acid', 'Preservative (Antifungal)', { optimal_ph_min: 3, optimal_ph_max: 6, cost_category: 'low' }),
+    ing('benzoic', 'Benzoic Acid', 'Benzoic Acid', 'Preservative', { optimal_ph_min: 3, optimal_ph_max: 5, cost_category: 'low' }),
+    ing('gcap', 'Glyceryl Caprylate', 'Glyceryl Caprylate', 'Preservative Booster / Emollient', { cost_category: 'medium' }),
+    ing('pgpr', 'Polyglyceryl-3 Polyricinoleate', 'Polyglyceryl-3 Polyricinoleate (PGPR)', 'Emulsifier (W/O)', { ionic_charge: 'non-ionic', cost_category: 'low' }),
+    ing('ssl', 'Sodium Stearoyl Lactylate', 'Sodium Stearoyl Lactylate (SSL)', 'Emulsifier', { ionic_charge: 'anionic', cost_category: 'low' }),
+];
+const WITH_ADDED = [...CATALOG, ...ADDED];
+
 const ctx = (over: Partial<SuggestionContext> = {}): SuggestionContext => ({
     targetPh: 5.5, claims: [], inFormulaIds: new Set(), stashIds: new Set(), ...over,
 });
 const ids = (list: ReturnType<typeof suggestIngredients>) => list.map(s => s.ingredient.id);
 
 describe('suggestIngredients', () => {
+    it('suggests plain phenoxyethanol as a broad-spectrum preservative, but not benzyl alcohol, sorbic acid or a booster on their own', () => {
+        const list = ids(suggestIngredients('preservative', WITH_ADDED, ctx({ targetPh: 5 }), 20));
+        expect(list).toContain('phenoxy');
+        expect(list).not.toContain('benzyl'); // covers bacteria far better than mold
+        expect(list).not.toContain('sorbic'); // mold and yeast only
+        expect(list).not.toContain('gcap'); // a booster
+    });
+
+    it('offers benzoic acid only where the pH is low enough for it', () => {
+        expect(ids(suggestIngredients('preservative', WITH_ADDED, ctx({ targetPh: 4.5 }), 20))).toContain('benzoic');
+        expect(ids(suggestIngredients('preservative', WITH_ADDED, ctx({ targetPh: 5.5 }), 20))).not.toContain('benzoic');
+    });
+
+    it('suggests ordinary emulsifiers for a lotion, never a water-in-oil emulsifier', () => {
+        const list = ids(suggestIngredients('emulsifier', WITH_ADDED, ctx(), 20));
+        expect(list).toEqual(expect.arrayContaining(['olivem', 'ssl']));
+        expect(list).not.toContain('pgpr');
+        expect(list).not.toContain('btms');
+    });
+
     it('offers only broad-spectrum preservatives, never boosters or single-sided ones', () => {
         const list = ids(suggestIngredients('preservative', CATALOG, ctx({ targetPh: 5 })));
         expect(list).toEqual(expect.arrayContaining(['pe', 'k712', 'geo']));

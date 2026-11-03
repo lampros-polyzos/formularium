@@ -71,6 +71,28 @@ class IngredientInteractionRuleTest {
     private static final FormulaIngredient LEMON = ing("Citrus Limon Peel Oil", "Lemon Essential Oil", "Fragrance / Active", 0.5, "oil", "non-ionic", null, null, true, 0);
     private static final FormulaIngredient BERGAMOT_FCF = ing("Citrus Aurantium Bergamia (Bergamot) Fruit Oil", "Bergamot Essential Oil (FCF)", "Fragrance / Active", 0.3, "oil", "non-ionic", null, null, true, 0);
 
+    // Additions to the library
+    private static final FormulaIngredient NEROLI = ing("Citrus Aurantium Amara Flower Oil", "Neroli Essential Oil", "Fragrance / Active", 0.3, "oil", "non-ionic", null, null, true, 0);
+    private static final FormulaIngredient BITTER_ORANGE_PEEL = ing("Citrus Aurantium Amara Peel Oil", "Bitter Orange Essential Oil", "Fragrance / Active", 0.3, "oil", "non-ionic", null, null, true, 0);
+    private static final FormulaIngredient LIME_DISTILLED = ing("Citrus Aurantifolia (Lime) Oil", "Lime Essential Oil (Steam-Distilled, Furocoumarin-Free)", "Fragrance / Active", 0.3, "oil", "non-ionic", null, null, true, 0);
+    private static final FormulaIngredient SAFFLOWER = ing("Carthamus Tinctorius (Safflower) Seed Oil", "Safflower Oil", "Carrier Oil", 15, "oil", "non-ionic", null, null);
+    private static final FormulaIngredient POMEGRANATE = ing("Punica Granatum Seed Oil", "Pomegranate Seed Oil", "Carrier Oil", 3, "oil", "non-ionic", null, null);
+    private static final FormulaIngredient SESAME = ing("Sesamum Indicum (Sesame) Seed Oil", "Sesame Oil", "Carrier Oil", 15, "oil", "non-ionic", null, null);
+    private static final FormulaIngredient ASCORBYL_PALMITATE = ing("Ascorbyl Palmitate", "Ascorbyl Palmitate", "Active (Antioxidant)", 0.1, "oil", "non-ionic", null, null);
+    private static final FormulaIngredient KONJAC = ing("Amorphophallus Konjac Root Powder", "Konjac Glucomannan", "Rheology Modifier", 0.3, "water", "non-ionic", null, null);
+    private static final FormulaIngredient LOCUST_BEAN = ing("Ceratonia Siliqua Gum", "Locust Bean Gum", "Rheology Modifier", 0.3, "water", "non-ionic", null, null);
+    private static final FormulaIngredient CARRAGEENAN = ing("Carrageenan", "Carrageenan (Kappa / Iota)", "Rheology Modifier", 0.5, "water", "anionic", 4.0, 10.0);
+    private static final FormulaIngredient CELLULOSE_GUM = ing("Cellulose Gum", "Carboxymethylcellulose (CMC)", "Rheology Modifier", 0.8, "water", "anionic", 4.0, 10.0);
+    private static final FormulaIngredient ALUM = ing("Potassium Alum", "Alum (Potassium Alum)", "Deodorant Active", 5, "water", "non-ionic", null, null);
+    private static final FormulaIngredient MARSHMALLOW = ing("Althaea Officinalis Root Extract", "Marshmallow Root Extract", "Active (Soothing)", 2, "water", "non-ionic", 4.0, 7.0);
+    private static final FormulaIngredient BENZYL_ALCOHOL = ing("Benzyl Alcohol", "Benzyl Alcohol", "Preservative", 1, "water", "non-ionic", 3.0, 8.0);
+    private static final FormulaIngredient PHENOXYETHANOL = ing("Phenoxyethanol", "Phenoxyethanol", "Preservative", 1, "water", "non-ionic", 3.0, 10.0);
+    private static final FormulaIngredient SORBIC_ACID = ing("Sorbic Acid", "Sorbic Acid", "Preservative (Antifungal)", 0.3, "alcohol", "non-ionic", 3.0, 6.0);
+    private static final FormulaIngredient OCTOCRYLENE = ing("Octocrylene", "Octocrylene", "Active / UV Filter", 7, "oil", "non-ionic", 5.0, 7.5);
+    private static final FormulaIngredient OCTISALATE = ing("Ethylhexyl Salicylate", "Octisalate", "Active / UV Filter", 5, "oil", "non-ionic", null, null);
+    private static final FormulaIngredient DHHB = ing("Diethylamino Hydroxybenzoyl Hexyl Benzoate", "Uvinul A Plus", "Active / UV Filter", 5, "oil", "non-ionic", null, null);
+    private static final FormulaIngredient ZINC_OXIDE = ing("Zinc Oxide", "Zinc Oxide (Non-Nano)", "Active / UV Filter", 15, "dispersible", "non-ionic", 6.0, 8.0);
+
     // ---------- Helpers ----------
 
     private List<Recommendation> run(Double ph, ProfileConfig profile, FormulaIngredient... ingredients) {
@@ -266,6 +288,131 @@ class IngredientInteractionRuleTest {
     void phototoxicCitrusIsFlaggedButFcfBergamotIsNot() {
         assertTrue(has(run(null, JOJOBA, LEMON), "conflict", "Phototoxic Citrus Oil"));
         assertFalse(has(run(null, JOJOBA, BERGAMOT_FCF), "conflict", "Phototoxic Citrus Oil"));
+    }
+
+    @Test
+    void neroliAndOrangeBlossomAreNotPhototoxicButBitterOrangePeelIs() {
+        assertFalse(has(run(null, JOJOBA, NEROLI), "conflict", "Phototoxic Citrus Oil"), "neroli comes from the blossom");
+        assertTrue(has(run(null, JOJOBA, BITTER_ORANGE_PEEL), "conflict", "Phototoxic Citrus Oil"));
+    }
+
+    @Test
+    void steamDistilledFurocoumarinFreeLimeIsNotFlaggedButTheLemonOilStillIs() {
+        assertFalse(has(run(null, JOJOBA, LIME_DISTILLED), "conflict", "Phototoxic Citrus Oil"));
+        assertTrue(has(run(null, JOJOBA, LEMON), "conflict", "Phototoxic Citrus Oil"));
+    }
+
+    @Test
+    void newPolyunsaturatedOilsGetTheAntioxidantReminderButStableSesameDoesNot() {
+        assertTrue(has(run(null, SAFFLOWER, OLIVEM), "tip", "Protect Fragile Oils"));
+        assertTrue(has(run(null, POMEGRANATE, OLIVEM), "tip", "Protect Fragile Oils"));
+        assertFalse(has(run(null, SESAME, OLIVEM), "tip", "Protect Fragile Oils"));
+        assertFalse(has(run(null, SAFFLOWER, TOCOPHEROL), "tip", "Protect Fragile Oils"), "tocopherol protects it");
+    }
+
+    @Test
+    void ascorbylPalmitateAndVitaminEFormAnAntioxidantDuo() {
+        assertTrue(has(run(null, JOJOBA, TOCOPHEROL, ASCORBYL_PALMITATE), "synergy", "Antioxidant Duo: Vitamin E + Ascorbyl Palmitate"));
+        assertFalse(has(run(null, JOJOBA, TOCOPHEROL, ASCORBYL_PALMITATE), "tip", "Pair Ascorbyl Palmitate with Vitamin E"));
+    }
+
+    @Test
+    void ascorbylPalmitateAloneIsToldToAddVitaminEAndIsNotTreatedAsWaterSolubleVitaminC() {
+        List<Recommendation> recs = run(null, WATER, JOJOBA, ASCORBYL_PALMITATE, OLIVEM, PE9010);
+        assertTrue(has(recs, "tip", "Pair Ascorbyl Palmitate with Vitamin E"));
+        assertFalse(has(recs, "tip", "L-Ascorbic Acid Oxidizes in Water"));
+        assertFalse(has(recs, "conflict", "Vitamin C + Retinoid"));
+    }
+
+    @Test
+    void xanthanWithKonjacOrLocustBeanGumIsASynergy() {
+        assertTrue(has(run(null, WATER, XANTHAN, KONJAC), "synergy", "Natural Gum Synergy"));
+        assertTrue(has(run(null, WATER, XANTHAN, LOCUST_BEAN), "synergy", "Natural Gum Synergy"));
+        assertFalse(has(run(null, WATER, XANTHAN), "synergy", "Natural Gum Synergy"));
+        assertFalse(has(run(null, WATER, KONJAC, LOCUST_BEAN), "synergy", "Natural Gum Synergy"), "needs xanthan");
+    }
+
+    @Test
+    void carbomerWithXanthanIsASynergy() {
+        assertTrue(has(run(null, WATER, CARBOMER, XANTHAN, NAOH), "synergy", "Carbomer + Xanthan"));
+        assertFalse(has(run(null, WATER, CARBOMER, NAOH), "synergy", "Carbomer + Xanthan"));
+    }
+
+    @Test
+    void newAnionicThickenersClashWithCationicConditionersButKonjacDoesNot() {
+        for (FormulaIngredient anionic : List.of(CARRAGEENAN, CELLULOSE_GUM)) {
+            assertTrue(has(run(null, WATER, BTMS, anionic), "conflict", "Cationic Conditioner + Anionic Thickener"), anionic.name());
+        }
+        assertFalse(has(run(null, WATER, BTMS, KONJAC), "conflict", "Cationic Conditioner + Anionic Thickener"));
+        assertTrue(find(run(null, WATER, BTMS, CELLULOSE_GUM), "Cationic Conditioner + Anionic Thickener").action().contains("locust bean gum"));
+    }
+
+    @Test
+    void newPowderGumsCarryTheLumpWarning() {
+        for (FormulaIngredient gum : List.of(CARRAGEENAN, KONJAC, LOCUST_BEAN)) {
+            assertTrue(has(run(null, WATER, gum), "tip", "Lump Risk"), gum.name());
+        }
+        assertTrue(has(run(null, WATER, GLYCERIN, KONJAC), "tip", "Make a Slurry First"));
+    }
+
+    @Test
+    void alumIsASaltThatCollapsesCarbomerGels() {
+        assertTrue(has(run(null, WATER, CARBOMER, NAOH, ALUM), "conflict", "Electrolytes Will Thin Your Gel"));
+    }
+
+    @Test
+    void marshmallowRootCountsAsASoother() {
+        List<Recommendation> recs = run(null, WATER, GLYCOLIC, MARSHMALLOW, OLIVEM, PE9010);
+        assertTrue(has(recs, "synergy", "Actives + Soothers"));
+        assertFalse(has(recs, "tip", "Add a Soothing Ingredient"));
+    }
+
+    @Test
+    void benzylAlcoholAloneNeedsAMoldInhibitorButPhenoxyethanolAloneIsAcceptedAsBroadSpectrum() {
+        assertTrue(has(run(null, WATER, OLIVEM, BENZYL_ALCOHOL), "conflict", "No Protection Against Mold"));
+        assertFalse(has(run(null, WATER, OLIVEM, BENZYL_ALCOHOL, SORBIC_ACID), "conflict", "No Protection Against Mold"));
+        assertFalse(has(run(null, WATER, OLIVEM, PHENOXYETHANOL), "conflict", "No Protection Against Mold"));
+    }
+
+    @Test
+    void sorbicAcidIsAMoldInhibitorOnly() {
+        assertTrue(has(run(null, WATER, OLIVEM, SORBIC_ACID), "conflict", "No Protection Against Bacteria"));
+        assertFalse(has(run(null, WATER, OLIVEM, SORBIC_ACID, PHENOXYETHANOL), "conflict", "No Protection Against Bacteria"));
+    }
+
+    // ---------- Sun care ----------
+
+    @Test
+    void aUvbOnlySunscreenIsToldItLacksUvaProtection() {
+        List<Recommendation> recs = run(null, JOJOBA, OCTOCRYLENE, OCTISALATE);
+        assertTrue(has(recs, "tip", "No UVA Protection"));
+        assertFalse(has(recs, "tip", "No UVB Protection"));
+    }
+
+    @Test
+    void aUvaOnlySunscreenIsToldItLacksUvbProtection() {
+        assertTrue(has(run(null, JOJOBA, DHHB), "tip", "No UVB Protection"));
+    }
+
+    @Test
+    void zincOxideCoversBothSoItNeedsNeitherWarning() {
+        List<Recommendation> recs = run(null, JOJOBA, ZINC_OXIDE);
+        assertFalse(has(recs, "tip", "No UVA Protection"));
+        assertFalse(has(recs, "tip", "No UVB Protection"));
+    }
+
+    @Test
+    void stabilizedAvobenzoneWithAUvbFilterIsABroadSpectrumMix() {
+        List<Recommendation> recs = run(null, JOJOBA, AVOBENZONE, OCTOCRYLENE);
+        assertTrue(has(recs, "synergy", "Broad-Spectrum Filter Mix"));
+        assertFalse(has(recs, "conflict", "Unstable Avobenzone"));
+        assertFalse(has(recs, "tip", "No UVA Protection"));
+    }
+
+    @Test
+    void aFormulaWithoutUvFiltersGetsNoSunCareAdvice() {
+        List<Recommendation> recs = run(null, WATER, GLYCERIN, OLIVEM, JOJOBA, PE9010);
+        assertTrue(recs.stream().noneMatch(r -> r.title().startsWith("No UV") || r.title().equals("Broad-Spectrum Filter Mix")));
     }
 
     // ---------- Output ----------

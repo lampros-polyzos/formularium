@@ -17,7 +17,7 @@ public final class StabilityChecks {
     private StabilityChecks() {}
 
     // PhCompatibilityRule already raises errors for these; don't repeat them here
-    private static final Pattern REPORTED_ABOVE_5_5 = Pattern.compile("sodium benzoate|potassium sorbate|salicylic acid", Pattern.CASE_INSENSITIVE);
+    private static final Pattern REPORTED_ABOVE_5_5 = Pattern.compile("sodium benzoate|potassium sorbate|salicylic acid|benzoic acid|sorbic acid", Pattern.CASE_INSENSITIVE);
     private static final Pattern REPORTED_BELOW_5 = Pattern.compile("niacinamide", Pattern.CASE_INSENSITIVE);
 
     public static void run(FormulaContext c) {
@@ -67,6 +67,18 @@ public final class StabilityChecks {
                     c.names(FRAGILE_OIL) + " is rich in polyunsaturated fats and goes rancid quickly." + acetateNote,
                     "Add 0.5% tocopherol (vitamin E) or 0.1-0.2% rosemary CO2 extract to the oil phase.",
                 Fix.add("antioxidant", "Add an antioxidant"));
+        }
+        if (c.has(ASCORBYL_PALMITATE)) {
+            if (c.has(VITAMIN_E)) {
+                c.synergy("Antioxidant Duo: Vitamin E + Ascorbyl Palmitate",
+                        c.names(ASCORBYL_PALMITATE) + " regenerates " + c.names(VITAMIN_E) + " after it has done its work, so the pair protects oils for much longer than either alone.",
+                        "Use about 0.05-0.2% ascorbyl palmitate with 0.5% tocopherol, and add both to the warm oil phase.");
+            } else {
+                c.tip("Pair Ascorbyl Palmitate with Vitamin E",
+                        c.names(ASCORBYL_PALMITATE) + " is most effective as a partner for tocopherol, which it recharges. On its own it protects oils only weakly.",
+                        "Add 0.5% tocopherol (vitamin E) to the oil phase.",
+                Fix.add("antioxidant", "Add vitamin E"));
+            }
         }
         if (c.has(OXIDATION_PRONE) && !c.has(OIL_ANTIOXIDANT)) {
             c.tip("Shield Sensitive Actives",
@@ -118,6 +130,22 @@ public final class StabilityChecks {
                 c.conflict("Avobenzone + Mineral Filters",
                         "Uncoated " + c.names(MINERAL_UV) + " can speed up avobenzone breakdown and cause discoloration.",
                         "Use coated zinc oxide or titanium dioxide grades.");
+            }
+        }
+        if (c.hasAny(UV_FILTER, MINERAL_UV)) {
+            boolean uva = c.has(UVA_PROTECTION), uvb = c.has(UVB_PROTECTION);
+            if (uvb && !uva) {
+                c.tip("No UVA Protection",
+                        c.names(UVB_PROTECTION) + " mostly blocks UVB (the burning rays). UVA rays, which age skin and reach deeper, pass through.",
+                        "Add a UVA filter such as zinc oxide, bemotrizinol (Tinosorb S), Uvinul A Plus or a stabilized avobenzone for broad-spectrum protection.");
+            } else if (uva && !uvb) {
+                c.tip("No UVB Protection",
+                        c.names(UVA_PROTECTION) + " covers UVA but gives little protection against UVB, the rays that cause sunburn.",
+                        "Add a UVB filter such as octocrylene, octisalate or homosalate, or use zinc oxide, which covers both.");
+            } else if (uva && c.items().stream().filter(i -> i.tags().contains(UV_FILTER) || i.tags().contains(MINERAL_UV)).count() >= 2) {
+                c.synergy("Broad-Spectrum Filter Mix",
+                        c.names(UVA_PROTECTION, UVB_PROTECTION) + " together cover both UVA and UVB.",
+                        "Dissolve solid filters in the oil phase with a liquid solvent filter (octisalate, homosalate) so they do not crystallize.");
             }
         }
         if (c.has(UV_FILTER)) {

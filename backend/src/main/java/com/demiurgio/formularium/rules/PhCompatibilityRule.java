@@ -20,7 +20,8 @@ public class PhCompatibilityRule implements ValidationRule {
 
         boolean hasOrganicAcid = request.ingredients().stream().anyMatch(i -> {
             String n = i.name().toLowerCase();
-            return n.contains("sodium benzoate") || n.contains("potassium sorbate") || n.contains("salicylic acid");
+            return n.contains("sodium benzoate") || n.contains("potassium sorbate") || n.contains("salicylic acid")
+                    || n.contains("benzoic acid") || n.contains("sorbic acid");
         });
         boolean hasNiacinamide = request.ingredients().stream().anyMatch(i -> i.name().toLowerCase().contains("niacinamide"));
 

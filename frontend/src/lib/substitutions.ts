@@ -183,6 +183,9 @@ const INCI_STOPWORDS = new Set(['oil', 'seed', 'butter', 'extract', 'leaf', 'flo
 const inciWords = (inci: string) =>
     new Set(inciBase(inci).split(/[^a-z0-9-]+/).filter(w => w.length > 2 && !INCI_STOPWORDS.has(w)));
 
+/** "Phenoxyethanol (and) Ethylhexylglycerin" or "Cetearyl Olivate, Sorbitan Olivate": several ingredients sold as one. */
+const isBlend = (ing: CatalogIngredient) => /\(and\)|,/.test(ing.inci_name ?? '');
+
 const isWater = (ing: CatalogIngredient) => inciBase(ing.inci_name) === 'aqua';
 
 const isCosmos = (ing: CatalogIngredient) => !!(ing.cosmos_compliant || ing.is_cosmos);
@@ -236,7 +239,9 @@ function scoreCandidate(candidate: CatalogIngredient, ctx: Context): SubstituteO
     const fnB = parseFunction(candidate.function);
 
     const sameInci = inciBase(original.inci_name) === inciBase(candidate.inci_name);
-    const sameCas = intersects(casSet(original.cas_number), casSet(candidate.cas_number)) && intersects(fnA.all, fnB.all);
+    // A blend shares a CAS number with each of its parts, but it is not the same product as one of them
+    const sameCas = !isBlend(original) && !isBlend(candidate)
+        && intersects(casSet(original.cas_number), casSet(candidate.cas_number)) && intersects(fnA.all, fnB.all);
     let score: number;
     let matchLabel: string;
 

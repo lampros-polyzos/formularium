@@ -38,12 +38,15 @@ function isBroadPreservative(i: CatalogIngredient): boolean {
     if (!fn.startsWith('preservative') || fn.includes('booster')) return false;
     const sorbateAlone = /sorbate|sorbic/.test(inci) && !/benzo|benzyl alcohol|phenoxy|hydroxamic/.test(inci);
     const dehydroacetateAlone = inci.includes('dehydroacet') && !inci.includes('benzyl alcohol');
-    return !(sorbateAlone || dehydroacetateAlone || /anisate|levulinate|leuconostoc/.test(inci));
+    // Benzyl alcohol alone covers bacteria far better than mold
+    const benzylAlone = inci === 'benzyl alcohol';
+    return !(sorbateAlone || dehydroacetateAlone || benzylAlone || /anisate|levulinate|leuconostoc/.test(inci));
 }
 
 const MATCHERS: Record<FixCategory, (i: CatalogIngredient) => boolean> = {
     preservative: isBroadPreservative,
-    emulsifier: i => lower(i.function).includes('emulsifier') && !lower(i.function).includes('co-emulsifier') && lower(i.ionic_charge) !== 'cationic',
+    // Water-in-oil emulsifiers are left out: they would break the usual oil-in-water lotion the fix is asked for
+    emulsifier: i => lower(i.function).includes('emulsifier') && !lower(i.function).includes('co-emulsifier') && !lower(i.function).includes('(w/o)') && lower(i.ionic_charge) !== 'cationic',
     chelator: i => lower(i.function).includes('chelat'),
     antioxidant: i => lower(i.function).startsWith('antioxidant') && !lower(i.inci_name).includes('acetate'),
     ferulic: i => lower(i.inci_name).startsWith('ferulic'),

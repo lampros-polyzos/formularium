@@ -70,6 +70,16 @@ describe('analyzeFormula', () => {
         expect(item.marketOptions[0].matchLabel).toBe('Same ingredient, different grade');
     });
 
+    it('does not call a blend the same ingredient as one of its parts just because they share a CAS number', () => {
+        const pure = ing('phenoxy', { inci_name: 'Phenoxyethanol', trade_name: 'Phenoxyethanol', function: 'Preservative', cas_number: '122-99-6' });
+        const blend = ing('optiphen', { inci_name: 'Phenoxyethanol (and) Caprylyl Glycol', trade_name: 'Optiphen', function: 'Preservative', cas_number: '122-99-6, 1117-86-8' });
+        const other = ing('phenoxy2', { inci_name: 'Phenoxyethanol', trade_name: 'Phenoxyethanol (Other Supplier)', function: 'Preservative', cas_number: '122-99-6' });
+        const [item] = analyzeFormula([line(pure, 1)], [pure, blend, other], [], 100, null);
+        const byId = Object.fromEntries(item.marketOptions.map(o => [o.ingredient.id, o]));
+        expect(byId.phenoxy2.matchLabel).toBe('Same ingredient, different grade');
+        expect(byId.optiphen?.matchLabel).not.toBe('Same ingredient, different grade');
+    });
+
     it('offers stash substitutes only when there is enough of them', () => {
         const stash = [{ ingredient_id: 'mango', amount_left_g: 50 }, { ingredient_id: 'jojoba', amount_left_g: 2 }];
         const [item] = analyzeFormula([line(sheaRaw, 10)], catalog, stash, 100, null);

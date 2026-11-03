@@ -45,6 +45,25 @@ class FixesContractTest {
             + "\"requires_emulsifier\":true,\"requires_preservative\":true,\"default_ph_min\":5.0,\"default_ph_max\":6.0,\"max_oil_phase_percent\":30}";
 
     @Test
+    void organicAcidPreservativesAreFlaggedAboveTheirPhAndOfferTheLowerPh() throws Exception {
+        for (String acid : new String[] {"Sorbic Acid", "Benzoic Acid"}) {
+            validate(LOTION, 6.5, 100,
+                    ingredient("water", "Aqua", "Solvent", "A", 99, "water", 100.0, 1.0, 100.0, null, null),
+                    ingredient("acid", acid, "Preservative", "C", 0.5, "alcohol", 80.0, 0.1, 0.6, 3.0, 5.5))
+                    .andExpect(jsonPath("$.alerts[?(@.message =~ /.*Preservative failure risk.*/)]", hasSize(1)))
+                    .andExpect(jsonPath("$.alerts[?(@.message =~ /.*Preservative failure risk.*/)].fix.kind", contains("set-ph")));
+        }
+    }
+
+    @Test
+    void organicAcidPreservativesAreFineAtAMildlyAcidicPh() throws Exception {
+        validate(LOTION, 5.0, 100,
+                ingredient("water", "Aqua", "Solvent", "A", 99, "water", 100.0, 1.0, 100.0, null, null),
+                ingredient("acid", "Sorbic Acid", "Preservative", "C", 0.5, "alcohol", 80.0, 0.1, 0.6, 3.0, 6.0))
+                .andExpect(jsonPath("$.alerts[?(@.message =~ /.*Preservative failure risk.*/)]", hasSize(0)));
+    }
+
+    @Test
     void misplacedHeatSensitiveIngredientsOfferAMoveToPhaseC() throws Exception {
         validate(LOTION, 5.5, 100,
                 ingredient("water", "Aqua", "Solvent", "A", 94, "water", 100.0, 1.0, 100.0, null, null),

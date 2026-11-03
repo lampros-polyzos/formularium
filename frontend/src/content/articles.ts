@@ -144,9 +144,12 @@ const RAW_ARTICLES: Article[] = [
                 [`Benzyl alcohol + salicylic acid + sorbic acid (e.g. Geogard ECT)`, `0.6-1.0%`, `3-8`, `Almond-like smell; add below 45°C`],
                 [`Radish root ferment (e.g. Leucidal Liquid)`, `2-4%`, `3-8`, `Weak against mold; pair with an antifungal`],
                 [`Sodium dehydroacetate`, `0.1-0.6%`, `up to 6.5`, `Only fights mold and yeast; needs a partner for bacteria`],
+                [`Phenoxyethanol on its own`, `0.3-1.0%`, `3-10`, `Strong against bacteria and very pH-tolerant; weaker against mold, so many formulas add ethylhexylglycerin. The EU limit is 1%`],
+                [`Benzyl alcohol`, `0.5-1.0%`, `3-8`, `Accepted in natural formulas; mainly antibacterial, so pair it with sodium dehydroacetate or a sorbate`],
+                [`Sorbic acid and benzoic acid (the acid forms of sorbate and benzoate)`, `0.1-0.6% and 0.1-0.5%`, `3-6 and 3-5`, `Barely dissolve in water: dissolve them in a little alcohol or propanediol first, and use them only in acidic products`],
             ] },
             { type: 'h2', text: `Boosters and helpers` },
-            { type: 'p', text: `Pentylene glycol, caprylyl glycol and 1,2-hexanediol make a preservative work better, and they also hydrate the skin. They are **boosters, not preservatives on their own**. Adding a chelator such as disodium EDTA (0.05-0.2%) also helps, because metal ions can weaken a preservative.` },
+            { type: 'p', text: `Pentylene glycol, caprylyl glycol, glyceryl caprylate and 1,2-hexanediol make a preservative work better, and they also hydrate or soften the skin. They are **boosters, not preservatives on their own**. Adding a chelator such as disodium EDTA (0.05-0.2%) also helps, because metal ions can weaken a preservative.` },
             { type: 'h2', text: `Myths to leave behind` },
             { type: 'ul', items: [
                 `**"Essential oils preserve it."** At safe usage levels they do not.`,
