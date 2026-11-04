@@ -1,4 +1,4 @@
-import type { Article, ArticleCategory, Block } from './types';
+import type { Article, ArticleCategory, Block } from './types.ts';
 
 export const CATEGORIES: ArticleCategory[] = ['Getting started', 'Ingredients', 'Techniques', 'Safety'];
 

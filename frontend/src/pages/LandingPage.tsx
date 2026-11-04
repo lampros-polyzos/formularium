@@ -17,6 +17,7 @@ import ArticleCard from '../components/content/ArticleCard';
 import HeroIllustration from '../components/HeroIllustration';
 import { fetchRecipePreviews } from '../lib/communityApi';
 import { contactLink } from '../lib/contact';
+import { useSeo } from '../seo/useSeo';
 
 interface PreviewPost {
   id: string;
@@ -46,6 +47,7 @@ const normalizeTags = (tags: PreviewPost['tags']) =>
   Array.isArray(tags) ? tags : (tags ? [tags] : []);
 
 const LandingPage = () => {
+  useSeo('/');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [searchQuery, setSearchQuery] = useState('');

@@ -1,0 +1,13 @@
+# Public pages (home, blog, learn, calculators, privacy, terms) are open to everyone, including search engines and AI assistants.
+# The signed-in app pages hold private data and have nothing to index.
+User-agent: *
+Allow: /
+Disallow: /studio
+Disallow: /stash
+Disallow: /what-can-i-make
+Disallow: /metrics
+Disallow: /shopping
+Disallow: /batches
+Disallow: /containers
+Disallow: /library
+Disallow: /community

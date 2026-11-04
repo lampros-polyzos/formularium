@@ -11,7 +11,7 @@ import {
     StartSection,
     TroubleshootingSection,
 } from '../components/content/LearnSections';
-import { usePageTitle } from '../components/content/usePageTitle';
+import { useSeo } from '../seo/useSeo';
 import { ARTICLES } from '../content/articles';
 import { FAQ, GLOSSARY, TROUBLESHOOTING } from '../content/learn';
 import { searchLearn } from '../content/search';
@@ -39,7 +39,7 @@ function ResultGroup({ title, count, children }: { title: string; count: number;
 }
 
 export default function LearnHubPage() {
-    usePageTitle('Learn');
+    useSeo('/learn');
     const [params, setParams] = useSearchParams();
     const query = params.get('q') ?? '';
     const requestedTab = params.get('tab');

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Search } from 'lucide-react';
 import Header from '../components/Header';
 import ArticleCard from '../components/content/ArticleCard';
-import { usePageTitle } from '../components/content/usePageTitle';
+import { useSeo } from '../seo/useSeo';
 import { ARTICLES } from '../content/articles';
 import { articleText, CATEGORIES } from '../content/helpers';
 import type { ArticleCategory } from '../content/types';
@@ -12,7 +12,7 @@ type Filter = ArticleCategory | 'All';
 
 // The articles are our own. What members write stays in the community (Advice and Information posts), not here.
 export default function BlogPage() {
-    usePageTitle('Blog');
+    useSeo('/blog');
     const [filter, setFilter] = useState<Filter>('All');
     const [query, setQuery] = useState('');
 

@@ -5,12 +5,12 @@ import HlbTool from '../components/tools/HlbTool';
 import PhDoseTool from '../components/tools/PhDoseTool';
 import PreservativeTool from '../components/tools/PreservativeTool';
 import UnitsTool from '../components/tools/UnitsTool';
-import { usePageTitle } from '../components/content/usePageTitle';
+import { useSeo } from '../seo/useSeo';
 import { useAuth } from '../contexts/AuthContext';
 import { TOOLS, isToolId, type ToolId } from '../lib/toolLinks';
 
 export default function ToolsPage() {
-    usePageTitle('Calculators');
+    useSeo('/tools');
     const { user } = useAuth();
     const [params, setParams] = useSearchParams();
     const requested = params.get('tool');

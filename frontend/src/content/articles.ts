@@ -1,4 +1,4 @@
-import type { Article } from './types';
+import type { Article } from './types.ts';
 
 // Newest first is applied by the pages; order here is just authoring order.
 // Numbers (usage rates, pH windows, preservative ranges) mirror the Formularium ingredient library.
@@ -649,7 +649,7 @@ const RAW_ARTICLES: Article[] = [
     },
     {
         slug: 'what-ingredients-do-functions-explained',
-        title: `What does each ingredient do? The EU ingredient functions explained`,
+        title: `What does each ingredient do? EU functions explained`,
         excerpt: `Every cosmetic ingredient is filed under a job. Here are the standard functions from the EU ingredient list, in plain language, with examples you can find in the library.`,
         category: 'Ingredients',
         level: 'Beginner',

@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Clock, Lightbulb } from 'lucide-react';
 import Header from '../components/Header';
 import ArticleBody from '../components/content/ArticleBody';
 import ArticleCard, { CategoryBadge } from '../components/content/ArticleCard';
-import { usePageTitle } from '../components/content/usePageTitle';
+import { useSeo } from '../seo/useSeo';
 import { ARTICLES, getArticle } from '../content/articles';
 import { readingMinutes, tableOfContents } from '../content/helpers';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,7 +14,7 @@ export default function BlogArticlePage() {
     const article = getArticle(slug);
     const { user } = useAuth();
     const { formatDate } = useSettings();
-    usePageTitle(article ? article.title : 'Article not found');
+    useSeo(`/blog/${slug}`, { noindex: !article, title: article ? undefined : 'Article not found' });
 
     if (!article) {
         return (

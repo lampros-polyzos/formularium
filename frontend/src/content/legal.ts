@@ -1,4 +1,4 @@
-import type { Block } from "./types";
+import type { Block } from "./types.ts";
 
 // ---------------------------------------------------------------------------------------------
 // Fill these in before going live. Everything below reads from here.

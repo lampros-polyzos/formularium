@@ -1,4 +1,4 @@
-import type { ChecklistGroup, CheatSheet, FaqItem, GlossaryEntry, LearningStep, TroubleshootingItem } from './types';
+import type { ChecklistGroup, CheatSheet, FaqItem, GlossaryEntry, LearningStep, TroubleshootingItem } from './types.ts';
 
 // ---------- Learning path ----------
 

@@ -2,13 +2,13 @@ import { Link } from 'react-router-dom';
 import { Beaker } from 'lucide-react';
 import ArticleBody from '../components/content/ArticleBody';
 import { RichText } from '../components/content/ArticleBody';
-import { usePageTitle } from '../components/content/usePageTitle';
+import { useSeo } from '../seo/useSeo';
 import { headingId } from '../content/helpers';
 import { LEGAL, type LegalDocument } from '../content/legal';
 import { useSettings } from '../contexts/SettingsContext';
 
 export default function LegalPage({ document }: { document: LegalDocument }) {
-    usePageTitle(document.title);
+    useSeo(`/${document.slug}`);
     const { formatDate } = useSettings();
     const sections = document.body.flatMap(b => (b.type === 'h2' ? [b.text] : []));
     const other = document.slug === 'privacy'
