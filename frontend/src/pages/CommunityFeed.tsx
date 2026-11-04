@@ -6,7 +6,7 @@ import Header from '../components/Header';
 import RatingSummary from '../components/RatingSummary';
 import { sortPosts, summarizeRatings, type RatingRow, type RatingStats, type SortMode } from '../lib/ratingStats';
 
-type PostType = 'formulation' | 'discussion' | 'request' | 'education';
+import { postTypeInfo, storedTypesFor, type PostType } from '../lib/postTypes';
 type DevStatus = 'concept' | 'in-testing' | 'stable' | null;
 
 interface CommunityPost {
@@ -66,7 +66,7 @@ export default function CommunityFeed() {
                     .order('created_at', { ascending: false });
 
                 if (activeTab !== 'all') {
-                    query = query.eq('post_type', activeTab);
+                    query = query.in('post_type', storedTypesFor(activeTab));
                 }
 
                 const { data, error } = await query;
@@ -111,15 +111,7 @@ export default function CommunityFeed() {
 
     const visiblePosts = sortPosts(filteredPosts, ratingStats, sortMode);
 
-    const getTypeLabel = (type: PostType) => {
-        switch (type) {
-            case 'formulation': return { label: 'Recipe', icon: '🧪', color: 'bg-green-100 text-green-800 border-green-200' };
-            case 'discussion': return { label: 'Discussion', icon: '💬', color: 'bg-blue-100 text-blue-800 border-blue-200' };
-            case 'request': return { label: 'Request', icon: '✋', color: 'bg-amber-100 text-amber-800 border-amber-200' };
-            case 'education': return { label: 'Education', icon: '📚', color: 'bg-purple-100 text-purple-800 border-purple-200' };
-            default: return { label: 'Post', icon: '📄', color: 'bg-gray-100 text-gray-800 border-gray-200' };
-        }
-    };
+    const getTypeLabel = (type: string) => postTypeInfo(type);
 
     const getStatusBadge = (status?: DevStatus) => {
         switch (status) {
@@ -151,16 +143,17 @@ export default function CommunityFeed() {
                     {/* Top Row: Main Filters & Search */}
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="flex space-x-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-                            {(['all', 'formulation', 'discussion', 'request', 'education'] as const).map((tab) => (
+                            {([{ id: 'all', label: 'All' }, ...(['formulation', 'discussion', 'advice', 'information'] as const).map(id => postTypeInfo(id))] as { id: PostType | 'all'; label: string }[]).map((tab) => (
                                 <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap border ${activeTab === tab
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    aria-pressed={activeTab === tab.id}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap border ${activeTab === tab.id
                                         ? 'bg-[#2c4c3b] text-white border-[#2c4c3b]'
                                         : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
                                         }`}
                                 >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    {tab.label}
                                 </button>
                             ))}
                         </div>

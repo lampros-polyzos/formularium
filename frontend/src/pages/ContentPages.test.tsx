@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import BlogPage from './BlogPage';
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
         { id: 'post-1', title: 'My notes on cold-process butters', write_up: 'I tried melting shea at different temperatures and cooling it fast. Here is what happened to the grain.', tags: ['butters'], created_at: '2026-10-28T10:00:00Z', author_name: 'Sam' },
     ] as Record<string, unknown>[],
     error: null as unknown,
+    tablesRead: [] as string[],
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -25,11 +26,14 @@ vi.mock('../lib/supabase', () => {
     return {
         supabase: {
             auth: { signOut: vi.fn() },
-            from: (table: string) => ({
+            from: (table: string) => {
+                mocks.tablesRead.push(table);
+                return {
                 select: () => query(() => table === 'community_posts'
                     ? (mocks.error ? { data: null, error: mocks.error } : { data: mocks.posts, error: null })
                     : { data: [], error: null }),
-            }),
+            };
+            },
             channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
             removeChannel: vi.fn(),
         },
@@ -42,6 +46,7 @@ vi.mock('../contexts/AuthContext', () => ({
 
 afterEach(() => {
     cleanup();
+    mocks.tablesRead = [];
     mocks.user = null;
     mocks.error = null;
 });
@@ -83,53 +88,55 @@ describe('Blog page', () => {
     });
 });
 
-describe('Blog with community articles', () => {
-    it('merges community education posts into the feed', async () => {
+describe('The blog is only our own articles', () => {
+    // A member's Information post: it lives in the community and must never reach the blog
+    const memberPost = { id: 'post-1', title: 'My notes on cold-process butters', write_up: 'I tried melting shea at different temperatures.', tags: ['butters'], post_type: 'information', created_at: '2026-10-28T10:00:00Z', author_name: 'Sam' };
+
+    it('does not show posts written by members, even when Information posts exist', async () => {
+        mocks.posts = [memberPost];
         renderAt('/blog');
-        expect(await screen.findByText('My notes on cold-process butters')).toBeInTheDocument();
-        expect(screen.getAllByText(/preservatives 101/i).length).toBeGreaterThan(0);
-        expect(screen.getByText(/by Sam/)).toBeInTheDocument();
+        expect(await screen.findAllByText(/preservatives 101/i)).not.toHaveLength(0);
+        expect(screen.queryByText('My notes on cold-process butters')).not.toBeInTheDocument();
+        expect(screen.queryByText(/by Sam/)).not.toBeInTheDocument();
     });
 
-    it('filters to community articles only', async () => {
+    it('never even asks for community posts', async () => {
         renderAt('/blog');
-        await screen.findByText('My notes on cold-process butters');
-        fireEvent.click(within(screen.getByRole('group', { name: /filter by category/i })).getByRole('button', { name: /^Community/ }));
-        expect(screen.getByText('My notes on cold-process butters')).toBeInTheDocument();
-        expect(screen.queryByText(/preservatives 101/i)).not.toBeInTheDocument();
+        await screen.findAllByText(/preservatives 101/i);
+        expect(mocks.tablesRead).not.toContain('community_posts');
     });
 
-    it('opens on the community filter from the URL', async () => {
+    it('has no Community filter, only the article categories', () => {
+        renderAt('/blog');
+        const filters = within(screen.getByRole('group', { name: /filter by category/i })).getAllByRole('button').map(b => b.textContent?.replace(/\s*\(\d+\)$/, ''));
+        expect(filters).toEqual(['All', 'Getting started', 'Ingredients', 'Techniques', 'Safety']);
+        expect(screen.queryByText(/write an article/i)).not.toBeInTheDocument();
+    });
+
+    it('counts exactly its own articles', () => {
+        renderAt('/blog');
+        const all = within(screen.getByRole('group', { name: /filter by category/i })).getByRole('button', { name: /^All/ });
+        expect(all).toHaveTextContent(`(${ARTICLES.length})`);
+    });
+
+    it('treats the old ?filter=community address like any other visit', () => {
         renderAt('/blog?filter=community');
-        expect(await screen.findByText('My notes on cold-process butters')).toBeInTheDocument();
-        expect(screen.queryByText(/preservatives 101/i)).not.toBeInTheDocument();
-    });
-
-    it('searches across both kinds', async () => {
-        renderAt('/blog');
-        await screen.findByText('My notes on cold-process butters');
-        fireEvent.change(screen.getByLabelText(/search articles/i), { target: { value: 'grain' } });
-        expect(screen.getByText('My notes on cold-process butters')).toBeInTheDocument();
-    });
-
-    it('tells logged-out visitors the full post is for members, and logged-in members get a link', async () => {
-        const { unmount } = renderAt('/blog');
-        expect(await screen.findByText(/sign in to read the full post/i)).toBeInTheDocument();
-        unmount();
-
-        mocks.user = { id: 'u1' };
-        renderAt('/blog');
-        const link = await screen.findByRole('link', { name: /my notes on cold-process butters/i });
-        expect(link).toHaveAttribute('href', '/community/post-1');
-    });
-
-    it('still shows the guides if community posts fail to load', async () => {
-        mocks.error = { message: 'boom' };
-        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        renderAt('/blog');
-        await waitFor(() => expect(spy).toHaveBeenCalled());
         expect(screen.getAllByText(/preservatives 101/i).length).toBeGreaterThan(0);
-        spy.mockRestore();
+        expect(within(screen.getByRole('group', { name: /filter by category/i })).getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('says the articles are ours, and points questions and tips to the community', () => {
+        renderAt('/blog');
+        expect(screen.queryByText(/written by the community|articles from the community|Education posts/i)).not.toBeInTheDocument();
+        expect(screen.getByText(/Practical guides for home formulators/)).toBeInTheDocument();
+        expect(screen.getByText(/Ask for advice or share useful information in the community/)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Visit the community/ })).toHaveAttribute('href', '/community');
+    });
+
+    it('still searches the guides', () => {
+        renderAt('/blog');
+        fireEvent.change(screen.getByLabelText(/search articles/i), { target: { value: 'preservative' } });
+        expect(screen.getAllByText(/preservatives 101/i).length).toBeGreaterThan(0);
     });
 });
 

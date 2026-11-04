@@ -4,7 +4,6 @@ import { blockText, CATEGORIES, headingId, internalLinks, readingMinutes, tableO
 import { CHEAT_SHEETS, FAQ, GLOSSARY, LEARNING_PATH, TROUBLESHOOTING } from './learn';
 import { searchLearn } from './search';
 import { isToolId } from '../lib/toolLinks';
-import { excerptOf, toCommunityArticle } from './community';
 
 const slugs = new Set(ARTICLES.map(a => a.slug));
 const TABS = new Set(['start', 'glossary', 'cheatsheets', 'troubleshooting', 'safety', 'faq']);
@@ -145,26 +144,5 @@ describe('searchLearn', () => {
 
     it('requires every word to match', () => {
         expect(searchLearn('preservative zzzznotaword').total).toBe(0);
-    });
-});
-
-describe('community articles', () => {
-    it('shortens excerpts at a word boundary', () => {
-        const long = 'word '.repeat(100);
-        const excerpt = excerptOf(long, 50);
-        expect(excerpt.length).toBeLessThanOrEqual(53);
-        expect(excerpt.endsWith('...')).toBe(true);
-        expect(excerptOf('short text')).toBe('short text');
-        expect(excerptOf(null)).toBe('');
-    });
-
-    it('maps a database row, tolerating odd tag shapes and missing fields', () => {
-        const base = { id: '1', title: 'T', write_up: null, created_at: '2026-01-01T00:00:00Z' };
-        expect(toCommunityArticle({ ...base, tags: ['a', 'b'] }).tags).toEqual(['a', 'b']);
-        expect(toCommunityArticle({ ...base, tags: 'solo' }).tags).toEqual(['solo']);
-        expect(toCommunityArticle({ ...base, tags: null }).tags).toEqual([]);
-        const post = toCommunityArticle({ ...base, tags: null });
-        expect(post.authorName).toBeNull();
-        expect(post.minutes).toBe(1);
     });
 });

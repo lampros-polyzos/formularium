@@ -8,6 +8,7 @@ import { cloneRecipeToStudio } from '../lib/cloneRecipe';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useDialog } from '../hooks/useDialog';
+import { postTypeInfo } from '../lib/postTypes';
 
 interface Snapshot {
     version: number;
@@ -301,7 +302,7 @@ export default function PostDetail() {
                         <div className="flex-1">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex gap-2 items-center flex-wrap">
-                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-[#e9eee7] text-[#2c4c3b] border border-[#c1d1b9]">{post.post_type}</span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-[#e9eee7] text-[#2c4c3b] border border-[#c1d1b9]">{postTypeInfo(post.post_type).label}</span>
                                     {post.development_status && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-blue-50 text-blue-600 border border-blue-200">{post.development_status}</span>}
                                     {post.profile_name && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-purple-50 text-purple-700 border border-purple-200">{post.profile_name}</span>}
                                 </div>

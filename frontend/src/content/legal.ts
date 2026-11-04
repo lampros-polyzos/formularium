@@ -19,7 +19,7 @@ export const LEGAL = {
     supabaseRegion: "us-east-1",
     /** Minimum age to create an account. 16 is the safe default across the EU. */
     minimumAge: 16,
-    lastUpdated: "2026-11-03",
+    lastUpdated: "2026-11-04",
 } as const;
 
 export interface LegalDocument {
@@ -155,7 +155,7 @@ export const PRIVACY_POLICY: LegalDocument = {
             items: [
                 "**Private by default:** your formulas, stash, containers and favorites are visible only to you.",
                 "**Visible to members:** community posts, recipe versions, comments, ratings and reviews are shown to other signed-in members with your display name.",
-                "**Visible to everyone:** the title, opening text and display name of posts you publish as Education articles appear on the public blog.",
+                "**Visible to everyone:** formula posts you share may appear as a preview (title, a short excerpt and tags) on the public home page. The blog contains only articles we write; nothing members post is published there.",
             ],
         },
 

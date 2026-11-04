@@ -15,9 +15,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ARTICLES } from '../content/articles';
 import ArticleCard from '../components/content/ArticleCard';
-import CommunityCard from '../components/content/CommunityCard';
 import HeroIllustration from '../components/HeroIllustration';
-import { toCommunityArticle } from '../content/community';
 
 interface PreviewPost {
   id: string;
@@ -52,7 +50,6 @@ const LandingPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [recipes, setRecipes] = useState<PreviewPost[]>([]);
-  const [labNotes, setLabNotes] = useState<PreviewPost[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -77,24 +74,14 @@ const LandingPage = () => {
     const fetchPreviews = async () => {
       setIsLoadingPosts(true);
       try {
-        const [recipeRes, notesRes] = await Promise.all([
-          supabase
-            .from('community_posts')
-            .select('id, title, write_up, tags, development_status, created_at')
-            .eq('post_type', 'formulation')
-            .order('created_at', { ascending: false })
-            .limit(3),
-          supabase
-            .from('community_posts')
-            .select('id, title, write_up, tags, created_at')
-            .eq('post_type', 'education')
-            .order('created_at', { ascending: false })
-            .limit(3),
-        ]);
+        const recipeRes = await supabase
+          .from('community_posts')
+          .select('id, title, write_up, tags, development_status, created_at')
+          .eq('post_type', 'formulation')
+          .order('created_at', { ascending: false })
+          .limit(3);
         if (recipeRes.error) throw recipeRes.error;
-        if (notesRes.error) throw notesRes.error;
         setRecipes(recipeRes.data || []);
-        setLabNotes(notesRes.data || []);
       } catch (error) {
         console.error("Error fetching landing page previews:", error);
       } finally {
@@ -122,12 +109,8 @@ const LandingPage = () => {
     else openAuth(mode, path);
   };
 
-  // Two newest guides plus the newest community article, falling back to a third guide
-  const communityLatest = labNotes[0] ? toCommunityArticle({ ...labNotes[0], tags: labNotes[0].tags ?? null, write_up: labNotes[0].write_up ?? null }) : null;
-  const blogPreview = [
-    ...ARTICLES.slice(0, communityLatest ? 2 : 3).map((article) => ({ kind: 'guide' as const, article })),
-    ...(communityLatest ? [{ kind: 'community' as const, post: communityLatest }] : []),
-  ];
+  // The three newest guides. The blog is our own writing; what members post stays in the community
+  const blogPreview = ARTICLES.slice(0, 3);
 
   const handleSearch = (e: SyntheticEvent) => {
     e.preventDefault();
@@ -451,24 +434,15 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* From the blog: beginner guides plus the newest community article */}
+      {/* From the blog: the newest beginner guides */}
       <section className="px-6 md:px-12 py-20 bg-[#f7f8f6]">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-[#1f382a] mb-3">New to formulating? Start here</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">Plain-language guides and articles from the community, free for everyone.</p>
+            <p className="text-gray-600 max-w-2xl mx-auto">Plain-language guides for home formulators, free for everyone.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {blogPreview.map((item) => item.kind === 'guide'
-              ? <ArticleCard key={item.article.slug} article={item.article} />
-              : (
-                <CommunityCard
-                  key={item.post.id}
-                  post={item.post}
-                  onOpen={() => goTo(`/community/${item.post.id}`)}
-                  membersOnly={!user}
-                />
-              ))}
+            {blogPreview.map((article) => <ArticleCard key={article.slug} article={article} />)}
           </div>
           <div className="flex flex-wrap justify-center gap-4 mt-10">
             <button onClick={() => navigate('/blog')} className="px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors shadow-sm">

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     ratings: [] as Record<string, unknown>[],
     ratingsError: null as unknown,
     ratingRequests: [] as string[][],
+    typeFilters: [] as string[][],
 }));
 
 vi.mock('../components/NewPostModal', () => ({ default: () => null }));
@@ -18,11 +19,15 @@ vi.mock('../contexts/SettingsContext', () => ({
 }));
 vi.mock('../lib/supabase', () => {
     const builder = (table: string) => {
+        let kinds: string[] | null = null;
         const b: Record<string, unknown> = {};
         for (const m of ['select', 'eq', 'order']) b[m] = () => b;
-        b.in = (_column: string, ids: string[]) => { mocks.ratingRequests.push(ids); return b; };
+        b.in = (column: string, ids: string[]) => {
+            if (column === 'post_type') { kinds = ids; mocks.typeFilters.push(ids); } else mocks.ratingRequests.push(ids);
+            return b;
+        };
         b.then = (resolve: (v: unknown) => void) => {
-            if (table === 'community_posts') return resolve({ data: mocks.posts, error: null });
+            if (table === 'community_posts') return resolve({ data: kinds ? mocks.posts.filter(p => kinds!.includes(p.post_type as string)) : mocks.posts, error: null });
             if (table === 'recipe_ratings') return resolve(mocks.ratingsError ? { data: null, error: mocks.ratingsError } : { data: mocks.ratings, error: null });
             return resolve({ data: [], error: null });
         };
@@ -47,6 +52,7 @@ const titles = () => screen.getAllByRole('heading', { level: 3 }).map(h => h.tex
 beforeEach(() => {
     mocks.ratingsError = null;
     mocks.ratingRequests = [];
+    mocks.typeFilters = [];
     mocks.posts = [
         post('r-new', 'Newest Recipe', 'formulation', 20),
         post('r-top', 'Beloved Recipe', 'formulation', 5),
@@ -131,5 +137,72 @@ describe('Community feed without ratings', () => {
         expect(titles()).toHaveLength(4);
         expect(screen.getAllByText('Not rated yet')).toHaveLength(3);
         spy.mockRestore();
+    });
+});
+
+describe('Community feed post types', () => {
+    const tabs = () => within(screen.getByRole('button', { name: 'All' }).parentElement!).getAllByRole('button').map(b => b.textContent);
+
+    beforeEach(() => {
+        mocks.posts = [
+            post('d1', 'A Discussion', 'discussion', 20),
+            post('a1', 'How do I thicken a toner?', 'advice', 19),
+            post('a2', 'An old question', 'request', 18), // still has the old name until the database is updated
+            post('i1', 'Why pH matters', 'information', 17),
+            post('i2', 'An old tip', 'education', 16),
+            post('r1', 'A Recipe', 'formulation', 15),
+        ];
+    });
+
+    it('has the tabs All, Recipe, Discussion, Advice and Information', async () => {
+        await openFeed();
+        expect(tabs()).toEqual(['All', 'Recipe', 'Discussion', 'Advice', 'Information']);
+        expect(screen.queryByRole('button', { name: 'Request' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Education' })).not.toBeInTheDocument();
+    });
+
+    it('labels posts with the new names, including posts that still have an old one', async () => {
+        await openFeed();
+        const label = (title: string) => screen.getByRole('link', { name: new RegExp(title) }).textContent ?? '';
+        expect(label('How do I thicken')).toContain('Advice');
+        expect(label('An old question')).toContain('Advice');
+        expect(label('Why pH matters')).toContain('Information');
+        expect(label('An old tip')).toContain('Information');
+        expect(screen.queryByText('Request')).not.toBeInTheDocument();
+        expect(screen.queryByText('Education')).not.toBeInTheDocument();
+    });
+
+    it('the Advice tab finds new and old advice posts, and asks the database for both names', async () => {
+        await openFeed();
+        fireEvent.click(screen.getByRole('button', { name: 'Advice' }));
+        await act(async () => { await Promise.resolve(); });
+        expect(mocks.typeFilters.at(-1)).toEqual(['advice', 'request']);
+        expect(titles()).toEqual(['How do I thicken a toner?', 'An old question']);
+    });
+
+    it('the Information tab finds new and old information posts', async () => {
+        await openFeed();
+        fireEvent.click(screen.getByRole('button', { name: 'Information' }));
+        await act(async () => { await Promise.resolve(); });
+        expect(mocks.typeFilters.at(-1)).toEqual(['information', 'education']);
+        expect(titles()).toEqual(['Why pH matters', 'An old tip']);
+    });
+
+    it('shows which tab is chosen', async () => {
+        await openFeed();
+        expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(screen.getByRole('button', { name: 'Advice' }));
+        expect(screen.getByRole('button', { name: 'Advice' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('keeps recipes and discussions on the names they always had', async () => {
+        await openFeed();
+        fireEvent.click(screen.getByRole('button', { name: 'Discussion' }));
+        await act(async () => { await Promise.resolve(); });
+        expect(mocks.typeFilters.at(-1)).toEqual(['discussion']);
+        fireEvent.click(screen.getByRole('button', { name: 'Recipe' }));
+        await act(async () => { await Promise.resolve(); });
+        expect(mocks.typeFilters.at(-1)).toEqual(['formulation']);
     });
 });

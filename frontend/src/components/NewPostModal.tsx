@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-type PostType = 'discussion' | 'request' | 'education' | 'formulation';
+import { POST_TYPES, type PostType } from '../lib/postTypes';
 
 interface NewPostModalProps {
     isOpen: boolean;
@@ -92,17 +92,11 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-2">Post Type</label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {(
-                                    [
-                                        { id: 'discussion', label: 'Discussion', icon: '💬' },
-                                        { id: 'request', label: 'Request', icon: '✋' },
-                                        { id: 'education', label: 'Education', icon: '📚' },
-                                        { id: 'formulation', label: 'Recipe', icon: '🧪' }
-                                    ] as const
-                                ).map((type) => (
+                                {POST_TYPES.map((type) => (
                                     <button
                                         key={type.id}
                                         type="button"
+                                        aria-pressed={postType === type.id}
                                         onClick={() => setPostType(type.id)}
                                         className={`flex flex-col items-center justify-center p-3 border rounded-xl transition-all ${postType === type.id
                                                 ? 'bg-[#e9eee7] border-[#2c4c3b] ring-1 ring-[#2c4c3b] shadow-sm'
@@ -113,6 +107,7 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
                                         <span className={`text-xs font-bold ${postType === type.id ? 'text-[#1f382a]' : 'text-gray-600'}`}>
                                             {type.label}
                                         </span>
+                                        <span className="text-[10px] text-gray-500 mt-0.5 text-center leading-tight">{type.hint}</span>
                                     </button>
                                 ))}
                             </div>
