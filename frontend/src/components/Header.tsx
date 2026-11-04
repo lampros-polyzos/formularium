@@ -5,6 +5,7 @@ import BatchesNavLink from './BatchesNavLink';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { SettingsModal } from './SettingsModal';
+import { contactLink } from '../lib/contact';
 
 interface HeaderProps {
     title: string;
@@ -119,6 +120,14 @@ export default function Header({ title, backPath, backLabel, children, leading }
                                     >
                                         <span>⚙️</span> Global Settings
                                     </button>
+
+                                    <a
+                                        href={contactLink(`${title} (${window.location.pathname})`)}
+                                        onClick={() => setIsProfileOpen(false)}
+                                        className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#2c4c3b] transition-colors"
+                                    >
+                                        <span>💬</span> Send feedback or report a problem
+                                    </a>
 
                                     <div className="h-px bg-gray-100 my-2"></div>
 

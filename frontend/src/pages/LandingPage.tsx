@@ -16,6 +16,7 @@ import { ARTICLES } from '../content/articles';
 import ArticleCard from '../components/content/ArticleCard';
 import HeroIllustration from '../components/HeroIllustration';
 import { fetchRecipePreviews } from '../lib/communityApi';
+import { contactLink } from '../lib/contact';
 
 interface PreviewPost {
   id: string;
@@ -534,6 +535,14 @@ const LandingPage = () => {
                 <li><button onClick={() => navigate('/terms')} className="hover:text-[#1f382a]">Terms of Use</button></li>
               </ul>
             </div>
+            <div>
+              <h4 className="font-bold text-[#1f382a] mb-4">Get in touch</h4>
+              <ul className="space-y-2 text-gray-500">
+                <li><a href={contactLink('Home page')} className="hover:text-[#1f382a]">Contact us</a></li>
+                <li><a href={contactLink('Home page')} className="hover:text-[#1f382a]">Suggest an idea</a></li>
+                <li><a href={contactLink('Home page')} className="hover:text-[#1f382a]">Report a problem</a></li>
+              </ul>
+            </div>
           </div>
 
           <div className="flex gap-4">
@@ -554,6 +563,8 @@ const LandingPage = () => {
           <button onClick={() => navigate('/privacy')} className="hover:text-[#1f382a]">Privacy</button>
           <span className="mx-2" aria-hidden>·</span>
           <button onClick={() => navigate('/terms')} className="hover:text-[#1f382a]">Terms</button>
+          <span className="mx-2" aria-hidden>·</span>
+          <a href={contactLink('Home page')} className="hover:text-[#1f382a]">Contact</a>
         </div>
       </footer>
     </div>
