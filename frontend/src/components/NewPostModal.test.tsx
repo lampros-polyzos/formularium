@@ -103,3 +103,61 @@ describe('sending a post', () => {
         expect(onSuccess).not.toHaveBeenCalled();
     });
 });
+
+describe('safety and limits', () => {
+    it('reminds people writing advice or information that it is not professional advice', () => {
+        renderModal();
+        expect(screen.queryByRole('note')).not.toBeInTheDocument();
+        fireEvent.click(typeButton(/Advice/));
+        expect(screen.getByRole('note')).toHaveTextContent(/not professional advice.*Patch test.*preserved/i);
+        expect(screen.getByRole('link', { name: 'Community rules' })).toHaveAttribute('href', '/terms');
+        fireEvent.click(typeButton(/Information/));
+        expect(screen.getByRole('note')).toBeInTheDocument();
+    });
+
+    it('limits and counts the title and text', () => {
+        renderModal();
+        expect(screen.getByPlaceholderText(/Best emulsifier/)).toHaveAttribute('maxlength', '150');
+        expect(screen.getByPlaceholderText(/Explain your question/)).toHaveAttribute('maxlength', '10000');
+        fireEvent.change(screen.getByPlaceholderText(/Best emulsifier/), { target: { value: 'Hello' } });
+        expect(screen.getByText('5/150')).toBeInTheDocument();
+    });
+
+    it('offers sources only for information, and sends them', async () => {
+        renderModal();
+        expect(screen.queryByLabelText(/Sources/)).not.toBeInTheDocument();
+        fireEvent.click(typeButton(/Advice/));
+        expect(screen.queryByLabelText(/Sources/)).not.toBeInTheDocument();
+        fireEvent.click(typeButton(/Information/));
+        fill();
+        fireEvent.change(screen.getByLabelText(/Sources/), { target: { value: '  Handbook of Cosmetic Science  ' } });
+        submit();
+        await waitFor(() => expect(mocks.inserted).toHaveLength(1));
+        expect(mocks.inserted[0]).toMatchObject({ post_type: 'information', sources: 'Handbook of Cosmetic Science' });
+    });
+
+    it('sends no sources when none were given, or for other kinds of post', async () => {
+        renderModal();
+        fireEvent.click(typeButton(/Information/));
+        fill();
+        submit();
+        await waitFor(() => expect(mocks.inserted).toHaveLength(1));
+        expect(mocks.inserted[0]).not.toHaveProperty('sources');
+    });
+
+    it('explains in plain words when posting too often', async () => {
+        mocks.error = { message: 'You are posting too quickly. Please wait a little and try again.' };
+        renderModal();
+        fill();
+        submit();
+        expect(await screen.findByText(/posting too quickly/)).toBeInTheDocument();
+    });
+
+    it('explains a too-long title in plain words if the database refuses it', async () => {
+        mocks.error = { message: 'new row violates check constraint "community_posts_title_length"' };
+        renderModal();
+        fill();
+        submit();
+        expect(await screen.findByText('Titles can be up to 150 characters.')).toBeInTheDocument();
+    });
+});

@@ -9,6 +9,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useDialog } from '../hooks/useDialog';
 import { postTypeInfo } from '../lib/postTypes';
+import ReportModal from '../components/ReportModal';
+import EditPostModal from '../components/EditPostModal';
+import { useCommunityMutes } from '../hooks/useCommunityMutes';
+import { useIsModerator } from '../hooks/useIsModerator';
+import { deleteComment, setAnswered } from '../lib/communityApi';
+import { COMMENT_MAX, SAFETY_NOTICE, communityErrorMessage } from '../lib/communityLimits';
 
 interface Snapshot {
     version: number;
@@ -19,6 +25,7 @@ interface Snapshot {
 
 interface Comment {
     id: string;
+    author_id?: string | null;
     body: string;
     author_name: string;
     created_at: string;
@@ -42,9 +49,10 @@ export default function PostDetail() {
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-    const [score, setScore] = useState(0);
-    const [userVote, setUserVote] = useState<number>(0);
-    const [isVoting, setIsVoting] = useState(false);
+    const { muted, mute } = useCommunityMutes();
+    const isModerator = useIsModerator();
+    const [reporting, setReporting] = useState<{ type: 'post' | 'comment'; id: string } | null>(null);
+    const [editing, setEditing] = useState(false);
 
     useEffect(() => {
         const fetchPostData = async () => {
@@ -83,21 +91,6 @@ export default function PostDetail() {
                     .eq('post_id', id)
                     .order('created_at', { ascending: true });
                 if (commentData) setComments(commentData);
-
-                // 4. Fetch Votes
-                const { data: voteData } = await supabase
-                    .from('post_votes')
-                    .select('user_id, vote_value')
-                    .eq('post_id', id);
-
-                if (voteData) {
-                    const totalScore = voteData.reduce((acc, curr) => acc + curr.vote_value, 0);
-                    setScore(totalScore);
-                    if (user) {
-                        const myVote = voteData.find(v => v.user_id === user.id);
-                        if (myVote) setUserVote(myVote.vote_value);
-                    }
-                }
             } catch (error) {
                 console.error("Error loading post:", error);
             } finally {
@@ -132,41 +125,6 @@ export default function PostDetail() {
         );
     };
 
-    // Rating Logic
-    const handleVote = async (value: number) => {
-        if (!user) return alert("You must be logged in to vote.", { title: "Sign in to vote" });
-        if (post && user.id === post.author_id) return alert("You cannot rate your own post.", { title: "That's your post" });
-        if (isVoting) return; // Prevent spam clicking
-
-        setIsVoting(true);
-
-        const newVoteValue = userVote === value ? 0 : value;
-        const scoreDifference = newVoteValue - userVote;
-
-        // Optimistic update
-        setScore(prev => prev + scoreDifference);
-        setUserVote(newVoteValue);
-
-        try {
-            if (newVoteValue === 0) {
-                await supabase.from('post_votes').delete().match({ post_id: id, user_id: user.id });
-            } else {
-                await supabase.from('post_votes').upsert({
-                    post_id: id as string,
-                    user_id: user.id,
-                    vote_value: newVoteValue
-                });
-            }
-        } catch (error) {
-            console.error("Error voting:", error);
-            // Revert on failure
-            setScore(prev => prev - scoreDifference);
-            setUserVote(userVote);
-        } finally {
-            setIsVoting(false);
-        }
-    };
-
     // Comment Logic
     const handleAddComment = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -180,7 +138,7 @@ export default function PostDetail() {
                 .insert([{
                     post_id: id as string,
                     author_id: user.id,
-                    author_name: username || 'Anonymous Formulary',
+                    author_name: username || 'Anonymous Formulary', // the database sets the real name; this is only a placeholder
                     body: newComment.trim()
                 }])
                 .select('*')
@@ -190,18 +148,8 @@ export default function PostDetail() {
             if (data) setComments(prev => [...prev, data]);
             setNewComment('');
 
-            // NEW: Send a notification to the post author (if it's not their own post)
-            if (post.author_id !== user.id) {
-                await supabase.from('notifications').insert([{
-                    recipient_id: post.author_id,
-                    actor_name: username || 'Someone',
-                    post_id: id as string,
-                    type: 'comment'
-                }]);
-            }
-
         } catch (error: any) {
-            void alert(`Failed to post comment: ${error.message}`, { tone: "error", title: "Couldn't post your comment" });
+            void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't post your comment" });
         } finally {
             setIsSubmittingComment(false);
         }
@@ -247,9 +195,45 @@ export default function PostDetail() {
             navigate('/community');
         } catch (error: any) {
             console.error("Error deleting post:", error);
-            void alert(`Failed to delete post: ${error.message}`, { tone: "error", title: "Couldn't delete the post" });
+            void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't delete the post" });
             setIsDeleting(false);
         }
+    };
+
+    const isAuthor = !!user && user.id === post.author_id;
+    const canRemovePost = isAuthor || isModerator;
+    const isAdvice = post.post_type === 'advice' || post.post_type === 'request';
+    const showSafety = isAdvice || post.post_type === 'information' || post.post_type === 'education';
+    const visibleComments = comments.filter(c => !(c.author_id && muted.includes(c.author_id)));
+    const hiddenCount = comments.length - visibleComments.length;
+
+    const handleToggleAnswered = async () => {
+        try {
+            const answeredAt = await setAnswered(post.id, !post.answered_at);
+            setPost((prev: Record<string, unknown>) => ({ ...prev, answered_at: answeredAt }));
+        } catch (error) {
+            void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't update the post" });
+        }
+    };
+
+    const handleMute = async (authorId: string, name: string) => {
+        if (!(await confirm(`You won't see posts or comments from ${name} any more. You can unmute them from the Community page.`, { title: `Mute ${name}?`, confirmLabel: 'Mute' }))) return;
+        try { await mute(authorId); } catch (error) { void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't mute" }); }
+    };
+
+    const handleDeleteComment = async (comment: Comment) => {
+        if (!(await confirm("Delete this comment? This cannot be undone.", { title: "Delete this comment?", confirmLabel: "Delete comment", tone: "danger" }))) return;
+        try {
+            await deleteComment(comment.id);
+            setComments(prev => prev.filter(c => c.id !== comment.id));
+        } catch (error) {
+            void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't delete the comment" });
+        }
+    };
+
+    const afterReport = () => {
+        setReporting(null);
+        void alert("Thank you. A moderator will take a look.", { title: "Report sent" });
     };
 
     return (
@@ -275,29 +259,6 @@ export default function PostDetail() {
                 <div className="bg-white rounded-2xl shadow-sm border border-[#c1d1b9] overflow-hidden">
                     <div className="p-8 flex gap-6">
 
-                        {/* Vote Widget (recipes use the star ratings section instead) */}
-                        {post.post_type !== 'formulation' && (
-                        <div className="flex flex-col items-center gap-1 shrink-0 mt-2">
-                            <button
-                                onClick={() => handleVote(1)}
-                                disabled={isVoting || (user && post && user.id === post.author_id)}
-                                title={user && post && user.id === post.author_id ? "You cannot rate your own post" : "Upvote"}
-                                className={`p-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${userVote === 1 ? 'bg-green-100 text-green-700' : 'text-gray-400 hover:bg-gray-100 hover:text-green-600'}`}
-                            >
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-                            </button>
-                            <span className={`font-bold text-lg ${score > 0 ? 'text-green-700' : score < 0 ? 'text-red-700' : 'text-gray-600'}`}>{score}</span>
-                            <button
-                                onClick={() => handleVote(-1)}
-                                disabled={isVoting || (user && post && user.id === post.author_id)}
-                                title={user && post && user.id === post.author_id ? "You cannot rate your own post" : "Downvote"}
-                                className={`p-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${userVote === -1 ? 'bg-red-100 text-red-700' : 'text-gray-400 hover:bg-gray-100 hover:text-red-600'}`}
-                            >
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                            </button>
-                        </div>
-                        )}
-
                         {/* Content Area */}
                         <div className="flex-1">
                             <div className="flex justify-between items-start mb-4">
@@ -305,18 +266,34 @@ export default function PostDetail() {
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-[#e9eee7] text-[#2c4c3b] border border-[#c1d1b9]">{postTypeInfo(post.post_type).label}</span>
                                     {post.development_status && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-blue-50 text-blue-600 border border-blue-200">{post.development_status}</span>}
                                     {post.profile_name && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-purple-50 text-purple-700 border border-purple-200">{post.profile_name}</span>}
+                                    {isAdvice && post.answered_at && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-green-50 text-green-700 border border-green-200">✓ Answered</span>}
                                 </div>
 
-                                {/* Render Delete Button ONLY if the logged-in user owns the post */}
-                                {user && user.id === post.author_id && (
-                                    <button
-                                        onClick={handleDeletePost}
-                                        disabled={isDeleting}
-                                        className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors disabled:opacity-50"
-                                    >
-                                        {isDeleting ? 'Deleting...' : 'Delete Post'}
-                                    </button>
-                                )}
+                                <div className="flex gap-2 flex-wrap justify-end">
+                                    {isAuthor && isAdvice && (
+                                        <button onClick={handleToggleAnswered} className="px-3 py-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors">
+                                            {post.answered_at ? 'Reopen' : 'Mark as answered'}
+                                        </button>
+                                    )}
+                                    {isAuthor && post.post_type !== 'formulation' && (
+                                        <button onClick={() => setEditing(true)} className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors">Edit</button>
+                                    )}
+                                    {user && !isAuthor && (
+                                        <>
+                                            <button onClick={() => setReporting({ type: 'post', id: post.id })} className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors">Report</button>
+                                            {post.author_id && <button onClick={() => handleMute(post.author_id, post.author_name || 'this member')} className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors">Mute author</button>}
+                                        </>
+                                    )}
+                                    {canRemovePost && (
+                                        <button
+                                            onClick={handleDeletePost}
+                                            disabled={isDeleting}
+                                            className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors disabled:opacity-50"
+                                        >
+                                            {isDeleting ? 'Deleting...' : isAuthor ? 'Delete Post' : 'Remove (moderator)'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <h1 className="text-3xl font-bold text-[#1f382a] mb-2">{post.title}</h1>
@@ -327,9 +304,21 @@ export default function PostDetail() {
                                 <span className="font-medium text-gray-700">{post.author_name || 'Anonymous Formulary'}</span>
                                 <span>•</span>
                                 <span>{formatDate(post.created_at)}</span>
+                                {post.edited_at && <><span>•</span><span>edited</span></>}
                             </div>
 
+                            {showSafety && (
+                                <p role="note" className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">⚠️ {SAFETY_NOTICE}</p>
+                            )}
+
                             <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">{post.write_up}</div>
+
+                            {post.sources && (
+                                <div className="mt-6 pt-4 border-t border-gray-100">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Sources</h4>
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{post.sources}</p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -406,17 +395,17 @@ export default function PostDetail() {
                 {/* Comments Section */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#c1d1b9] overflow-hidden">
                     <div className="bg-[#e9eee7] px-6 py-4 border-b border-[#c1d1b9]">
-                        <h3 className="text-lg font-bold text-[#1f382a]">Discussion ({comments.length})</h3>
+                        <h3 className="text-lg font-bold text-[#1f382a]">Discussion ({visibleComments.length})</h3>
                     </div>
 
                     <div className="p-6">
-                        {comments.length === 0 ? (
+                        {visibleComments.length === 0 ? (
                             <div className="text-center py-8 text-gray-500 italic text-sm">
                                 No comments yet. Be the first to share your thoughts!
                             </div>
                         ) : (
                             <div className="space-y-6 mb-8">
-                                {comments.map((comment) => (
+                                {visibleComments.map((comment) => (
                                     <div key={comment.id} className="flex gap-4">
                                         <div className="w-10 h-10 rounded-full bg-[#cbd8d0] text-[#2c4c3b] flex items-center justify-center font-bold shrink-0">
                                             {comment.author_name ? comment.author_name.charAt(0).toUpperCase() : '?'}
@@ -429,10 +418,27 @@ export default function PostDetail() {
                                                 </div>
                                                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{comment.body}</p>
                                             </div>
+                                            <div className="flex gap-3 mt-1 ml-1 text-[11px] text-gray-400">
+                                                {user && comment.author_id !== user.id && (
+                                                    <button onClick={() => setReporting({ type: 'comment', id: comment.id })} className="hover:text-gray-700">Report</button>
+                                                )}
+                                                {user && comment.author_id && comment.author_id !== user.id && (
+                                                    <button onClick={() => handleMute(comment.author_id!, comment.author_name || 'this member')} className="hover:text-gray-700">Mute</button>
+                                                )}
+                                                {user && (comment.author_id === user.id || isModerator) && (
+                                                    <button onClick={() => handleDeleteComment(comment)} className="hover:text-red-600">
+                                                        {comment.author_id === user.id ? 'Delete' : 'Remove (moderator)'}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
+                        )}
+
+                        {hiddenCount > 0 && (
+                            <p className="text-xs text-gray-400 italic mb-4">{hiddenCount} comment{hiddenCount === 1 ? '' : 's'} from muted members hidden.</p>
                         )}
 
                         {/* Add Comment Input */}
@@ -443,12 +449,14 @@ export default function PostDetail() {
                             <div className="flex-1 flex flex-col gap-2">
                                 <textarea
                                     value={newComment}
+                                    maxLength={COMMENT_MAX}
                                     onChange={(e) => setNewComment(e.target.value)}
                                     placeholder={user ? "Add to the discussion..." : "Log in to join the discussion."}
                                     disabled={!user || isSubmittingComment}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm min-h-[80px] resize-y disabled:bg-gray-50"
                                 />
-                                <div className="flex justify-end">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[11px] text-gray-400">{newComment.length.toLocaleString('en-US')}/{COMMENT_MAX.toLocaleString('en-US')}</span>
                                     <button
                                         type="submit"
                                         disabled={!user || !newComment.trim() || isSubmittingComment}
@@ -463,6 +471,15 @@ export default function PostDetail() {
                 </div>
 
             </main>
+
+            {reporting && <ReportModal targetType={reporting.type} targetId={reporting.id} onClose={() => setReporting(null)} onSent={afterReport} />}
+            {editing && (
+                <EditPostModal
+                    post={post}
+                    onClose={() => setEditing(false)}
+                    onSaved={(changes) => { setPost((prev: Record<string, unknown>) => ({ ...prev, ...changes, edited_at: new Date().toISOString() })); setEditing(false); }}
+                />
+            )}
         </div>
     );
 }

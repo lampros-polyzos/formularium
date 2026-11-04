@@ -147,7 +147,6 @@ export default function RecipeRatings({ postId, authorId, versions, activeVersio
 
         setIsSaving(true);
         setError('');
-        const isFirstRating = !myRating;
 
         try {
             const { data, error } = await supabase
@@ -173,17 +172,6 @@ export default function RecipeRatings({ postId, authorId, versions, activeVersio
             if (error) throw error;
             setRatings(prev => [data, ...prev.filter(r => r.user_id !== user.id)]);
             setDraft(null);
-
-            // Let the author know about new ratings (not edits)
-            if (isFirstRating) {
-                const { error: notifError } = await supabase.from('notifications').insert([{
-                    recipient_id: authorId,
-                    actor_name: username || 'Someone',
-                    post_id: postId,
-                    type: 'rating'
-                }]);
-                if (notifError) console.error("Error sending rating notification:", notifError);
-            }
         } catch (err) {
             setError((err as { message?: string }).message || 'Failed to save your rating.');
         } finally {

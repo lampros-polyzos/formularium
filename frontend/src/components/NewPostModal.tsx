@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { POST_TYPES, type PostType } from '../lib/postTypes';
+import { SAFETY_NOTICE, SOURCES_MAX, TEXT_MAX, TITLE_MAX, communityErrorMessage } from '../lib/communityLimits';
 
 interface NewPostModalProps {
     isOpen: boolean;
@@ -24,6 +25,7 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
     const [postType, setPostType] = useState<PostType>('discussion');
     const [title, setTitle] = useState('');
     const [writeUp, setWriteUp] = useState('');
+    const [sources, setSources] = useState('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -52,6 +54,7 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
                     write_up: writeUp.trim(),
                     post_type: postType,
                     tags: selectedTags,
+                    ...(postType === 'information' && sources.trim() ? { sources: sources.trim() } : {}),
                     author_id: user.id,
                     author_name: username || 'Anonymous Formulary' // Applies the global display name
                 }]);
@@ -60,12 +63,13 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
 
             setTitle('');
             setWriteUp('');
+            setSources('');
             setSelectedTags([]);
             onSuccess();
             onClose();
         } catch (err: any) {
             console.error("Error creating post:", err);
-            setError(err.message || "Failed to create post.");
+            setError(communityErrorMessage(err) || "Failed to create post.");
         } finally {
             setIsSubmitting(false);
         }
@@ -135,23 +139,48 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
                                     <input
                                         type="text"
                                         required
+                                        maxLength={TITLE_MAX}
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
                                         placeholder="e.g., Best emulsifier for a high-oil body butter?"
                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm"
                                     />
+                                    <div className="text-[11px] text-gray-400 text-right">{title.length}/{TITLE_MAX}</div>
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Description</label>
                                     <textarea
                                         required
+                                        maxLength={TEXT_MAX}
                                         value={writeUp}
                                         onChange={(e) => setWriteUp(e.target.value)}
                                         placeholder="Explain your question, share your knowledge, or describe what you're working on..."
                                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm min-h-[160px] resize-y"
                                     />
+                                    <div className="text-[11px] text-gray-400 text-right">{writeUp.length.toLocaleString('en-US')}/{TEXT_MAX.toLocaleString('en-US')}</div>
                                 </div>
+
+                                {postType === 'information' && (
+                                    <div>
+                                        <label htmlFor="new-post-sources" className="block text-sm font-bold text-gray-700 mb-1">Sources (optional)</label>
+                                        <textarea
+                                            id="new-post-sources"
+                                            value={sources}
+                                            maxLength={SOURCES_MAX}
+                                            onChange={(e) => setSources(e.target.value)}
+                                            placeholder="Where does this come from? Books, papers, supplier data sheets, links..."
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2c4c3b] outline-none text-sm min-h-[70px] resize-y"
+                                        />
+                                    </div>
+                                )}
+
+                                {(postType === 'advice' || postType === 'information') && (
+                                    <p role="note" className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                        ⚠️ {SAFETY_NOTICE}{' '}
+                                        <Link to="/terms" className="underline font-semibold">Community rules</Link>
+                                    </p>
+                                )}
 
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Tags (Select all that apply)</label>

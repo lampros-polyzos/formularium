@@ -208,17 +208,11 @@ describe('a community post', () => {
         await settle();
     };
 
-    it('asks you to sign in with the app\'s dialog when you vote without being signed in', async () => {
+    it('no longer shows vote arrows (there is nowhere to keep votes)', async () => {
         mocks.post = discussion();
         await open();
-        fireEvent.click(screen.getByTitle('Upvote'));
-        await settle();
-        const box = dialog();
-        expect(within(box).getByRole('heading', { name: 'Sign in to vote' })).toBeInTheDocument();
-        expect(box).toHaveTextContent('You must be logged in to vote.');
-        fireEvent.click(within(box).getByRole('button', { name: 'Close' }));
-        await settle();
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Upvote')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Downvote')).not.toBeInTheDocument();
     });
 
     it('asks before deleting your own post, naming the action', async () => {

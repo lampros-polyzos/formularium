@@ -6,6 +6,8 @@ import Header from '../components/Header';
 import RatingSummary from '../components/RatingSummary';
 import { sortPosts, summarizeRatings, type RatingRow, type RatingStats, type SortMode } from '../lib/ratingStats';
 
+import { useCommunityMutes } from '../hooks/useCommunityMutes';
+import { useIsModerator } from '../hooks/useIsModerator';
 import { postTypeInfo, storedTypesFor, type PostType } from '../lib/postTypes';
 type DevStatus = 'concept' | 'in-testing' | 'stable' | null;
 
@@ -16,6 +18,8 @@ interface CommunityPost {
     tags: string[] | null;
     post_type: PostType;
     development_status?: DevStatus;
+    answered_at?: string | null;
+    author_name?: string | null;
     created_at: string;
     author_id: string;
     /** Set when the recipe started as another community recipe. */
@@ -35,6 +39,9 @@ export default function CommunityFeed() {
     const [activeTags, setActiveTags] = useState<string[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [sortMode, setSortMode] = useState<SortMode>('newest');
+    const { muted, unmute } = useCommunityMutes();
+    const isModerator = useIsModerator();
+    const [showMuted, setShowMuted] = useState(false);
     const [ratingStats, setRatingStats] = useState<Map<string, RatingStats>>(new Map());
 
     // Ratings are a bonus: if they can't be loaded, the feed still works without them
@@ -98,6 +105,7 @@ export default function CommunityFeed() {
 
     // Filter by search term AND selected tags
     const filteredPosts = posts.filter(post => {
+        if (post.author_id && muted.includes(post.author_id)) return false;
         const lowerSearch = searchTerm.toLowerCase();
         const matchesSearch = !searchTerm ||
             post.title?.toLowerCase().includes(lowerSearch) ||
@@ -131,13 +139,38 @@ export default function CommunityFeed() {
                         <h1 className="text-3xl font-bold">Community Hub</h1>
                         <p className="text-gray-600 mt-1">Discover formulas, ask questions, and learn from other chemists.</p>
                     </div>
+                    <div className="flex items-center gap-3">
+                    {isModerator && <Link to="/community/moderation" className="text-sm font-semibold text-[#2c4c3b] underline">Moderation</Link>}
+                    {muted.length > 0 && (
+                        <button onClick={() => setShowMuted(v => !v)} className="text-sm font-semibold text-gray-600 underline">
+                            Muted members ({muted.length})
+                        </button>
+                    )}
                     <button
                         onClick={() => setIsModalOpen(true)}
                         className="px-5 py-2.5 bg-[#1f382a] text-white rounded-lg font-medium hover:bg-[#2c4c3b] transition-colors shadow-sm"
                     >
                         + New Post
                     </button>
+                    </div>
                 </div>
+
+                {showMuted && muted.length > 0 && (
+                    <div className="mb-6 bg-white p-4 rounded-xl border border-[#c1d1b9]" aria-label="Muted members">
+                        <p className="text-sm text-gray-600 mb-3">You do not see posts or comments from these members.</p>
+                        <ul className="space-y-2">
+                            {muted.map(id => {
+                                const name = posts.find(p => p.author_id === id)?.author_name || 'Member';
+                                return (
+                                    <li key={id} className="flex items-center justify-between text-sm">
+                                        <span>{name}</span>
+                                        <button onClick={() => { void unmute(id); }} className="font-semibold text-[#2c4c3b] underline">Unmute</button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
+                )}
 
                 <div className="flex flex-col gap-4 mb-8 bg-white p-4 rounded-xl shadow-sm border border-[#c1d1b9]">
                     {/* Top Row: Main Filters & Search */}
@@ -237,6 +270,9 @@ export default function CommunityFeed() {
                                             <div className="flex items-center gap-1.5">
                                                 {/* Formulation Status Badge (renders only if applicable) */}
                                                 {post.post_type === 'formulation' && getStatusBadge(post.development_status)}
+                                                {(post.post_type === 'advice' || post.post_type === ('request' as string)) && post.answered_at && (
+                                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-green-50 text-green-700 border border-green-200">✓ Answered</span>
+                                                )}
                                                 {post.remixed_from_post_id && (
                                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm bg-[#e9eee7] text-[#2c4c3b] border border-[#c1d1b9]" title="This recipe started as another community recipe">↻ Remix</span>
                                                 )}

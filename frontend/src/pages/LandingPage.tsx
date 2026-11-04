@@ -12,10 +12,10 @@ import {
 import AuthModal from '../components/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 import { ARTICLES } from '../content/articles';
 import ArticleCard from '../components/content/ArticleCard';
 import HeroIllustration from '../components/HeroIllustration';
+import { fetchRecipePreviews } from '../lib/communityApi';
 
 interface PreviewPost {
   id: string;
@@ -74,14 +74,9 @@ const LandingPage = () => {
     const fetchPreviews = async () => {
       setIsLoadingPosts(true);
       try {
-        const recipeRes = await supabase
-          .from('community_posts')
-          .select('id, title, write_up, tags, development_status, created_at')
-          .eq('post_type', 'formulation')
-          .order('created_at', { ascending: false })
-          .limit(3);
-        if (recipeRes.error) throw recipeRes.error;
-        setRecipes(recipeRes.data || []);
+        // Signed-out visitors only get a title, a short excerpt and tags; the full community needs an account
+        const previews = await fetchRecipePreviews(3);
+        setRecipes(previews.map(r => ({ id: r.id, title: r.title, write_up: r.excerpt, tags: r.tags, development_status: r.development_status, created_at: r.created_at })));
       } catch (error) {
         console.error("Error fetching landing page previews:", error);
       } finally {

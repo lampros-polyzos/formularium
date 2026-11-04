@@ -65,7 +65,8 @@ export const PRIVACY_POLICY: LegalDocument = {
                 "Formulas, phases, percentages, batch sizes, target pH and marketing claims you save in the Studio.",
                 "Your stash (ingredients you own, amounts, prices), containers, favorites and starred ingredients.",
                 "Batch records: lot numbers, the ingredients and weights of batches you make, your notes, and stability check-ins.",
-                "Community posts, recipe versions, comments, ratings and reviews (including skin type, if you choose to give it), votes and notifications.",
+                "Community posts, recipe versions, comments, ratings and reviews (including skin type, if you choose to give it) and notifications, plus reports you send about other members' content and the members you mute.",
+                "Reports are visible to you and to community moderators. The person you report is not told who reported them.",
             ],
         },
         { type: "h3", text: "Technical information" },
@@ -351,7 +352,7 @@ export const TERMS_OF_USE: LegalDocument = {
         {
             type: "p",
             text:
-                `We may remove content or suspend accounts that break these rules. If you see something that breaks them, report it to ${mail}.`,
+                `We may remove content or suspend accounts that break these rules. If you see something that breaks them, use the Report button on the post or comment, or write to ${mail}. Moderators review reports and may remove content. You can mute a member to stop seeing their posts and comments. To keep the community usable, there are limits on how often you can post, comment and report.`,
         },
 
         { type: "h2", text: "Acceptable use" },
