@@ -25,6 +25,8 @@ import LineageNotice from '../components/LineageNotice';
 import StarterNotice, { type StarterNoticeData } from '../components/editor/StarterNotice';
 import { getTemplate } from '../lib/starterTemplates';
 import { loadStarterFormula } from '../lib/loadStarterFormula';
+import { takeImport } from '../lib/importHandoff';
+import ImportNotice, { type ImportNoticeData } from '../components/editor/ImportNotice';
 import { notifyBatchesChanged } from '../hooks/useDueChecks';
 import AutosaveIndicator from '../components/AutosaveIndicator';
 import { useAuth } from '../contexts/AuthContext';
@@ -272,6 +274,30 @@ const FormulationEditor = () => {
                 setModal({ isOpen: true, type: 'error', title: 'Could not start from the template', message: 'We could not load the ingredients for this template. You can still build the formula from scratch.' });
             });
     }, [starterId, user, setSearchParams]);
+
+    // "Import from pasted text": the import page leaves the finished formula for this screen to pick up
+    const [importNotice, setImportNotice] = useState<ImportNoticeData | null>(null);
+    const wantsImport = routeKey === 'new' && searchParams.get('import') === '1';
+    const appliedImport = useRef(false);
+
+    useEffect(() => {
+        if (!wantsImport || !user || appliedImport.current) return;
+        appliedImport.current = true;
+        const imported = takeImport();
+        setSearchParams({}, { replace: true });
+        if (!imported) return;
+        setProfileId(imported.profileId);
+        setActiveProfile(imported.profile);
+        setProjectName(imported.name);
+        setTargetWeight(imported.targetWeight);
+        if (imported.profile?.default_ph_min && imported.profile?.default_ph_max) {
+            setTargetPh(parseFloat(((imported.profile.default_ph_min + imported.profile.default_ph_max) / 2).toFixed(1)));
+        }
+        setFormulaIngredients(imported.ingredients.map((ing, index) => ({ ...ing, originalIndex: index })) as unknown as typeof formulaIngredients);
+        clearDraft(null);
+        setPendingDraft(null);
+        setImportNotice({ warnings: imported.warnings, skipped: imported.skipped });
+    }, [wantsImport, user, setSearchParams]);
 
     useEffect(() => {
         if (!user) return;
@@ -915,6 +941,7 @@ const FormulationEditor = () => {
                     />
 
                     {starterNotice && <StarterNotice {...starterNotice} onDismiss={() => setStarterNotice(null)} />}
+                    {importNotice && <ImportNotice {...importNotice} onDismiss={() => setImportNotice(null)} />}
 
                     <IngredientSearch
                         searchTerm={searchTerm}

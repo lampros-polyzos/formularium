@@ -7,6 +7,7 @@ import './App.css'
 import LandingPage from './pages/LandingPage';
 import StudioPage from './pages/StudioPage';
 import StartPage from './pages/StartPage';
+import ImportFormulaPage from './pages/ImportFormulaPage';
 import FormulationEditor from './pages/FormulationEditor';
 import StashPage from './pages/StashPage';
 import FormulaHistoryPage from './pages/FormulaHistoryPage';
@@ -51,6 +52,7 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route path="/studio" element={<StudioPage />} />
               <Route path="/studio/start" element={<StartPage />} />
+              <Route path="/studio/import" element={<ImportFormulaPage />} />
               <Route path="/studio/new" element={<FormulationEditor />} />
               <Route path="/studio/:id" element={<FormulationEditor />} />
               <Route path="/studio/:id/history" element={<FormulaHistoryPage />} />

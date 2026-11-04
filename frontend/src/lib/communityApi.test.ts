@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deleteComment, editPost, fetchRecipePreviews, isModerator, listMutes, listOpenReports, muteMember, reportContent, resolveReport, setAnswered, unmuteMember, type Report } from './communityApi';
 import { communityErrorMessage } from './communityLimits';
+
+// The tests pass their own client, so the real one (which needs environment variables) is never created
+vi.mock('./supabase', () => ({ supabase: {} }));
 
 type Call = { table?: string; rpc?: string; args?: unknown; op?: string; payload?: unknown; filters: [string, unknown][] };
 

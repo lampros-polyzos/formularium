@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, FilePlus2 } from 'lucide-react';
+import { ArrowRight, ClipboardPaste, FilePlus2 } from 'lucide-react';
 import Header from '../components/Header';
 import { usePageTitle } from '../components/content/usePageTitle';
 import { STARTER_TEMPLATES } from '../lib/starterTemplates';
@@ -48,8 +48,19 @@ export default function StartPage() {
                 </div>
 
                 <Link
+                    to="/studio/import"
+                    className="mt-6 flex items-center gap-3 bg-white border border-[#c1d1b9] rounded-2xl p-5 hover:border-[#2c4c3b] hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-[#2c4c3b]"
+                >
+                    <ClipboardPaste size={22} className="text-[#2c4c3b] shrink-0" aria-hidden />
+                    <span>
+                        <span className="block font-bold text-[#1f382a]">Paste a formula</span>
+                        <span className="block text-sm text-gray-600">Paste a recipe or ingredient list from anywhere and we match it to your library.</span>
+                    </span>
+                </Link>
+
+                <Link
                     to="/studio/new"
-                    className="mt-6 flex items-center gap-3 bg-white border border-dashed border-[#c1d1b9] rounded-2xl p-5 hover:border-[#2c4c3b] transition-colors focus:outline-none focus:ring-2 focus:ring-[#2c4c3b]"
+                    className="mt-4 flex items-center gap-3 bg-white border border-dashed border-[#c1d1b9] rounded-2xl p-5 hover:border-[#2c4c3b] transition-colors focus:outline-none focus:ring-2 focus:ring-[#2c4c3b]"
                 >
                     <FilePlus2 size={22} className="text-[#2c4c3b] shrink-0" aria-hidden />
                     <span>

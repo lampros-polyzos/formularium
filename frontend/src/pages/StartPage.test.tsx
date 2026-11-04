@@ -37,6 +37,11 @@ describe('What are you making?', () => {
         expect(within(screen.getByRole('link', { name: /Body butter/ })).getByText('Easiest')).toBeInTheDocument();
     });
 
+    it('offers to paste a formula from anywhere', () => {
+        renderPage();
+        expect(screen.getByRole('link', { name: /Paste a formula/ })).toHaveAttribute('href', '/studio/import');
+    });
+
     it('still lets you start from scratch', () => {
         renderPage();
         expect(screen.getByRole('link', { name: /start from scratch/i })).toHaveAttribute('href', '/studio/new');
