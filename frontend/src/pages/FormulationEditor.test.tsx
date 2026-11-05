@@ -27,7 +27,7 @@ vi.mock('../contexts/SettingsContext', () => ({
   })
 }));
 
-// Mock Supabase DB calls (remove edge functions mock)
+// Mock Supabase DB calls
 vi.mock('../lib/supabase', () => {
   const mockQueryBuilder = {
     select: vi.fn().mockReturnThis(),
