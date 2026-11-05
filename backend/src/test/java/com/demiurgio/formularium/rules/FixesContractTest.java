@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import com.demiurgio.formularium.TestAuthConfig;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -21,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** What the editor receives from POST /api/v1/validate: alerts and insights carry structured one-click fixes. */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TestAuthConfig.class)   // the API needs sign-in; these tests are about what the endpoints do, not who calls them
 class FixesContractTest {
 
     @Autowired private MockMvc mvc;

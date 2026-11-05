@@ -1,0 +1,60 @@
+package com.demiurgio.formularium.auth;
+
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+class UserRepository {
+    private static final String COLUMNS = "id, email, password_hash, google_sub, username";
+
+    private final JdbcClient jdbc;
+
+    UserRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    private static UserAccount map(ResultSet rs, int row) throws SQLException {
+        return new UserAccount(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("password_hash"), rs.getString("google_sub"), rs.getString("username"));
+    }
+
+    Optional<UserAccount> findByEmail(String email) {
+        return jdbc.sql("select " + COLUMNS + " from app_users where lower(email) = lower(:email)").param("email", email).query(UserRepository::map).optional();
+    }
+
+    Optional<UserAccount> findById(UUID id) {
+        return jdbc.sql("select " + COLUMNS + " from app_users where id = :id").param("id", id).query(UserRepository::map).optional();
+    }
+
+    Optional<UserAccount> findByGoogleSub(String sub) {
+        return jdbc.sql("select " + COLUMNS + " from app_users where google_sub = :sub").param("sub", sub).query(UserRepository::map).optional();
+    }
+
+    boolean usernameTaken(String username) {
+        return jdbc.sql("select count(*) from app_users where lower(username) = lower(:u)").param("u", username).query(Long.class).single() > 0;
+    }
+
+    /** @throws org.springframework.dao.DuplicateKeyException when the email, username or Google id is already used */
+    UserAccount insert(String email, String passwordHash, String googleSub, String username) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("insert into app_users (id, email, password_hash, google_sub, username) values (:id, :email, :hash, :sub, :username)")
+                .param("id", id).param("email", email).param("hash", passwordHash).param("sub", googleSub).param("username", username).update();
+        return new UserAccount(id, email, passwordHash, googleSub, username);
+    }
+
+    void linkGoogle(UUID id, String sub) {
+        jdbc.sql("update app_users set google_sub = :sub where id = :id").param("sub", sub).param("id", id).update();
+    }
+
+    void touchLogin(UUID id, Instant now) {
+        jdbc.sql("update app_users set last_login_at = :now where id = :id").param("now", Timestamp.from(now)).param("id", id).update();
+    }
+
+    void delete(UUID id) {
+        jdbc.sql("delete from app_users where id = :id").param("id", id).update();
+    }
+}

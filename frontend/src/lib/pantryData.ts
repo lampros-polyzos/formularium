@@ -1,11 +1,11 @@
 import { supabase } from './supabase';
+import { fetchIngredientsByIds, fetchStash } from './libraryApi';
 import type { StashLot } from './batchPlan';
 import type { Recipe } from './pantry';
 import type { CatalogIngredient, FormulaLine } from './substitutions';
 
 type Client = Pick<typeof supabase, 'from'>;
 
-const CHUNK = 100;
 /** How many of the newest community recipes are looked at. */
 export const COMMUNITY_LIMIT = 200;
 
@@ -17,25 +17,22 @@ function fail(what: string, error: { message?: string } | null): never {
 }
 
 /** Your stash lots, as the batch planner reads them. */
-export async function loadStash(userId: string, client: Client = supabase): Promise<StashLot[]> {
-    const { data, error } = await client
-        .from('user_stash')
-        .select('id, ingredient_id, amount_left_g, expiration_date, supplier_name, batch_lot_number, price_per_g')
-        .eq('user_id', userId);
-    if (error) fail('your stash', error);
-    return (data ?? []) as StashLot[];
+export async function loadStash(): Promise<StashLot[]> {
+    try {
+        return (await fetchStash()).map(({ id, ingredient_id, amount_left_g, expiration_date, supplier_name, batch_lot_number, price_per_g }) =>
+            ({ id, ingredient_id, amount_left_g, expiration_date, supplier_name, batch_lot_number, price_per_g }));
+    } catch (e) {
+        return fail('your stash', e as Error);
+    }
 }
 
 /** Full library rows for some ingredients, fetched in short batches so the request address stays short. */
-export async function loadIngredients(ids: string[], client: Client = supabase): Promise<CatalogIngredient[]> {
-    const unique = [...new Set(ids.filter(Boolean))];
-    const results = await Promise.all(chunk(unique, CHUNK).map(group => client.from('ingredients').select('*').in('id', group)));
-    const rows: CatalogIngredient[] = [];
-    for (const { data, error } of results) {
-        if (error) fail('ingredients', error);
-        rows.push(...((data ?? []) as CatalogIngredient[]));
+export async function loadIngredients(ids: string[]): Promise<CatalogIngredient[]> {
+    try {
+        return (await fetchIngredientsByIds(ids)) as CatalogIngredient[];
+    } catch (e) {
+        return fail('ingredients', e as Error);
     }
-    return rows;
 }
 
 interface NestedFormulation {
@@ -131,7 +128,7 @@ export async function loadCommunityRecipes(
             if (id && !ownedById.has(id)) wanted.add(id);
         }
     }
-    const fetched = new Map((await loadIngredients([...wanted], client)).map(i => [i.id, i]));
+    const fetched = new Map((await loadIngredients([...wanted])).map(i => [i.id, i]));
 
     const recipes: Recipe[] = [];
     for (const post of others) {

@@ -11,8 +11,9 @@ import type { CatalogIngredient } from '../lib/substitutions';
  * gathered so far. `isLoading` is true from the moment a list is asked for until its rows have arrived.
  */
 export function useCatalogCandidates(groups: CatalogFilter[][], stashIds: string[]) {
-    // Strings, so a new array of the same filters on every render doesn't look like a change
-    const filterKey = [...new Set(groups.map(toOrFilter).filter(Boolean))].sort().join('\n');
+    // Strings, so a new array of the same filters on every render doesn't look like a change. The same filters in any order or
+    // with repeats are one key. JSON never contains a raw line break, so one line per list is safe.
+    const filterKey = [...new Map(groups.map(g => [toOrFilter(g), JSON.stringify(g)] as const).filter(([k]) => k)).values()].sort().join('\n');
     const stashKey = [...new Set(stashIds)].sort().join(',');
     const requestKey = filterKey ? `${filterKey}#${stashKey}` : '';
 
@@ -25,11 +26,11 @@ export function useCatalogCandidates(groups: CatalogFilter[][], stashIds: string
         let cancelled = false;
         const stash = stashKey ? stashKey.split(',') : [];
 
-        const lists = filterKey.split('\n').map(orFilter => {
-            const cacheKey = `${orFilter}#${stashKey}`;
+        const lists = filterKey.split('\n').map(listJson => {
+            const cacheKey = `${listJson}#${stashKey}`;
             let request = cache.current.get(cacheKey);
             if (!request) {
-                request = fetchCandidates(orFilter, stash);
+                request = fetchCandidates(JSON.parse(listJson) as CatalogFilter[], stash);
                 cache.current.set(cacheKey, request);
                 request.catch(() => cache.current.delete(cacheKey)); // a failure is retried next time, not remembered
             }

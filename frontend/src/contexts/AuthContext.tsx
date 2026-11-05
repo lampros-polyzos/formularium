@@ -1,69 +1,35 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { logout, onAuthChange, refreshSession, type AuthUser } from '../lib/authClient';
 
 interface AuthState {
-  session: Session | null;
-  user: User | null;
+  /** The signed-in user, or null */
+  user: AuthUser | null;
   username: string | null;
+  /** True until we know whether there is a sign-in to resume (a refresh cookie from an earlier visit) */
   isLoading: boolean;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', userId)
-        .single();
-
-      if (!error && data) {
-        setUsername(data.username);
-      }
-    } catch (err) {
-      console.error("Error fetching user profile:", err);
-    }
-  };
-
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      setIsLoading(false);
-    });
-
-    // Listen for auth events (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setUsername(null);
-      }
-      setIsLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    let live = true;
+    const stop = onAuthChange(next => { if (live) setUser(next); });
+    // Resume the sign-in from an earlier visit, if the browser still has its refresh cookie
+    refreshSession()
+      .then(resumed => { if (live) setUser(resumed); })
+      .catch(() => { /* the server could not be reached: stay signed out */ })
+      .finally(() => { if (live) setIsLoading(false); });
+    return () => { live = false; stop(); };
   }, []);
 
-  return (
-    <AuthContext.Provider value={{ session, user, username, isLoading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = useMemo<AuthState>(() => ({ user, username: user?.username ?? null, isLoading, signOut: logout }), [user, isLoading]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

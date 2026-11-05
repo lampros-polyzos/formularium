@@ -1,8 +1,8 @@
-import { apiUrl } from './api';
+import { authFetch } from './authClient';
 
 /** Posts a payload to an export endpoint and saves the PDF it returns. Throws if the backend refuses. */
 export async function downloadPdf(path: string, payload: unknown, filename: string): Promise<void> {
-    const res = await fetch(apiUrl(path), {
+    const res = await authFetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

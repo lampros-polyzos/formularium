@@ -33,7 +33,7 @@ vi.mock('../lib/batches', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../lib/batches')>()),
     countDueChecks: () => Promise.resolve(mocks.due),
 }));
-vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, session: null, username: null, isLoading: false }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, username: null, isLoading: false, signOut: mocks.signOut }) }));
 vi.mock('../contexts/SettingsContext', () => ({
     useSettings: () => ({ currency: '$', setCurrency: vi.fn(), dateFormat: 'en-US', setDateFormat: vi.fn(), warningDays: 30, setWarningDays: vi.fn(), sellingRegion: 'none', setSellingRegion: vi.fn(), formatDate: (d: string) => d }),
 }));

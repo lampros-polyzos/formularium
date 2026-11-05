@@ -10,21 +10,23 @@ const mocks = vi.hoisted(() => ({
     dateFormat: 'en-US',
 }));
 
+// The stash and the ingredient search come from the backend
+vi.mock('../lib/libraryApi', () => ({
+    fetchStash: () => Promise.resolve(mocks.items),
+    searchIngredients: () => Promise.resolve([{ id: 'i1', trade_name: 'Shea Butter', inci_name: 'Butyrospermum Parkii Butter', function: 'Butter' }]),
+    addStashLot: (payload: Record<string, unknown>) => { mocks.saved.push({ op: 'insert', payload }); return Promise.resolve({}); },
+    changeStashLot: (_id: string, payload: Record<string, unknown>) => { mocks.saved.push({ op: 'update', payload }); return Promise.resolve({}); },
+    deleteStashLot: () => Promise.resolve(),
+}));
+// The header's notification bell still reads and listens for notifications
 vi.mock('../lib/supabase', () => {
-    const builder = (table: string): Record<string, unknown> => {
-        let op: 'select' | 'insert' | 'update' = 'select';
+    const builder = (): Record<string, unknown> => {
         const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'or', 'limit', 'in', 'is', 'delete']) b[m] = () => b;
-        b.insert = (rows: Record<string, unknown>[]) => { op = 'insert'; mocks.saved.push({ op: 'insert', payload: rows[0] }); return b; };
-        b.update = (payload: Record<string, unknown>) => { op = 'update'; mocks.saved.push({ op: 'update', payload }); return b; };
-        b.then = (resolve: (v: unknown) => void) => {
-            if (op !== 'select') return resolve({ data: null, error: null });
-            if (table === 'ingredients') return resolve({ data: [{ id: 'i1', trade_name: 'Shea Butter', inci_name: 'Butyrospermum Parkii Butter', function: 'Butter' }], error: null });
-            resolve({ data: table === 'user_stash' ? mocks.items : [], error: null });
-        };
+        for (const m of ['select', 'eq', 'order', 'or', 'limit', 'in', 'is', 'update']) b[m] = () => b;
+        b.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
         return b;
     };
-    return { supabase: { auth: { signOut: vi.fn() }, from: builder, channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
+    return { supabase: { from: builder, channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
 });
 vi.mock('../lib/batches', async (importOriginal) => ({ ...(await importOriginal<typeof import('../lib/batches')>()), countDueChecks: () => Promise.resolve(0) }));
 // One object every time: a new one on each render would make the page load its stash over and over

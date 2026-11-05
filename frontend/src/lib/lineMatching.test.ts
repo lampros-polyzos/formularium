@@ -5,7 +5,9 @@ import { buildImportedFormula, type ImportLine } from './importFormula';
 import { parseRecipeText } from './recipeParser';
 import { LIBRARY, row, type Row } from './starterLibraryFixture';
 
-vi.mock('./supabase', () => ({ supabase: {} }));
+// The library and the stash come from the backend
+const api = vi.hoisted(() => ({ searchIngredients: vi.fn(), fetchStash: vi.fn() }));
+vi.mock('./libraryApi', () => api);
 
 // A shampoo-ish library: the fixture plus the ingredients a copied sulfate-free shampoo recipe talks about
 const EXTRA: Row[] = [
@@ -145,21 +147,13 @@ describe('what is asked of the library', () => {
     });
 
     it('fetches the kind once however many lines ask for it, plus what you own', async () => {
-        const asked: string[] = [];
-        const client = {
-            from: (table: string) => {
-                const b: Record<string, unknown> = {};
-                for (const m of ['select', 'order', 'limit', 'eq']) b[m] = () => b;
-                b.or = (f: string) => { asked.push(f); return b; };
-                b.in = (_col: string, ids: string[]) => { asked.push(`owned:${ids.length}`); return b; };
-                b.then = (resolve: (v: unknown) => void) => resolve({ data: table === 'user_stash' ? [{ ingredient_id: 'owned-1' }] : [], error: null });
-                return b;
-            },
-        };
+        const asked: { anyOf?: { column: string }[]; ids?: string[] }[] = [];
+        api.searchIngredients.mockReset().mockImplementation(async (search: (typeof asked)[number]) => { asked.push(search); return []; });
+        api.fetchStash.mockReset().mockResolvedValue([{ ingredient_id: 'owned-1' }]);
         const lines = parseRecipeText('Fragrance 0.5%\nEssential oil 0.2%').lines;
-        await loadImportCandidates(lines, 'u1', client as never);
-        const roleAsks = asked.filter(a => a.includes('function.ilike'));
+        await loadImportCandidates(lines);
+        const roleAsks = asked.filter(a => a.anyOf?.some(f => f.column === 'function'));
         expect(roleAsks).toHaveLength(2);       // one for the kind: the first few by name, and the ones you own
-        expect(asked).toContain('owned:1');
+        expect(roleAsks.some(a => a.ids?.length === 1)).toBe(true);
     });
 });

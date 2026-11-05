@@ -6,6 +6,10 @@ import FormulationEditor from './FormulationEditor';
 import { apiUrl } from '../lib/api';
 
 // Mock Auth Context
+vi.mock('../lib/authClient', async () => {
+    const { apiUrl } = await import('../lib/api');
+    return { authFetch: (path: string, init?: RequestInit) => globalThis.fetch(apiUrl(path), init) };
+});
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'test-user-id', email: 'test@example.com' },
@@ -25,6 +29,16 @@ vi.mock('../contexts/SettingsContext', () => ({
     setDateFormat: vi.fn(),
     setWarningDays: vi.fn()
   })
+}));
+
+// The ingredient library and the stash come from the backend; this test is about the validation request only
+vi.mock('../lib/libraryApi', () => ({
+  searchIngredients: () => Promise.resolve([]),
+  fetchStash: () => Promise.resolve([]),
+  fetchIngredientByInci: () => Promise.resolve(null),
+  fetchFavorites: () => Promise.resolve([]),
+  addFavorite: () => Promise.resolve(),
+  removeFavorite: () => Promise.resolve(),
 }));
 
 // Mock Supabase DB calls

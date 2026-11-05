@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PackageCheck, TriangleAlert, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { fetchContainers, fetchStash } from '../lib/libraryApi';
 import { createBatch, lotNumbersLike } from '../lib/batches';
 import {
     buildPlan, summarizePlan, suggestLotNumber, type PlanEdits, type PlanRow, type StashLot,
@@ -50,12 +50,8 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
         let cancelled = false;
         const load = async () => {
             try {
-                const { data, error: loadError } = await supabase
-                    .from('user_stash')
-                    .select('id, ingredient_id, amount_left_g, expiration_date, supplier_name, batch_lot_number, price_per_g')
-                    .eq('user_id', userId);
-                if (loadError) throw loadError;
-                if (!cancelled) { setLots((data ?? []) as StashLot[]); setStashError(false); }
+                const data = await fetchStash();
+                if (!cancelled) { setLots(data as StashLot[]); setStashError(false); }
             } catch (e) {
                 console.error('Could not read the stash for the batch plan:', e);
                 if (!cancelled) { setLots([]); setStashError(true); }
@@ -79,11 +75,13 @@ export default function MakeBatchModal({ userId, formulationId, formulaName, tar
     // The containers you own that have a known size. Without any, the container picker simply doesn't show.
     useEffect(() => {
         let cancelled = false;
-        supabase.from('user_containers').select('id, name, volume_ml, price_per_unit').eq('user_id', userId).order('name')
-            .then(({ data, error: loadError }) => {
-                if (cancelled || loadError) return;
-                setContainers(((data ?? []) as ContainerOption[]).filter(c => c.volume_ml > 0));
-            });
+        fetchContainers()
+            .then(data => {
+                if (cancelled) return;
+                const named = [...data].sort((a, b) => a.name.localeCompare(b.name));
+                setContainers((named as unknown as ContainerOption[]).filter(c => c.volume_ml > 0));
+            })
+            .catch(() => { /* without containers the picker simply doesn't show */ });
         return () => { cancelled = true; };
     }, [userId]);
 

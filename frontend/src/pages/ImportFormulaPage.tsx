@@ -78,7 +78,7 @@ export default function ImportFormulaPage() {
 
         setIsWorking(true);
         try {
-            const { rows, stashIds } = await loadImportCandidates(result.lines, user.id);
+            const { rows, stashIds } = await loadImportCandidates(result.lines);
             const candidates: Candidate[][] = result.lines.map(line => {
                 const named: Candidate[] = matchLine(line, rows, { stashIds });
                 // A line such as "Fragrance" or "Humectant" with nothing sure found by name gets the library's ingredients of that kind to pick from

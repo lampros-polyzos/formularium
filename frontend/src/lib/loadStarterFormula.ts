@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { toOrFilter } from './catalogFilter';
+import { fetchStash, searchIngredients } from './libraryApi';
 import { buildStarterFormula, templateFilters, type StarterFormula, type StarterTemplate } from './starterTemplates';
 import type { DatabaseIngredient, ProfileConfig } from '../types/formulation';
 
@@ -18,22 +18,21 @@ export interface LoadedStarter {
  * Loads what a template needs from the library, the product type, and what the user owns, then builds the
  * balanced starting formula. Only the ingredients the template could use are fetched, never the whole library.
  */
-export async function loadStarterFormula(template: StarterTemplate, userId: string): Promise<LoadedStarter> {
+export async function loadStarterFormula(template: StarterTemplate): Promise<LoadedStarter> {
     const [ingredients, profileRes, stashRes] = await Promise.all([
-        supabase.from('ingredients').select('*').or(toOrFilter(templateFilters(template))).limit(ROW_LIMIT),
+        searchIngredients({ anyOf: templateFilters(template), limit: ROW_LIMIT }),
         supabase.from('formulation_profiles').select('*').eq('id', template.profileId).maybeSingle(),
-        supabase.from('user_stash').select('ingredient_id').eq('user_id', userId),
+        fetchStash().then(lots => ({ lots, error: null }), (error: Error) => ({ lots: [], error })),
     ]);
-    if (ingredients.error) throw ingredients.error;
     if (profileRes.error) console.warn('Could not load the product type; using default balancing rules:', profileRes.error.message);
     if (stashRes.error) console.warn('Could not read your stash; the template will not prefer what you own:', stashRes.error.message);
 
     const profile = (profileRes.data as ProfileConfig | null) ?? null;
-    const stashIds = new Set(((stashRes.data ?? []) as { ingredient_id: string }[]).map(entry => entry.ingredient_id));
+    const stashIds = new Set(stashRes.lots.map(entry => entry.ingredient_id));
 
     const formula = buildStarterFormula(
         template,
-        (ingredients.data ?? []) as (LibraryRow & { percentage?: number })[],
+        ingredients as (LibraryRow & { percentage?: number })[],
         // Without the profile the balancer still knows the product type from its id
         profile ?? { id: template.profileId, max_oil_phase_percent: null },
         stashIds,

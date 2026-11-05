@@ -6,13 +6,14 @@ import { emailMatches } from '../lib/accountData';
 
 const mocks = vi.hoisted(() => ({
     rpc: vi.fn(),
-    signOut: vi.fn(),
+    deleteAccount: vi.fn(),
     leave: vi.fn(),
     download: vi.fn(),
     user: { id: 'u1', email: 'Alice@Example.com' } as { id: string; email: string } | null,
 }));
 
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: mocks.rpc, auth: { signOut: mocks.signOut } } }));
+vi.mock('../lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }));
+vi.mock('../lib/authClient', () => ({ deleteAccount: mocks.deleteAccount }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, session: null, username: null, isLoading: false }) }));
 vi.mock('../lib/accountData', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../lib/accountData')>()),
@@ -24,7 +25,7 @@ const settle = () => act(async () => { await Promise.resolve(); await Promise.re
 
 beforeEach(() => {
     mocks.rpc.mockReset();
-    mocks.signOut.mockReset().mockResolvedValue({ error: null });
+    mocks.deleteAccount.mockReset().mockResolvedValue(undefined);
     mocks.leave.mockReset();
     mocks.download.mockReset();
     mocks.user = { id: 'u1', email: 'Alice@Example.com' };
@@ -89,21 +90,19 @@ describe('Delete my account', () => {
         expect(confirmButton()).toBeEnabled();
     });
 
-    it('deletes, clears the local session and leaves the app', async () => {
-        mocks.rpc.mockResolvedValue({ data: null, error: null });
+    it('deletes the account through the backend, forgets the sign-in and leaves the app', async () => {
         render(<AccountDataSection />);
         open();
         fireEvent.change(screen.getByLabelText(/Type your email address/), { target: { value: 'alice@example.com' } });
         fireEvent.click(confirmButton());
         await settle();
 
-        expect(mocks.rpc).toHaveBeenCalledWith('delete_my_account');
-        expect(mocks.signOut).toHaveBeenCalledWith({ scope: 'local' });
+        expect(mocks.deleteAccount).toHaveBeenCalledTimes(1);
         expect(mocks.leave).toHaveBeenCalledTimes(1);
     });
 
     it('keeps the session and says nothing was removed if the deletion fails', async () => {
-        mocks.rpc.mockResolvedValue({ data: null, error: { message: 'foreign key violation' } });
+        mocks.deleteAccount.mockRejectedValue(new Error('foreign key violation'));
         render(<AccountDataSection />);
         open();
         fireEvent.change(screen.getByLabelText(/Type your email address/), { target: { value: 'alice@example.com' } });
@@ -111,7 +110,6 @@ describe('Delete my account', () => {
         await settle();
 
         expect(screen.getByRole('alert')).toHaveTextContent('nothing was removed');
-        expect(mocks.signOut).not.toHaveBeenCalled();
         expect(mocks.leave).not.toHaveBeenCalled();
         expect(confirmButton()).toBeEnabled();
     });

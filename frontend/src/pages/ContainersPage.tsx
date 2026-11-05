@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
+import { addContainer, changeContainer, deleteContainer, fetchContainers as fetchContainerRows } from '../lib/libraryApi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import CustomModal from '../components/CustomModal';
@@ -161,14 +161,7 @@ const ContainersPage = () => {
         if (!user) return;
         try {
             setIsLoading(true);
-            const { data, error } = await supabase
-                .from('user_containers')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setContainers(data || []);
+            setContainers(await fetchContainerRows());
         } catch (error) {
             console.error('Error fetching containers:', error);
         } finally {
@@ -212,7 +205,6 @@ const ContainersPage = () => {
         if (!user) return;
 
         const payload = {
-            user_id: user.id,
             name: formData.name,
             container_type: formData.container_type,
             material: formData.material || null,
@@ -227,11 +219,9 @@ const ContainersPage = () => {
 
         try {
             if (editingId) {
-                const { error } = await supabase.from('user_containers').update(payload).eq('id', editingId);
-                if (error) throw error;
+                await changeContainer(editingId, payload);
             } else {
-                const { error } = await supabase.from('user_containers').insert([payload]);
-                if (error) throw error;
+                await addContainer(payload);
             }
             setIsModalOpen(false);
             fetchContainers();
@@ -251,8 +241,7 @@ const ContainersPage = () => {
 
     const executeDelete = async () => {
         try {
-            const { error } = await supabase.from('user_containers').delete().eq('id', confirmModal.targetId);
-            if (error) throw error;
+            await deleteContainer(confirmModal.targetId);
             setContainers(prev => prev.filter(c => c.id !== confirmModal.targetId));
             setConfirmModal(prev => ({ ...prev, isOpen: false }));
         } catch (error) {

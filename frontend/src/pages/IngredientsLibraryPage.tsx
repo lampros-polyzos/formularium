@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { createIngredient, fetchAllIngredients, fetchStarredIds, starIngredient, unstarIngredient } from '../lib/libraryApi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import StudioLayout from '../components/StudioLayout';
@@ -99,24 +99,11 @@ const IngredientsLibraryPage = () => {
         try {
             setIsLoading(true);
 
-            // Fetch ingredients (global + custom)
-            const { data: ingData, error: ingError } = await supabase
-                .from('ingredients')
-                .select('*')
-                .order('trade_name', { ascending: true });
-
-            if (ingError) throw ingError;
-
-            // Fetch starred records
-            const { data: starData, error: starError } = await supabase
-                .from('user_starred_ingredients')
-                .select('ingredient_id')
-                .eq('user_id', user.id);
-
-            if (starError) throw starError;
+            // The shared ingredients and your own, and which ones you starred
+            const [ingData, starData] = await Promise.all([fetchAllIngredients(), fetchStarredIds()]);
 
             setIngredients(ingData || []);
-            setStarredIds(new Set((starData || []).map(s => s.ingredient_id)));
+            setStarredIds(new Set(starData));
         } catch (error) {
             console.error('Error fetching ingredients library:', error);
         } finally {
@@ -144,17 +131,8 @@ const IngredientsLibraryPage = () => {
         });
 
         try {
-            if (isStarred) {
-                await supabase
-                    .from('user_starred_ingredients')
-                    .delete()
-                    .eq('user_id', user.id)
-                    .eq('ingredient_id', ingredientId);
-            } else {
-                await supabase
-                    .from('user_starred_ingredients')
-                    .insert([{ user_id: user.id, ingredient_id: ingredientId }]);
-            }
+            if (isStarred) await unstarIngredient(ingredientId);
+            else await starIngredient(ingredientId);
         } catch (error) {
             console.error('Failed to toggle favorite:', error);
             // Revert state if error occurs
@@ -169,7 +147,6 @@ const IngredientsLibraryPage = () => {
 
         try {
             const payload = {
-                user_id: user.id,
                 trade_name: formData.trade_name,
                 inci_name: formData.inci_name,
                 function: formData.function,
@@ -186,8 +163,7 @@ const IngredientsLibraryPage = () => {
                 is_fragrance: formData.is_fragrance
             };
 
-            const { error } = await supabase.from('ingredients').insert([payload]);
-            if (error) throw error;
+            await createIngredient(payload);
 
             setIsAddModalOpen(false);
             setFormData({

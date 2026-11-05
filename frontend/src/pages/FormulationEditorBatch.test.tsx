@@ -24,6 +24,19 @@ vi.mock('../contexts/SettingsContext', () => ({
 vi.mock('../components/FormulationCompanion', () => ({ default: () => <div /> }));
 vi.mock('../components/FormulationCostCalculator', () => ({ default: () => <div /> }));
 
+// The ingredient library and the stash come from the backend
+vi.mock('../lib/libraryApi', async () => {
+    return {
+        searchIngredients: () => Promise.resolve([]),
+        fetchStash: () => Promise.resolve(mocks.stash),
+        fetchContainers: () => Promise.resolve([]),
+    fetchFavorites: () => Promise.resolve([]),
+    addFavorite: () => Promise.resolve(),
+    removeFavorite: () => Promise.resolve(),
+    fetchIngredientByInci: () => Promise.resolve(null),
+    };
+});
+
 vi.mock('../lib/supabase', () => {
     const formulation = { id: 'f1', name: 'Day Cream', profile_id: 'ow_lotion', target_weight_g: 200, target_ph: 5.5, community_post_id: null };
     const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
@@ -31,7 +44,6 @@ vi.mock('../lib/supabase', () => {
         if (table === 'formulations') return formulation;
         if (table === 'formulation_phases') return mocks.phases;
         if (table === 'formulation_profiles') return profile;
-        if (table === 'user_stash') return mocks.stash;
         return [];
     };
     const builder = (table: string): Record<string, unknown> => {

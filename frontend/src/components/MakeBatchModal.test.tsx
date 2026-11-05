@@ -21,18 +21,13 @@ vi.mock('../lib/batches', () => ({
     createBatch: mocks.createBatch,
     lotNumbersLike: vi.fn().mockResolvedValue([`${TODAY_CODE}-1`]),
 }));
-vi.mock('../lib/supabase', () => ({
-    supabase: {
-        from: (table: string) => ({
-            select: () => ({
-                eq: () => {
-                    if (table === 'user_containers') return { order: () => Promise.resolve({ data: mocks.containers, error: null }) };
-                    mocks.stashReads += 1;
-                    return Promise.resolve(mocks.lotError ? { data: null, error: mocks.lotError } : { data: mocks.lots, error: null });
-                },
-            }),
-        }),
+// The stash and the containers come from the backend
+vi.mock('../lib/libraryApi', () => ({
+    fetchStash: () => {
+        mocks.stashReads += 1;
+        return mocks.lotError ? Promise.reject(mocks.lotError) : Promise.resolve(mocks.lots);
     },
+    fetchContainers: () => Promise.resolve(mocks.containers),
 }));
 
 const rows = [

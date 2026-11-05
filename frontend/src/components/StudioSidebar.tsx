@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { BarChart3, BookOpen, Calculator, ChefHat, ClipboardCheck, FlaskConical, Settings, ShoppingCart, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import DueBadge from './DueBadge';
 import { SettingsModal } from './SettingsModal';
@@ -51,11 +50,11 @@ interface StudioSidebarProps {
 /** The left-hand navigation shared by every page in the Studio, so they all stay in step. */
 export default function StudioSidebar({ active, isOpen = false, onClose }: StudioSidebarProps) {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, signOut } = useAuth();
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         navigate('/');
     };
 

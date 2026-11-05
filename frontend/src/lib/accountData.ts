@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { deleteAccount } from './authClient';
 
 /** Where to send people after their account is gone. The landing page shows a short confirmation for it. */
 export const ACCOUNT_DELETED_URL = '/?account=deleted';
@@ -22,12 +23,10 @@ export function downloadTextFile(filename: string, text: string, type = 'applica
     URL.revokeObjectURL(url);
 }
 
-/** Permanently deletes the signed-in account and its data, then clears the local session. */
+/** Permanently deletes the signed-in account and its data, then forgets the sign-in on this device. */
 export async function deleteMyAccount(): Promise<void> {
-    const { error } = await supabase.rpc('delete_my_account');
-    if (error) throw new Error(error.message);
-    // The login no longer exists, so only clear this browser's session instead of asking the server to
-    await supabase.auth.signOut({ scope: 'local' });
+    // The Spring backend deletes the account; the database removes what belongs to it
+    await deleteAccount();
 }
 
 /** Whether what was typed matches the account's email, ignoring case and stray spaces. */

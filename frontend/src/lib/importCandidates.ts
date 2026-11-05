@@ -1,12 +1,11 @@
-import { supabase } from './supabase';
-import { toOrFilter, type CatalogFilter } from './catalogFilter';
+import type { CatalogFilter } from './catalogFilter';
+import { fetchStash, searchIngredients } from './libraryApi';
 import { lineNames, lineSearchTerms, roleSearch, type RoleSearch } from './lineMatching';
 import type { ParsedLine } from './recipeParser';
 import type { DatabaseIngredient } from '../types/formulation';
 
 export type LibraryRow = DatabaseIngredient & { id: string };
 
-type Client = Pick<typeof supabase, 'from'>;
 
 /** Rows fetched per pasted line. Plenty for one ingredient's name, and a hard stop on a very common word. */
 const ROWS_PER_LINE = 60;
@@ -38,42 +37,34 @@ export function roleFilters(search: RoleSearch): CatalogFilter[] {
 }
 
 /** Rows of a kind: the first few by name, plus every one the user owns (so those are never cut off). */
-async function fetchRole(search: RoleSearch, ownedIds: string[], client: Client): Promise<LibraryRow[]> {
-    const filter = toOrFilter(roleFilters(search));
-    const requests = [
-        client.from('ingredients').select('*').or(filter).order('trade_name').limit(ROWS_PER_ROLE),
-        ...(ownedIds.length ? [client.from('ingredients').select('*').or(filter).in('id', ownedIds.slice(0, 100))] : []),
-    ];
-    const results = await Promise.all(requests);
-    const rows: LibraryRow[] = [];
-    for (const { data, error } of results) {
-        if (error) throw error;
-        rows.push(...((data ?? []) as LibraryRow[]));
-    }
-    return rows;
+async function fetchRole(search: RoleSearch, ownedIds: string[]): Promise<LibraryRow[]> {
+    const filters = roleFilters(search);
+    const results = await Promise.all([
+        searchIngredients({ anyOf: filters, limit: ROWS_PER_ROLE, orderByName: true }),
+        ...(ownedIds.length ? [searchIngredients({ anyOf: filters, ids: ownedIds.slice(0, 100), limit: 100 })] : []),
+    ]);
+    return results.flat();
 }
 
 /**
  * The library rows that could be any of the pasted ingredients, and which of the user's ingredients they own. Only rows
  * that could match are fetched, never the whole library.
  */
-export async function loadImportCandidates(lines: ParsedLine[], userId: string, client: Client = supabase): Promise<{ rows: LibraryRow[]; stashIds: Set<string> }> {
+export async function loadImportCandidates(lines: ParsedLine[]): Promise<{ rows: LibraryRow[]; stashIds: Set<string> }> {
     const wanted = lines.slice(0, MAX_IMPORT_LINES);
     const [lookups, stash] = await Promise.all([
         Promise.all(wanted.map(async line => {
             const filters = importFilters(line);
             if (!filters.length) return [] as LibraryRow[];
-            const { data, error } = await client.from('ingredients').select('*').or(toOrFilter(filters)).order('trade_name').limit(ROWS_PER_LINE);
-            if (error) throw error;
-            return (data ?? []) as LibraryRow[];
+            return searchIngredients({ anyOf: filters, limit: ROWS_PER_LINE, orderByName: true }) as Promise<LibraryRow[]>;
         })),
-        client.from('user_stash').select('ingredient_id').eq('user_id', userId),
+        // Not being able to read the stash only means owned ingredients are not preferred
+        fetchStash().catch(() => []),
     ]);
 
     const byId = new Map<string, LibraryRow>();
     for (const rows of lookups) for (const row of rows) byId.set(row.id, row);
-    // Not being able to read the stash only means owned ingredients are not preferred
-    const stashIds = new Set(((stash.data ?? []) as { ingredient_id: string }[]).map(s => s.ingredient_id));
+    const stashIds = new Set(stash.map(s => s.ingredient_id));
 
     // Lines that name a kind of ingredient get that kind's ingredients to choose from (one lookup per distinct kind)
     const kinds = new Map<string, RoleSearch>();
@@ -81,7 +72,7 @@ export async function loadImportCandidates(lines: ParsedLine[], userId: string, 
         const search = roleSearch(line);
         if (search) kinds.set(search.functions.join('|') + '#' + search.names.join('|'), search);
     }
-    const roleRows = await Promise.all([...kinds.values()].map(search => fetchRole(search, [...stashIds], client)));
+    const roleRows = await Promise.all([...kinds.values()].map(search => fetchRole(search, [...stashIds])));
     for (const rows of roleRows) for (const row of rows) byId.set(row.id, row);
     return { rows: [...byId.values()], stashIds };
 }

@@ -28,7 +28,7 @@ export function usePantry(userId: string | undefined) {
         let cancelled = false;
         (async () => {
             try {
-                const lots = await loadStash(userId);
+                const lots = await loadStash();
                 const stashIngredients = await loadIngredients(lots.map(l => l.ingredient_id));
                 const [own, community] = await Promise.all([
                     loadOwnRecipes(userId),

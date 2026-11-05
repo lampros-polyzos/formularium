@@ -3,7 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
 import { supabase } from '../lib/supabase';
-import { apiUrl } from '../lib/api';
+import { authFetch } from '../lib/authClient';
+import { fetchIngredientByInci, fetchStash, searchIngredients } from '../lib/libraryApi';
 import { saveFormulation } from '../lib/saveFormulation';
 import { settleQS } from '../lib/qs';
 import { applyImmediateFix, isFixApplicable } from '../lib/fixes';
@@ -252,7 +253,7 @@ const FormulationEditor = () => {
         if (!template || !user || appliedStarter.current === template.id) return;
         appliedStarter.current = template.id;
 
-        loadStarterFormula(template, user.id)
+        loadStarterFormula(template)
             .then(({ formula, profile }) => {
                 setProfileId(template.profileId);
                 setActiveProfile(profile);
@@ -303,10 +304,14 @@ const FormulationEditor = () => {
         if (!user) return;
 
         const fetchSourcingData = async () => {
-            const stashRes = await supabase.from('user_stash').select('ingredient_id, amount_left_g').eq('user_id', user.id);
-            if (stashRes.error) console.error("Error loading stash:", stashRes.error);
-            else setStashEntries(stashRes.data ?? []);
-            setIsStashLoaded(!stashRes.error);
+            try {
+                const lots = await fetchStash();
+                setStashEntries(lots.map(l => ({ ingredient_id: l.ingredient_id, amount_left_g: l.amount_left_g })));
+                setIsStashLoaded(true);
+            } catch (error) {
+                console.error("Error loading stash:", error);
+                setIsStashLoaded(false);
+            }
         };
 
         fetchSourcingData();
@@ -325,19 +330,21 @@ const FormulationEditor = () => {
             setIsSearching(true);
             const cleanTerm = searchTerm.trim();
 
-            const { data, error } = await supabase
-                .from('ingredients')
-                .select('*')
-                .or(`trade_name.ilike.%${cleanTerm}%,inci_name.ilike.%${cleanTerm}%,function.ilike.%${cleanTerm}%`)
-                .limit(10);
-
-            if (error) {
-                console.error("Ingredients search query failed:", error);
-            } else if (data) {
+            try {
+                const data = await searchIngredients({
+                    anyOf: [
+                        { column: 'trade_name', op: 'ilike', value: `%${cleanTerm}%` },
+                        { column: 'inci_name', op: 'ilike', value: `%${cleanTerm}%` },
+                        { column: 'function', op: 'ilike', value: `%${cleanTerm}%` },
+                    ],
+                    limit: 10,
+                });
                 const uniqueItems = Array.from(
                     new Map(data.map((item) => [item.inci_name.toLowerCase(), item])).values()
                 );
                 setSearchResults(uniqueItems);
+            } catch (error) {
+                console.error("Ingredients search query failed:", error);
             }
             setIsSearching(false);
         };
@@ -482,11 +489,7 @@ const FormulationEditor = () => {
             }
 
             if (profileData.requires_water) {
-                const { data: aquaData } = await supabase
-                    .from('ingredients')
-                    .select('*')
-                    .eq('inci_name', 'Aqua')
-                    .single();
+                const aquaData = await fetchIngredientByInci('Aqua').catch(() => null);
 
                 if (aquaData) {
                     setFormulaIngredients(prev => {
@@ -554,7 +557,7 @@ const FormulationEditor = () => {
             };
 
             try {
-                const response = await fetch(apiUrl('/api/v1/validate'), {
+                const response = await authFetch('/api/v1/validate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

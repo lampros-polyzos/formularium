@@ -21,6 +21,21 @@ vi.mock('../contexts/SettingsContext', () => ({
 }));
 vi.mock('../components/FormulationCostCalculator', () => ({ default: () => <div /> }));
 
+// The ingredient library and the stash come from the backend
+vi.mock('../lib/libraryApi', () => ({
+    searchIngredients: (search: { anyOf?: { value: string }[] }) => {
+        // The editor looks ingredients up for substitutes too; only count the template's own request
+        if (search.anyOf?.some(f => /olivem/i.test(f.value))) mocks.libraryQueries += 1;
+        return mocks.libraryError ? Promise.reject(new Error('down')) : Promise.resolve(mocks.library);
+    },
+    fetchStash: () => Promise.resolve(mocks.stash),
+    fetchContainers: () => Promise.resolve([]),
+    fetchIngredientByInci: () => Promise.resolve(null),
+    fetchFavorites: () => Promise.resolve([]),
+    addFavorite: () => Promise.resolve(),
+    removeFavorite: () => Promise.resolve(),
+}));
+
 vi.mock('../lib/supabase', async () => {
     const { PROFILES: profiles } = await import('../lib/starterLibraryFixture');
     const builder = (table: string) => {
@@ -28,16 +43,11 @@ vi.mock('../lib/supabase', async () => {
         const state = { orFilter: '' };
         const b: Record<string, unknown> = {};
         const result = (): { data: unknown; error: unknown } => {
-            if (table === 'ingredients') {
-                // The editor looks ingredients up for substitutes too; only count the template's own request
-                return mocks.libraryError ? { data: null, error: { message: 'down' } } : { data: mocks.library, error: null };
-            }
             if (table === 'formulation_profiles') return { data: profiles[String(filters.id)] ?? null, error: null };
-            if (table === 'user_stash') return { data: mocks.stash, error: null };
             return { data: [], error: null };
         };
         for (const m of ['select', 'order', 'limit', 'match', 'in', 'update', 'insert']) b[m] = () => b;
-        b.or = (f: string) => { state.orFilter = f; if (table === 'ingredients' && /olivem/i.test(f)) mocks.libraryQueries += 1; return b; };
+        b.or = (f: string) => { state.orFilter = f; return b; };
         b.eq = (col: string, val: unknown) => { filters[col] = val; return b; };
         b.single = () => Promise.resolve(result());
         b.maybeSingle = () => Promise.resolve(result());

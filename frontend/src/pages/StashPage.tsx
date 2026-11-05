@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { addStashLot, changeStashLot, deleteStashLot, fetchStash as fetchStashLots, searchIngredients } from '../lib/libraryApi';
 import { useAuth } from '../contexts/AuthContext';
 import CustomModal from '../components/CustomModal';
 import { useSettings } from '../contexts/SettingsContext';
@@ -83,14 +83,7 @@ const StashPage = () => {
         if (!user) return;
         try {
             setIsLoading(true);
-            const { data, error } = await supabase
-                .from('user_stash')
-                .select('*, ingredients(id, inci_name, trade_name, function)')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setStashItems((data as any) || []);
+            setStashItems((await fetchStashLots()) as never);
         } catch (error) {
             console.error('Error fetching stash:', error);
         } finally {
@@ -112,14 +105,13 @@ const StashPage = () => {
         const searchGlobalIngredients = async () => {
             setIsSearching(true);
             const cleanTerm = searchTerm.trim();
-            const { data, error } = await supabase
-                .from('ingredients')
-                .select('id, inci_name, trade_name, function')
-                .or(`trade_name.ilike.%${cleanTerm}%,inci_name.ilike.%${cleanTerm}%`)
-                .limit(10);
-
-            if (!error && data) {
-                setSearchResults(data);
+            try {
+                setSearchResults(await searchIngredients({
+                    anyOf: [{ column: 'trade_name', op: 'ilike', value: `%${cleanTerm}%` }, { column: 'inci_name', op: 'ilike', value: `%${cleanTerm}%` }],
+                    limit: 10,
+                }));
+            } catch {
+                // keep the results already shown
             }
             setIsSearching(false);
         };
@@ -172,7 +164,6 @@ const StashPage = () => {
             : 0;
 
         const payload = {
-            user_id: user.id,
             ingredient_id: selectedIngredient.id,
             supplier_name: formData.supplier_name || null,
             batch_lot_number: formData.batch_lot_number || null,
@@ -184,16 +175,9 @@ const StashPage = () => {
 
         try {
             if (editingStashId) {
-                const { error } = await supabase
-                    .from('user_stash')
-                    .update(payload)
-                    .eq('id', editingStashId);
-                if (error) throw error;
+                await changeStashLot(editingStashId, payload);
             } else {
-                const { error } = await supabase
-                    .from('user_stash')
-                    .insert([payload]);
-                if (error) throw error;
+                await addStashLot(payload);
             }
             setIsModalOpen(false);
             fetchStash();
@@ -213,12 +197,7 @@ const StashPage = () => {
 
     const executeDelete = async () => {
         try {
-            const { error } = await supabase
-                .from('user_stash')
-                .delete()
-                .eq('id', confirmModal.targetId);
-
-            if (error) throw error;
+            await deleteStashLot(confirmModal.targetId);
             setStashItems(prev => prev.filter(item => item.id !== confirmModal.targetId));
             setConfirmModal(prev => ({ ...prev, isOpen: false }));
         } catch (error) {

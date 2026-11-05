@@ -4,36 +4,23 @@ import { useCatalogCandidates } from './useCatalogCandidates';
 import { CANDIDATE_LIMIT } from '../lib/catalogQuery';
 import { fnHas, inci, type CatalogFilter } from '../lib/catalogFilter';
 
-interface Call { or?: string; limit?: number; order?: string; inIds?: string[] }
+interface Call { anyOf?: CatalogFilter[]; ids?: string[]; limit?: number; orderByName?: boolean }
 
 const mocks = vi.hoisted(() => ({
-    calls: [] as { or?: string; limit?: number; order?: string; inIds?: string[]; table: string; select?: string }[],
+    calls: [] as { anyOf?: unknown[]; ids?: string[]; limit?: number; orderByName?: boolean }[],
     rows: [] as { id: string; trade_name: string }[],
     failNext: false,
     gate: null as null | Promise<void>,
 }));
 
-vi.mock('../lib/supabase', () => ({
-    supabase: {
-        from: (table: string) => {
-            const call: Call & { table: string; select?: string } = { table };
-            mocks.calls.push(call);
-            const b: Record<string, unknown> = {};
-            b.select = (cols: string) => { call.select = cols; return b; };
-            b.or = (f: string) => { call.or = f; return b; };
-            b.order = (col: string) => { call.order = col; return b; };
-            b.limit = (n: number) => { call.limit = n; return b; };
-            b.in = (_col: string, ids: string[]) => { call.inIds = ids; return b; };
-            b.then = (resolve: (v: unknown) => void) => {
-                const done = () => {
-                    if (mocks.failNext) { mocks.failNext = false; return resolve({ data: null, error: { message: 'down' } }); }
-                    const rows = call.inIds ? mocks.rows.filter(r => call.inIds!.includes(r.id)) : mocks.rows;
-                    resolve({ data: rows.slice(0, call.limit ?? rows.length), error: null });
-                };
-                if (mocks.gate) void mocks.gate.then(done); else done();
-            };
-            return b;
-        },
+// The backend: answers a search with the rows that were set up, narrowed by ids and capped by the limit like the real one
+vi.mock('../lib/libraryApi', () => ({
+    searchIngredients: async (call: Call) => {
+        mocks.calls.push(call);
+        if (mocks.gate) await mocks.gate;
+        if (mocks.failNext) { mocks.failNext = false; throw new Error('down'); }
+        const rows = call.ids ? mocks.rows.filter(r => call.ids!.includes(r.id)) : mocks.rows;
+        return rows.slice(0, call.limit ?? rows.length);
     },
 }));
 
@@ -64,7 +51,7 @@ describe('useCatalogCandidates', () => {
         const { result } = renderHook(() => useCatalogCandidates([emulsifier], []));
         await settle();
         expect(mocks.calls).toHaveLength(1);
-        expect(mocks.calls[0]).toMatchObject({ table: 'ingredients', or: 'function.ilike."%emulsifier%"', order: 'trade_name', limit: CANDIDATE_LIMIT });
+        expect(mocks.calls[0]).toMatchObject({ anyOf: emulsifier, orderByName: true, limit: CANDIDATE_LIMIT });
         expect(result.current.candidates.map(c => c.id)).toEqual(['a', 'b', 'c']);
     });
 
@@ -97,7 +84,7 @@ describe('useCatalogCandidates', () => {
         rerender({ groups: [emulsifier, oils] });
         await settle();
         expect(mocks.calls).toHaveLength(2);
-        expect(mocks.calls[1].or).toBe('function.ilike."%oil%",inci_name.ilike."argania%"');
+        expect(mocks.calls[1].anyOf).toEqual(oils);
         expect(result.current.candidates.map(c => c.id)).toEqual(['a', 'b', 'c', 'd']); // c is not listed twice
     });
 
@@ -106,10 +93,10 @@ describe('useCatalogCandidates', () => {
         mocks.rows = [...ids.map(row), row('z')];
         const { result } = renderHook(() => useCatalogCandidates([emulsifier], ids));
         await settle();
-        const stashCalls = mocks.calls.filter(c => c.inIds);
-        expect(stashCalls.map(c => c.inIds!.length)).toEqual([100, 100, 50]);
-        expect(stashCalls.every(c => c.or === 'function.ilike."%emulsifier%"')).toBe(true);
-        expect(mocks.calls.filter(c => !c.inIds)).toHaveLength(1);
+        const stashCalls = mocks.calls.filter(c => c.ids);
+        expect(stashCalls.map(c => c.ids!.length).sort((a, b) => b - a)).toEqual([100, 100, 50]);
+        expect(stashCalls.every(c => c.anyOf === undefined || JSON.stringify(c.anyOf) === JSON.stringify(emulsifier))).toBe(true);
+        expect(mocks.calls.filter(c => !c.ids)).toHaveLength(1);
         expect(result.current.candidates.map(c => c.id).sort()).toEqual([...ids, 'z'].sort());
     });
 
@@ -118,7 +105,7 @@ describe('useCatalogCandidates', () => {
         await settle();
         rerender({ stash: ['a', 'b'] });
         await settle();
-        expect(mocks.calls.filter(c => !c.inIds)).toHaveLength(2);
+        expect(mocks.calls.filter(c => !c.ids)).toHaveLength(2);
     });
 
     it('gives up quietly on a failed request, finishes loading, and tries again next time', async () => {

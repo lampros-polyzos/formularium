@@ -1,8 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCommunityRecipes, loadIngredients, loadOwnRecipes, loadStash } from './pantryData';
 
 // Every test passes its own client; the real one is never used
 vi.mock('./supabase', () => ({ supabase: {} }));
+
+// The stash and the ingredient rows come from the backend
+const api = vi.hoisted(() => ({ fetchStash: vi.fn(), fetchIngredientsByIds: vi.fn() }));
+vi.mock('./libraryApi', () => api);
+beforeEach(() => {
+    api.fetchStash.mockReset();
+    api.fetchIngredientsByIds.mockReset().mockResolvedValue([]);
+});
 
 type Rows = Record<string, unknown[] | { error: string }>;
 
@@ -29,31 +37,30 @@ function fakeClient(tables: Rows) {
 const ing = (id: string, extra: object = {}) => ({ id, inci_name: id.toUpperCase(), trade_name: id, function: 'Emollient', min_usage_pct: null, max_usage_pct: null, ...extra });
 
 describe('loadStash', () => {
-    it('reads only your lots', async () => {
-        const { client, calls } = fakeClient({ user_stash: [{ id: 'l1', ingredient_id: 'a' }] });
-        expect(await loadStash('u1', client)).toHaveLength(1);
-        expect(calls[0].filters).toContainEqual(['eq:user_id', 'u1']);
+    it('gives the lots the batch planner reads, and nothing else about them', async () => {
+        api.fetchStash.mockResolvedValue([{
+            id: 'l1', user_id: 'u1', ingredient_id: 'a', supplier_name: 'S', batch_lot_number: 'B1', amount_left_g: 50, price_per_g: 0.1, expiration_date: '2027-01-01',
+            notes: 'private', created_at: 't', ingredients: { id: 'a' },
+        }]);
+        expect(await loadStash()).toEqual([{ id: 'l1', ingredient_id: 'a', supplier_name: 'S', batch_lot_number: 'B1', amount_left_g: 50, price_per_g: 0.1, expiration_date: '2027-01-01' }]);
     });
 
     it('says what could not be loaded', async () => {
-        const { client } = fakeClient({ user_stash: { error: 'boom' } });
-        await expect(loadStash('u1', client)).rejects.toThrow('Could not load your stash: boom');
+        api.fetchStash.mockRejectedValue(new Error('boom'));
+        await expect(loadStash()).rejects.toThrow('Could not load your stash: boom');
     });
 });
 
 describe('loadIngredients', () => {
-    it('asks in short batches, once per distinct id', async () => {
-        const ids = Array.from({ length: 250 }, (_, i) => `i${i}`);
-        const { client, calls } = fakeClient({ ingredients: [ing('x')] });
-        await loadIngredients([...ids, ...ids, ''], client);
-        const sizes = calls.map(c => (c.filters[0][1] as string[]).length);
-        expect(sizes).toEqual([100, 100, 50]);
+    it('asks for the ingredients by id', async () => {
+        api.fetchIngredientsByIds.mockResolvedValue([ing('x')]);
+        expect(await loadIngredients(['x', 'y'])).toEqual([ing('x')]);
+        expect(api.fetchIngredientsByIds).toHaveBeenCalledWith(['x', 'y']);
     });
 
-    it('does not ask at all for nothing', async () => {
-        const { client, calls } = fakeClient({});
-        expect(await loadIngredients([], client)).toEqual([]);
-        expect(calls).toHaveLength(0);
+    it('says what could not be loaded', async () => {
+        api.fetchIngredientsByIds.mockRejectedValue(new Error('down'));
+        await expect(loadIngredients(['x'])).rejects.toThrow('Could not load ingredients: down');
     });
 });
 
@@ -90,8 +97,8 @@ describe('loadCommunityRecipes', () => {
                 { post_id: 'p1', version: 2, formulation_data: JSON.stringify([{ id: 'a', name: 'A', percentage: '60', phase: 'B' }, { id: 'zero', percentage: 0 }]) },
                 { post_id: 'p2', version: 1, formulation_data: [{ id: 'a', percentage: 100 }] },
             ],
-            ingredients: [ing('a')],
         });
+        api.fetchIngredientsByIds.mockResolvedValue([ing('a')]);
         const { recipes } = await loadCommunityRecipes('u1', [], client);
         expect(recipes.map(r => r.id)).toEqual(['p1']);
         expect(recipes[0]).toMatchObject({ source: 'community', name: 'Theirs', author: 'Ana' });
@@ -99,14 +106,13 @@ describe('loadCommunityRecipes', () => {
     });
 
     it('does not fetch ingredients you already have, and falls back to the shared name when one cannot be found', async () => {
-        const { client, calls } = fakeClient({
+        const { client } = fakeClient({
             community_posts: [posts[0]],
             post_snapshots: [{ post_id: 'p1', version: 1, formulation_data: [{ id: 'mine', percentage: 10 }, { id: 'gone', name: 'Mystery oil', percentage: 5, phase: 'Z' }] }],
-            ingredients: [],
         });
         const { recipes } = await loadCommunityRecipes('u1', [ing('mine') as never], client);
-        const asked = calls.filter(c => c.table === 'ingredients').flatMap(c => c.filters[0][1] as string[]);
-        expect(asked).toEqual(['gone']);
+        expect(api.fetchIngredientsByIds).toHaveBeenCalledTimes(1);
+        expect(api.fetchIngredientsByIds).toHaveBeenCalledWith(['gone']);
         expect(recipes[0].lines[0].ingredient.id).toBe('mine');
         expect(recipes[0].lines[1]).toMatchObject({ phase: 'A', ingredient: { trade_name: 'Mystery oil' } });
     });

@@ -14,11 +14,31 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/saveFormulation', () => ({ saveFormulation: vi.fn().mockResolvedValue('f1') }));
+vi.mock('../lib/authClient', async () => {
+    const { apiUrl } = await import('../lib/api');
+    return { authFetch: (path: string, init?: RequestInit) => globalThis.fetch(apiUrl(path), init) };
+});
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => mocks.auth }));
 vi.mock('../contexts/SettingsContext', () => ({
     useSettings: () => ({ currency: '$', dateFormat: 'en-US', warningDays: 30, setCurrency: vi.fn(), setDateFormat: vi.fn(), setWarningDays: vi.fn(), formatDate: (d: string) => d }),
 }));
 vi.mock('../components/FormulationCostCalculator', () => ({ default: () => <div /> }));
+
+// The ingredient library and the stash come from the backend
+vi.mock('../lib/libraryApi', async () => {
+    const { toOrFilter } = await import('../lib/catalogFilter');
+    return {
+        searchIngredients: (search: { anyOf?: Parameters<typeof toOrFilter>[0]; ids?: string[] }) => {
+            mocks.ingredientQueries.push({ or: search.anyOf ? toOrFilter(search.anyOf) : undefined, narrowed: !!(search.anyOf?.length || search.ids?.length) });
+            return Promise.resolve(mocks.catalog);
+        },
+        fetchStash: () => Promise.resolve([]),
+    fetchFavorites: () => Promise.resolve([]),
+    addFavorite: () => Promise.resolve(),
+    removeFavorite: () => Promise.resolve(),
+    fetchIngredientByInci: () => Promise.resolve(null),
+    };
+});
 
 vi.mock('../lib/supabase', () => {
     const formulation = { id: 'f1', name: 'Day Cream', profile_id: 'ow_lotion', target_weight_g: 100, target_ph: 4.5, community_post_id: null };
@@ -27,20 +47,11 @@ vi.mock('../lib/supabase', () => {
         if (table === 'formulations') return formulation;
         if (table === 'formulation_phases') return mocks.phases;
         if (table === 'formulation_profiles') return profile;
-        if (table === 'ingredients') return mocks.catalog;
         return [];
     };
     const builder = (table: string): Record<string, unknown> => {
         const b: Record<string, unknown> = {};
-        const query: { or?: string; narrowed: boolean } = { narrowed: false };
-        if (table === 'ingredients') mocks.ingredientQueries.push(query);
-        for (const m of ['select', 'eq', 'or', 'order', 'limit', 'match', 'in']) {
-            b[m] = (...args: unknown[]) => {
-                if (m === 'or') query.or = String(args[0]);
-                if (m === 'or' || m === 'eq' || m === 'in' || m === 'match') query.narrowed = true;
-                return b;
-            };
-        }
+        for (const m of ['select', 'eq', 'or', 'order', 'limit', 'match', 'in']) b[m] = () => b;
         b.single = () => Promise.resolve({ data: rows(table), error: null });
         b.then = (resolve: (v: unknown) => void) => {
             const data = rows(table);

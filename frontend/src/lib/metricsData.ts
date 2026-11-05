@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { listBatches } from './batches';
+import { fetchFavorites } from './libraryApi';
 import { loadIngredients, loadStash } from './pantryData';
 import type { MetricBatch, MetricFavorite, MetricFormula, MetricLine, MetricsInput } from './metrics';
 
@@ -52,11 +53,12 @@ export async function loadMetricLines(client: Client = supabase): Promise<Metric
     return lines;
 }
 
-export async function loadFavorites(userId: string, client: Client = supabase): Promise<MetricFavorite[]> {
-    const { data, error } = await client.from('favorite_ingredients').select('ingredients(id, trade_name, inci_name)').eq('user_id', userId);
-    if (error) fail('your favourite ingredients', error);
-    return ((data ?? []) as unknown as { ingredients: { id: string; trade_name: string | null; inci_name: string | null } | null }[])
-        .flatMap(r => (r.ingredients ? [{ id: r.ingredients.id, name: r.ingredients.trade_name || r.ingredients.inci_name || 'Unknown ingredient' }] : []));
+export async function loadFavorites(): Promise<MetricFavorite[]> {
+    try {
+        return (await fetchFavorites()).map(i => ({ id: i.id, name: i.trade_name || i.inci_name || 'Unknown ingredient' }));
+    } catch (e) {
+        return fail('your favourite ingredients', e as Error);
+    }
 }
 
 export async function loadFormulaSummaries(userId: string, client: Client = supabase): Promise<MetricFormula[]> {
@@ -89,12 +91,12 @@ export async function loadMetricsInput(userId: string, client: Client = supabase
     const [batches, lines, favorites, formulas, sharedCount, lots] = await Promise.all([
         loadMetricBatches(client),
         loadMetricLines(client),
-        loadFavorites(userId, client),
+        loadFavorites(),
         loadFormulaSummaries(userId, client),
         countSharedRecipes(userId, client),
-        loadStash(userId, client),
+        loadStash(),
     ]);
-    const stashRows = await loadIngredients(lots.map(l => l.ingredient_id), client);
+    const stashRows = await loadIngredients(lots.map(l => l.ingredient_id));
     return {
         batches, lines, favorites, formulas, sharedCount, lots,
         stashNames: new Map(stashRows.map(i => [i.id, i.trade_name || i.inci_name])),

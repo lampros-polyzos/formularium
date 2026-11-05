@@ -3,6 +3,10 @@ import { countSharedRecipes, loadFavorites, loadFormulaSummaries, loadMetricBatc
 
 vi.mock('./supabase', () => ({ supabase: {} }));
 
+// Favourites, the stash and the ingredient rows come from the backend
+const api = vi.hoisted(() => ({ fetchFavorites: vi.fn(), fetchStash: vi.fn(), fetchIngredientsByIds: vi.fn() }));
+vi.mock('./libraryApi', () => api);
+
 /** A stand-in for the database. A table is either rows, a function giving rows for a requested range, or an error. */
 type Table = unknown[] | ((range: [number, number] | null) => unknown[]) | { error: string } | { count: number };
 function fakeClient(tables: Record<string, Table>) {
@@ -81,16 +85,18 @@ describe('loadMetricLines', () => {
 });
 
 describe('the rest', () => {
-    it('reads favourites, naming them by trade name, then INCI, skipping gaps', async () => {
-        const { client, calls } = fakeClient({
-            favorite_ingredients: [
-                { ingredients: { id: 'a', trade_name: 'Shea Butter', inci_name: 'Butyrospermum' } },
-                { ingredients: { id: 'b', trade_name: '', inci_name: 'Glycerin' } },
-                { ingredients: null },
-            ],
-        });
-        expect(await loadFavorites('u1', client)).toEqual([{ id: 'a', name: 'Shea Butter' }, { id: 'b', name: 'Glycerin' }]);
-        expect(calls[0].filters).toContainEqual(['eq:user_id', 'u1']);
+    it('reads favourites, naming them by trade name, then INCI, then a placeholder', async () => {
+        api.fetchFavorites.mockResolvedValue([
+            { id: 'a', trade_name: 'Shea Butter', inci_name: 'Butyrospermum' },
+            { id: 'b', trade_name: '', inci_name: 'Glycerin' },
+            { id: 'c', trade_name: '', inci_name: '' },
+        ]);
+        expect(await loadFavorites()).toEqual([{ id: 'a', name: 'Shea Butter' }, { id: 'b', name: 'Glycerin' }, { id: 'c', name: 'Unknown ingredient' }]);
+    });
+
+    it('says what could not be loaded', async () => {
+        api.fetchFavorites.mockRejectedValue(new Error('down'));
+        await expect(loadFavorites()).rejects.toThrow('Could not load your favourite ingredients: down');
     });
 
     it('counts the ingredients of each formula across its phases', async () => {
@@ -116,12 +122,12 @@ describe('loadMetricsInput', () => {
         const { client } = fakeClient({
             batches: [{ id: 'b1', name: 'Lotion', batch_size_g: 100, made_on: '2026-11-01', status: 'active', batch_checks: [] }],
             batch_ingredients: [{ batch_id: 'b1', ingredient_id: 'i1', name: 'Shea', actual_g: 10, cost: null }],
-            favorite_ingredients: [],
             formulations: [],
             community_posts: { count: 2 },
-            user_stash: [{ id: 'l1', ingredient_id: 'i1', amount_left_g: 50 }],
-            ingredients: [{ id: 'i1', trade_name: 'Shea Butter', inci_name: 'Butyrospermum' }],
         });
+        api.fetchFavorites.mockResolvedValue([]);
+        api.fetchStash.mockResolvedValue([{ id: 'l1', ingredient_id: 'i1', amount_left_g: 50 }]);
+        api.fetchIngredientsByIds.mockResolvedValue([{ id: 'i1', trade_name: 'Shea Butter', inci_name: 'Butyrospermum' }]);
         const input = await loadMetricsInput('u1', client);
         expect(input.batches).toHaveLength(1);
         expect(input.lines).toHaveLength(1);
@@ -131,7 +137,9 @@ describe('loadMetricsInput', () => {
     });
 
     it('fails as a whole if any part fails', async () => {
-        const { client } = fakeClient({ batches: [], batch_ingredients: [], favorite_ingredients: { error: 'nope' }, formulations: [], community_posts: { count: 0 }, user_stash: [] });
+        const { client } = fakeClient({ batches: [], batch_ingredients: [], formulations: [], community_posts: { count: 0 } });
+        api.fetchFavorites.mockRejectedValue(new Error('nope'));
+        api.fetchStash.mockResolvedValue([]);
         await expect(loadMetricsInput('u1', client)).rejects.toThrow('Could not load your favourite ingredients');
     });
 });

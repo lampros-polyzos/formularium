@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { fetchContainers, fetchStash } from '../lib/libraryApi';
 
 export interface FormulaIngredientInput {
     ingredient_id: string;
@@ -61,23 +61,7 @@ export default function FormulationCostCalculator({
         const fetchInventoryData = async () => {
             setIsLoading(true);
             try {
-                const { data: stashData, error: stashError } = await supabase
-                    .from('user_stash')
-                    .select(`
-                        id, 
-                        ingredient_id,
-                        price_per_g, 
-                        amount_left_g,
-                        ingredients (trade_name, inci_name)
-                    `);
-
-                if (stashError) throw stashError;
-
-                const { data: containerData, error: containerError } = await supabase
-                    .from('user_containers')
-                    .select('id, name, price_per_unit, quantity');
-
-                if (containerError) throw containerError;
+                const [stashData, containerData] = await Promise.all([fetchStash(), fetchContainers()]);
 
                 const formattedStash = (stashData || []).map((item: any) => ({
                     id: item.id,

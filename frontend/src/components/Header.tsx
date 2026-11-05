@@ -3,7 +3,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
 import BatchesNavLink from './BatchesNavLink';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
 import { SettingsModal } from './SettingsModal';
 import { contactLink } from '../lib/contact';
 
@@ -18,7 +17,7 @@ interface HeaderProps {
 
 export default function Header({ title, backPath, backLabel, children, leading }: HeaderProps) {
     const navigate = useNavigate();
-    const { user, username } = useAuth();
+    const { user, username, signOut } = useAuth();
 
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -36,7 +35,7 @@ export default function Header({ title, backPath, backLabel, children, leading }
     }, []);
 
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         navigate('/login');
     };
 
