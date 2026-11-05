@@ -21,6 +21,7 @@ public class AuthService {
     private static final Duration REUSE_GRACE = Duration.ofSeconds(10);
 
     private final UserRepository users;
+    private final AccountCreator accounts;
     private final RefreshTokenRepository refreshTokens;
     private final TokenService tokens;
     private final PasswordEncoder passwords;
@@ -32,9 +33,10 @@ public class AuthService {
     /** Checked against when the email is unknown, so a wrong email and a wrong password take equally long. */
     private final String decoyHash;
 
-    AuthService(UserRepository users, RefreshTokenRepository refreshTokens, TokenService tokens, PasswordEncoder passwords, LoginAttemptLimiter limiter,
+    AuthService(UserRepository users, AccountCreator accounts, RefreshTokenRepository refreshTokens, TokenService tokens, PasswordEncoder passwords, LoginAttemptLimiter limiter,
                 CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, Clock clock) {
         this.users = users;
+        this.accounts = accounts;
         this.refreshTokens = refreshTokens;
         this.tokens = tokens;
         this.passwords = passwords;
@@ -54,7 +56,7 @@ public class AuthService {
         String username = request.username().trim();
         if (users.findByEmail(email).isPresent() || users.usernameTaken(username)) throw accountExists();
         try {
-            UserAccount user = users.insert(email, passwords.encode(request.password()), null, username);
+            UserAccount user = accounts.create(email, passwords.encode(request.password()), null, username);
             return startSession(user, userAgent);
         } catch (DuplicateKeyException e) {
             throw accountExists();   // lost a race with another sign-up
@@ -143,7 +145,7 @@ public class AuthService {
         for (int attempt = 0; attempt < 5; attempt++) {
             String username = attempt == 0 && !users.usernameTaken(base) ? base : base + "_" + UUID.randomUUID().toString().substring(0, 5);
             try {
-                return users.insert(email, null, who.sub(), username);
+                return accounts.create(email, null, who.sub(), username);
             } catch (DuplicateKeyException e) {
                 // a username (or, in a race, the account) was taken a moment ago: try the next name
             }

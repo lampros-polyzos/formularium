@@ -101,3 +101,37 @@ create table if not exists user_containers (
   created_at timestamp with time zone default current_timestamp,
   low_stock_threshold integer default 0
 );
+
+-- ---- formulas (only what the starter formulas need)
+create table if not exists formulation_profiles (
+  id varchar(100) primary key,
+  name varchar(200) not null,
+  category varchar(100) not null
+);
+merge into formulation_profiles (id, name, category) key (id) values
+  ('body_butter', 'Body Butter', 'Anhydrous'), ('ow_lotion', 'O/W Lotion or Cream', 'Emulsion'), ('body_wash', 'Body Wash', 'Surfactant');
+
+create table if not exists formulations (
+  id uuid primary key,
+  user_id uuid references app_users (id) on delete cascade,
+  name varchar(200) not null,
+  target_weight_g numeric,
+  status varchar(50) default 'draft',
+  profile_id varchar(100) references formulation_profiles (id),
+  created_at timestamp with time zone not null default current_timestamp,
+  target_ph numeric
+);
+
+create table if not exists formulation_phases (
+  id uuid primary key,
+  formulation_id uuid references formulations (id) on delete cascade,
+  phase_letter varchar(10) not null
+);
+
+create table if not exists formulation_ingredients (
+  id uuid primary key,
+  phase_id uuid references formulation_phases (id) on delete cascade,
+  ingredient_id uuid references ingredients (id),
+  percentage numeric not null,
+  is_qs boolean default false
+);

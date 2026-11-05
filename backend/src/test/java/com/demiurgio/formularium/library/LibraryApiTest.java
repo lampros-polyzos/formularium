@@ -44,7 +44,7 @@ class LibraryApiTest {
 
     @BeforeEach
     void seed() {
-        for (String table : List.of("user_stash", "user_containers", "favorite_ingredients", "user_starred_ingredients", "ingredients", "refresh_tokens", "app_users")) {
+        for (String table : List.of("formulations", "user_stash", "user_containers", "favorite_ingredients", "user_starred_ingredients", "ingredients", "refresh_tokens", "app_users")) {
             jdbc.update("delete from " + table);
         }
         alice = user("alice");

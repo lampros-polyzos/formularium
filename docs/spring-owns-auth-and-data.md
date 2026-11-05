@@ -69,8 +69,9 @@ PostgreSQL client tools installed.)
 - **`unique_inci_name`** (a unique index on the INCI name alone) means two library rows cannot share an INCI name, for example a powder and a solution of
   the same ingredient. Check that the ingredient migrations from `20261112` onwards were applied in full.
 - **`formulation_versions` is missing** from the live database: `frontend/src/db/fixtures/20261109000000_formula_versions.sql` was never applied.
-- **`populate_starter_formulas()`** exists in the database; it may have been run by a trigger on Supabase's own user table, which no longer fires for accounts
-  created by Spring. Look at it in the formulas slice.
+- **Starter formulas: done.** They are created by the Spring backend in the same transaction as the account (`backend/.../starter/`, `AccountCreator`), for password and
+  Google sign-up alike, and the three recipes now live in code (`StarterFormulas`). Run `supabase/migrations/20261118000000_starter_formulas_in_spring.sql` to remove the
+  old database trigger and function, at the same time as you deploy the backend. Accounts that already have their starter formulas keep them.
 
 - **No email confirmation yet.** Supabase sent a confirmation link on sign-up; the Spring sign-up signs people in immediately. Add email verification (an SMTP provider, a one-time token table and a verify endpoint) before opening sign-ups to the public.
 - **No password reset yet.** Same reason: it needs email. Plan it together with email confirmation.
