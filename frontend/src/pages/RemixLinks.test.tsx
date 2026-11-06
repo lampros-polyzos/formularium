@@ -7,7 +7,10 @@ import ShareFormulaModal from '../components/ShareFormulaModal';
 
 const mocks = vi.hoisted(() => ({
     inserts: [] as { table: string; row: Record<string, unknown> }[],
-    /** Pretend the database has not been migrated: inserts with lineage columns are refused. */
+    /** The copies made of a recipe, as the backend was asked to make them. */
+    created: [] as { body: Record<string, unknown>; options?: { copy?: boolean } }[],
+    linked: [] as { formulaId: string; postId: string }[],
+    /** Pretend the database has not been migrated: posts saved with a remix link are refused. */
     unmigrated: false,
     posts: {} as Record<string, Record<string, unknown>>,
     remixes: [] as Record<string, unknown>[],
@@ -20,6 +23,12 @@ vi.mock('../contexts/AuthContext', () => {
     return { useAuth: () => value };
 });
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ formatDate: (d: string) => d }) }));
+
+// Formulas are made and linked by the backend
+vi.mock('../lib/formulasApi', () => ({
+    createFormula: (body: Record<string, unknown>, options?: { copy?: boolean }) => { mocks.created.push({ body, options }); return Promise.resolve({ id: 'new-formula' }); },
+    linkFormulaToPost: (formulaId: string, postId: string) => { mocks.linked.push({ formulaId, postId }); return Promise.resolve(); },
+}));
 
 vi.mock('../lib/supabase', () => {
     const builder = (table: string) => {
@@ -62,6 +71,8 @@ const insertsInto = (table: string) => mocks.inserts.filter(i => i.table === tab
 
 beforeEach(() => {
     mocks.inserts = [];
+    mocks.created = [];
+    mocks.linked = [];
     mocks.unmigrated = false;
     mocks.remixes = [];
     mocks.posts = {
@@ -112,21 +123,11 @@ describe('a community recipe page', () => {
         fireEvent.click(screen.getByRole('button', { name: /Clone to Studio/ }));
         await settle();
 
-        const [draft] = insertsInto('formulations');
-        expect(draft).toMatchObject({ name: 'Lighter Day Cream (Clone)', user_id: 'me', status: 'Draft', remixed_from_post_id: 'p1' });
-        expect(insertsInto('formulation_ingredients')).toHaveLength(1); // the recipe itself was copied
-        expect(screen.getByText('STUDIO')).toBeInTheDocument();
-    });
-
-    it('still makes the copy, without the link, if the database has not been migrated yet', async () => {
-        mocks.unmigrated = true;
-        await openPost();
-        fireEvent.click(screen.getByRole('button', { name: /Clone to Studio/ }));
-        await settle();
-
-        const [draft] = insertsInto('formulations');
-        expect(draft).toMatchObject({ name: 'Lighter Day Cream (Clone)' });
-        expect(draft).not.toHaveProperty('remixed_from_post_id');
+        expect(mocks.created).toHaveLength(1);
+        const { body, options } = mocks.created[0];
+        expect(body).toMatchObject({ name: 'Lighter Day Cream (Clone)', remixed_from_post_id: 'p1' });
+        expect(body.ingredients).toEqual([{ ingredient_id: 'ing1', phase_letter: 'A', percentage: 100, is_qs: false }]); // the recipe itself was copied
+        expect(options).toEqual({ copy: true });   // another member's private ingredient is left out rather than failing the copy
         expect(screen.getByText('STUDIO')).toBeInTheDocument();
     });
 });

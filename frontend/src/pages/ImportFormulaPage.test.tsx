@@ -13,12 +13,10 @@ vi.mock('../components/Header', () => ({ default: ({ title }: { title: string })
 vi.mock('../components/content/usePageTitle', () => ({ usePageTitle: () => undefined }));
 const AUTH = vi.hoisted(() => ({ user: { id: 'u1' }, username: 'Sam' }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => AUTH }));
-vi.mock('../lib/supabase', () => {
-    const b: Record<string, unknown> = {};
-    for (const m of ['select', 'eq']) b[m] = () => b;
-    b.maybeSingle = () => Promise.resolve({ data: { id: 'ow_lotion', name: 'O/W Lotion', max_oil_phase_percent: 30, default_ph_min: 5, default_ph_max: 6 }, error: null });
-    return { supabase: { from: () => b } };
-});
+// The product type comes from the backend
+vi.mock('../lib/formulasApi', () => ({
+    fetchProfile: () => Promise.resolve({ id: 'ow_lotion', name: 'O/W Lotion', max_oil_phase_percent: 30, default_ph_min: 5, default_ph_max: 6 }),
+}));
 
 const renderPage = () => render(
     <MemoryRouter initialEntries={['/studio/import']}>

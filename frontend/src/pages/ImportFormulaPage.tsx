@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { usePageTitle } from '../components/content/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { fetchProfile } from '../lib/formulasApi';
 import { parseRecipeText, type ParsedLine } from '../lib/recipeParser';
 import type { Confidence, MatchCandidate } from '../lib/ingredientMatcher';
 import { matchLine, suggestByRole } from '../lib/lineMatching';
@@ -118,7 +118,7 @@ export default function ImportFormulaPage() {
         setIsWorking(true);
         setError('');
         try {
-            const { data } = await supabase.from('formulation_profiles').select('*').eq('id', formula.profileId).maybeSingle();
+            const data = await fetchProfile(formula.profileId).catch(() => null);
             const skipped = lines.filter(l => !l.row).map(l => l.parsed.name);
             const saved = saveImport({
                 name: name.trim() || 'Imported formula',

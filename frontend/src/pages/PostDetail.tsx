@@ -162,7 +162,6 @@ export default function PostDetail() {
         setIsCloning(true);
         try {
             const newId = await cloneRecipeToStudio(
-                user.id,
                 post,
                 recipe.map((ing: any) => ({ ingredient_id: ing.id || ing.ingredient_id, percentage: ing.percentage, phase: ing.phase })),
             );

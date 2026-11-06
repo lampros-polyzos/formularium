@@ -39,6 +39,16 @@ vi.mock('../lib/libraryApi', () => ({
     removeFavorite: () => Promise.resolve(),
 }));
 
+// The formula and its product type come from the backend
+vi.mock('../lib/formulasApi', async () => {
+    const { PROFILES: profiles } = await import('../lib/starterLibraryFixture');
+    return {
+        fetchProfile: (id: string) => (profiles[id] ? Promise.resolve(profiles[id]) : Promise.reject(new Error('That product type does not exist.'))),
+        fetchFormula: () => Promise.reject(new Error('That formula does not exist.')),
+        createFormula: vi.fn(),
+    };
+});
+
 vi.mock('../lib/supabase', async () => {
     const { PROFILES: profiles } = await import('../lib/starterLibraryFixture');
     const builder = (table: string) => {

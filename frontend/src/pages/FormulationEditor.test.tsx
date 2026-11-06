@@ -41,6 +41,13 @@ vi.mock('../lib/libraryApi', () => ({
   removeFavorite: () => Promise.resolve(),
 }));
 
+// The product types come from the backend
+vi.mock('../lib/formulasApi', () => ({
+  fetchProfile: () => Promise.resolve({ id: 'ow_lotion', name: 'O/W Lotion or Cream', requires_water: true, max_oil_phase_percent: 30, default_ph_min: 5.0, default_ph_max: 6.0 }),
+  fetchFormula: () => Promise.reject(new Error('not found')),
+  createFormula: () => Promise.reject(new Error('not used')),
+}));
+
 // Mock Supabase DB calls
 vi.mock('../lib/supabase', () => {
   const mockQueryBuilder = {

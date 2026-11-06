@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { fetchFormula } from './formulasApi';
 
 // "Remixed from" links. A copy points back at what it came from; deleting the original only clears the link.
 
@@ -52,12 +53,13 @@ export async function fetchPostSummary(postId: string): Promise<PostSummary | nu
 
 /** The formula a copy was made from. Only the owner can read it, so this is null for anyone else. */
 export async function fetchFormulaSummary(formulaId: string): Promise<FormulaSummary | null> {
-    const { data, error } = await supabase.from('formulations').select('id, name').eq('id', formulaId).maybeSingle();
-    if (error) {
-        console.warn('Could not load the original formula:', error.message);
+    try {
+        const formula = await fetchFormula(formulaId);
+        return { id: formula.id, name: formula.name };
+    } catch (error) {
+        console.warn('Could not load the original formula:', error instanceof Error ? error.message : error);
         return null;
     }
-    return (data as FormulaSummary | null) ?? null;
 }
 
 /** Posts that are remixes of this one, newest first. */

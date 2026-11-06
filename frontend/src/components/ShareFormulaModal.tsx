@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { linkFormulaToPost } from '../lib/formulasApi';
 import { useAuth } from '../contexts/AuthContext';
 import { withLineage } from '../lib/lineage';
 
@@ -99,9 +100,7 @@ export default function ShareFormulaModal({
                 if (postError) throw postError;
                 activePostId = postData.id;
 
-                await supabase.from('formulations')
-                    .update({ community_post_id: activePostId })
-                    .eq('id', formulaId);
+                await linkFormulaToPost(formulaId, activePostId as string).catch(error => console.warn('Could not link the formula to its post:', error));
 
                 onShareSuccess(activePostId as string);
             }

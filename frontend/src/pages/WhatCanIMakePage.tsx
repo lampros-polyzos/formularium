@@ -38,7 +38,7 @@ export default function WhatCanIMakePage() {
         try {
             const { recipe } = match;
             const id = await cloneRecipeToStudio(
-                user.id, { id: recipe.id, title: recipe.name }, cloneLines(match, withSwaps),
+                { id: recipe.id, title: recipe.name }, cloneLines(match, withSwaps),
                 `${recipe.name} (${withSwaps ? 'Clone with swaps' : 'Clone'})`,
             );
             navigate(`/studio/${id}`);

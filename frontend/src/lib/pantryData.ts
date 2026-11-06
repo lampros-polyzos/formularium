@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { fetchFormulasWithLines } from './formulasApi';
 import { fetchIngredientsByIds, fetchStash } from './libraryApi';
 import type { StashLot } from './batchPlan';
 import type { Recipe } from './pantry';
@@ -47,15 +48,15 @@ interface NestedFormulation {
 }
 
 /** Your own formulas, with every ingredient. Formulas with nothing in them are left out. */
-export async function loadOwnRecipes(userId: string, client: Client = supabase): Promise<Recipe[]> {
-    const { data, error } = await client
-        .from('formulations')
-        .select('id, name, target_ph, target_weight_g, formulation_phases(phase_letter, formulation_ingredients(percentage, is_qs, ingredients(*)))')
-        .eq('user_id', userId)
-        .order('name');
-    if (error) fail('your formulas', error);
+export async function loadOwnRecipes(): Promise<Recipe[]> {
+    let data;
+    try {
+        data = await fetchFormulasWithLines();
+    } catch (e) {
+        return fail('your formulas', e as Error);
+    }
 
-    return ((data ?? []) as unknown as NestedFormulation[])
+    return (data as unknown as NestedFormulation[])
         .map<Recipe>(f => ({
             id: f.id,
             source: 'own',

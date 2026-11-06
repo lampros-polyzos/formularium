@@ -43,7 +43,9 @@ delete them once you are sure you do not need them.
    (`backend/.../library/`, `frontend/src/lib/libraryApi.ts`). Needs `supabase/migrations/20261117000000_account_delete_cascade.sql`, so deleting an
    account also removes what it owns. Still on Supabase and therefore broken on this branch: product types (`formulation_profiles`), formulas, batches,
    community, notifications.
-3. **Formulas**: formulations, ingredients, phases, profiles, versions, `save_formulation_contents`.
+3. ~~**Formulas**~~ **done**: product types (profiles), formulas with their phases and ingredients, saving, copying, deleting, linking a formula to its shared post, and the
+   version history (`backend/.../formulas/`, `frontend/src/lib/formulasApi.ts`). A save writes the details and the whole contents in one transaction.
+   Needs `20261118000000_starter_formulas_in_spring.sql` and `20261119000000_formula_versions_in_spring.sql`. Still on Supabase: batches, community, notifications.
 4. **Batches**: batches, checks, ingredients, stash usage, `create_batch`, `void_batch`.
 5. **Community**: posts, comments, ratings, reports, mutes, snapshots, moderators, `public_recipe_previews`, `is_moderator`.
 6. **Notifications**: replace the Supabase realtime channel with server-sent events.
@@ -68,7 +70,8 @@ PostgreSQL client tools installed.)
   (a policy named "Allow read access for all users" allowed all rows). The backend only shows the shared ingredients and your own.
 - **`unique_inci_name`** (a unique index on the INCI name alone) means two library rows cannot share an INCI name, for example a powder and a solution of
   the same ingredient. Check that the ingredient migrations from `20261112` onwards were applied in full.
-- **`formulation_versions` is missing** from the live database: `frontend/src/db/fixtures/20261109000000_formula_versions.sql` was never applied.
+- **Formula history** now has its own migration (`20261119000000_formula_versions_in_spring.sql`); the old unapplied `20261109` version was removed.
+- **Copying a community recipe** leaves out lines that use another member's private ingredient (they cannot be shared). The copy is still made.
 - **Starter formulas: done.** They are created by the Spring backend in the same transaction as the account (`backend/.../starter/`, `AccountCreator`), for password and
   Google sign-up alike, and the three recipes now live in code (`StarterFormulas`). Run `supabase/migrations/20261118000000_starter_formulas_in_spring.sql` to remove the
   old database trigger and function, at the same time as you deploy the backend. Accounts that already have their starter formulas keep them.

@@ -1,28 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloneRecipeToStudio } from './cloneRecipe';
 
-vi.mock('./supabase', () => ({ supabase: {} }));
-
-/** Records what is inserted where, and answers like the database would. */
-function fakeClient(failOn?: string) {
-    const inserts: { table: string; rows: unknown }[] = [];
-    const client = {
-        from(table: string) {
-            const b: Record<string, unknown> = {};
-            b.insert = (rows: unknown) => { inserts.push({ table, rows }); return b; };
-            b.select = () => b;
-            b.single = () => b;
-            b.then = (resolve: (v: unknown) => void) => {
-                if (table === failOn) return resolve({ data: null, error: { message: `${table} failed` } });
-                if (table === 'formulations') return resolve({ data: { id: 'new1' }, error: null });
-                if (table === 'formulation_phases') return resolve({ data: (inserts.find(i => i.table === table)!.rows as { phase_letter: string }[]).map((p, n) => ({ id: `ph${n}`, phase_letter: p.phase_letter })), error: null });
-                resolve({ data: null, error: null });
-            };
-            return b;
-        },
-    };
-    return { client: client as never, inserts };
-}
+const api = vi.hoisted(() => ({ createFormula: vi.fn() }));
+vi.mock('./formulasApi', () => api);
 
 const LINES = [
     { ingredient_id: 'aqua', percentage: 80, phase: 'A' },
@@ -30,28 +10,34 @@ const LINES = [
     { ingredient_id: 'pres', percentage: 1, phase: 'B' },
 ];
 
+beforeEach(() => { api.createFormula.mockReset().mockResolvedValue({ id: 'new1' }); });
+
 describe('cloneRecipeToStudio', () => {
-    it('makes a draft that remembers the recipe, with one phase per letter and every line in its phase', async () => {
-        const { client, inserts } = fakeClient();
-        const id = await cloneRecipeToStudio('u1', { id: 'p1', title: 'Lotion' }, LINES, undefined, client);
+    it('makes a draft that remembers the recipe, with every line in its phase', async () => {
+        const id = await cloneRecipeToStudio({ id: 'p1', title: 'Lotion' }, LINES);
         expect(id).toBe('new1');
-        expect(inserts[0]).toMatchObject({ table: 'formulations', rows: [{ name: 'Lotion (Clone)', user_id: 'u1', status: 'Draft', remixed_from_post_id: 'p1' }] });
-        expect((inserts[1].rows as { phase_letter: string }[]).map(p => p.phase_letter)).toEqual(['A', 'B']);
-        expect(inserts[2].rows).toEqual([
-            { phase_id: 'ph0', ingredient_id: 'aqua', percentage: 80, is_qs: false },
-            { phase_id: 'ph1', ingredient_id: 'oil', percentage: '15', is_qs: false },
-            { phase_id: 'ph1', ingredient_id: 'pres', percentage: 1, is_qs: false },
+        expect(api.createFormula).toHaveBeenCalledTimes(1);
+        const [body] = api.createFormula.mock.calls[0];
+        expect(body).toMatchObject({ name: 'Lotion (Clone)', target_weight_g: 100, remixed_from_post_id: 'p1' });
+        expect(body.ingredients).toEqual([
+            { ingredient_id: 'aqua', phase_letter: 'A', percentage: 80, is_qs: false },
+            { ingredient_id: 'oil', phase_letter: 'B', percentage: 15, is_qs: false },   // a text amount becomes a number
+            { ingredient_id: 'pres', phase_letter: 'B', percentage: 1, is_qs: false },
         ]);
     });
 
-    it('uses the name it is given', async () => {
-        const { client, inserts } = fakeClient();
-        await cloneRecipeToStudio('u1', { id: 'p1', title: 'Lotion' }, LINES, 'Lotion (Clone with swaps)', client);
-        expect(inserts[0].rows).toMatchObject([{ name: 'Lotion (Clone with swaps)' }]);
+    it('asks the backend to leave out other members\' private ingredients instead of failing', async () => {
+        await cloneRecipeToStudio({ id: 'p1', title: 'Lotion' }, LINES);
+        expect(api.createFormula.mock.calls[0][1]).toEqual({ copy: true });
     });
 
-    it.each(['formulations', 'formulation_phases', 'formulation_ingredients'])('reports a failure saving %s', async table => {
-        const { client } = fakeClient(table);
-        await expect(cloneRecipeToStudio('u1', { id: 'p1', title: 'x' }, LINES, undefined, client)).rejects.toMatchObject({ message: `${table} failed` });
+    it('uses the name it is given', async () => {
+        await cloneRecipeToStudio({ id: 'p1', title: 'Lotion' }, LINES, 'Lotion (Clone with swaps)');
+        expect(api.createFormula.mock.calls[0][0].name).toBe('Lotion (Clone with swaps)');
+    });
+
+    it('reports a failure', async () => {
+        api.createFormula.mockRejectedValue(new Error('formula failed'));
+        await expect(cloneRecipeToStudio({ id: 'p1', title: 'x' }, LINES)).rejects.toMatchObject({ message: 'formula failed' });
     });
 });

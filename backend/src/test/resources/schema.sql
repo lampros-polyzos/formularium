@@ -106,10 +106,25 @@ create table if not exists user_containers (
 create table if not exists formulation_profiles (
   id varchar(100) primary key,
   name varchar(200) not null,
-  category varchar(100) not null
+  category varchar(100) not null,
+  requires_water boolean default false,
+  requires_oil boolean default false,
+  requires_emulsifier boolean default false,
+  requires_preservative boolean default false,
+  max_oil_phase_percent numeric,
+  default_ph_min numeric,
+  default_ph_max numeric
 );
-merge into formulation_profiles (id, name, category) key (id) values
-  ('body_butter', 'Body Butter', 'Anhydrous'), ('ow_lotion', 'O/W Lotion or Cream', 'Emulsion'), ('body_wash', 'Body Wash', 'Surfactant');
+merge into formulation_profiles (id, name, category, requires_water, requires_oil, requires_emulsifier, requires_preservative, max_oil_phase_percent, default_ph_min, default_ph_max) key (id) values
+  ('body_butter', 'Body Butter', 'Anhydrous', false, true, false, false, 100, null, null),
+  ('ow_lotion', 'O/W Lotion or Cream', 'Emulsion', true, true, true, true, 30, 5.0, 6.0),
+  ('body_wash', 'Body Wash', 'Surfactant', true, false, false, true, 0, 5.0, 6.5);
+
+create table if not exists community_posts (
+  id uuid primary key,
+  author_id uuid references app_users (id) on delete cascade,
+  title varchar(150) not null
+);
 
 create table if not exists formulations (
   id uuid primary key,
@@ -119,7 +134,10 @@ create table if not exists formulations (
   status varchar(50) default 'draft',
   profile_id varchar(100) references formulation_profiles (id),
   created_at timestamp with time zone not null default current_timestamp,
-  target_ph numeric
+  target_ph numeric,
+  community_post_id uuid references community_posts (id) on delete set null,
+  cloned_from_formulation_id uuid references formulations (id) on delete set null,
+  remixed_from_post_id uuid references community_posts (id) on delete set null
 );
 
 create table if not exists formulation_phases (
@@ -134,4 +152,19 @@ create table if not exists formulation_ingredients (
   ingredient_id uuid references ingredients (id),
   percentage numeric not null,
   is_qs boolean default false
+);
+
+create table if not exists formulation_versions (
+  id uuid primary key,
+  formulation_id uuid not null references formulations (id) on delete cascade,
+  user_id uuid not null references app_users (id) on delete cascade,
+  version_number integer not null,
+  note text,
+  name varchar(200) not null,
+  profile_id varchar(100),
+  target_weight_g numeric,
+  target_ph numeric,
+  lines text not null default '[]',
+  created_at timestamp with time zone not null default current_timestamp,
+  unique (formulation_id, version_number)
 );

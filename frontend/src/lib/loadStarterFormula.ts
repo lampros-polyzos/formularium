@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { fetchProfile } from './formulasApi';
 import { fetchStash, searchIngredients } from './libraryApi';
 import { buildStarterFormula, templateFilters, type StarterFormula, type StarterTemplate } from './starterTemplates';
 import type { DatabaseIngredient, ProfileConfig } from '../types/formulation';
@@ -21,7 +21,7 @@ export interface LoadedStarter {
 export async function loadStarterFormula(template: StarterTemplate): Promise<LoadedStarter> {
     const [ingredients, profileRes, stashRes] = await Promise.all([
         searchIngredients({ anyOf: templateFilters(template), limit: ROW_LIMIT }),
-        supabase.from('formulation_profiles').select('*').eq('id', template.profileId).maybeSingle(),
+        fetchProfile(template.profileId).then(data => ({ data, error: null }), (error: Error) => ({ data: null, error })),
         fetchStash().then(lots => ({ lots, error: null }), (error: Error) => ({ lots: [], error })),
     ]);
     if (profileRes.error) console.warn('Could not load the product type; using default balancing rules:', profileRes.error.message);

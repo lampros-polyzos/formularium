@@ -14,14 +14,8 @@ import java.util.UUID;
  * every query below carries that rule.
  */
 @Repository
-class IngredientRepository {
-    // The three enum columns are read as text so they come out as plain strings in the JSON
-    private static final String COLUMNS = """
-            i.id, i.inci_name, i.trade_name, i.function, i.min_usage_pct, i.max_usage_pct, i.cas_number,
-            cast(i.solubility as varchar) as solubility, cast(i.ionic_charge as varchar) as ionic_charge, cast(i.physical_state as varchar) as physical_state,
-            i.optimal_ph_min, i.optimal_ph_max, i.max_heating_temp_c, i.is_vegan, i.is_cosmos, cast(i.cost_category as varchar) as cost_category,
-            i.description, i.common_uses, i.is_sulfate, i.is_silicone, i.is_paraben, i.is_fragrance, i.cosmos_compliant, i.comedogenic_rating,
-            i.user_id, i.default_min_usage, i.default_max_usage, i.notes""";
+public class IngredientRepository {
+    private static final String COLUMNS = IngredientColumns.SELECT;
     private static final String VISIBLE = "(i.user_id is null or i.user_id = :uid)";
 
     private final JdbcClient jdbc;
@@ -69,6 +63,13 @@ class IngredientRepository {
         for (int i = 0; i < names.size(); i++) spec = spec.param(names.get(i), values.get(i));
         if (hasIds) spec = spec.param("ids", ids);
         return spec.query(Rows::map).list();
+    }
+
+    /** Which of these ingredients the person can use: the shared ones and their own. */
+    public java.util.Set<UUID> usable(UUID uid, java.util.Collection<UUID> ids) {
+        if (ids.isEmpty()) return java.util.Set.of();
+        return new java.util.HashSet<>(jdbc.sql("select i.id from ingredients i where " + VISIBLE + " and i.id in (:ids)").param("uid", uid).param("ids", ids)
+                .query((rs, n) -> rs.getObject(1, UUID.class)).list());
     }
 
     boolean visibleTo(UUID uid, UUID ingredientId) {

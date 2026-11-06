@@ -12,10 +12,10 @@ import java.util.Map;
  * Turns a database row into a map that becomes a JSON object with the column names as keys (snake_case, as the app already uses them).
  * Dates and timestamps become ISO text, so the JSON does not depend on how the database driver represents them.
  */
-final class Rows {
+public final class Rows {
     private Rows() { }
 
-    static Map<String, Object> map(ResultSet rs, int rowNum) throws SQLException {
+    public static Map<String, Object> map(ResultSet rs, int rowNum) throws SQLException {
         ResultSetMetaData meta = rs.getMetaData();
         Map<String, Object> row = new LinkedHashMap<>();
         for (int i = 1; i <= meta.getColumnCount(); i++) {

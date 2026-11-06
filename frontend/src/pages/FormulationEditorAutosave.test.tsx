@@ -36,6 +36,16 @@ vi.mock('../lib/libraryApi', async () => {
     };
 });
 
+// The formula and its product type come from the backend
+vi.mock('../lib/formulasApi', () => {
+    const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
+    return {
+        fetchFormula: () => Promise.resolve({ ...mocks.formulation, formulation_phases: mocks.phases }),
+        fetchProfile: () => Promise.resolve(profile),
+        createFormula: vi.fn(),
+    };
+});
+
 vi.mock('../lib/supabase', () => {
     const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
     const rows = (table: string) => {
@@ -117,7 +127,7 @@ describe('FormulationEditor autosave', () => {
         await settle(3000);
 
         expect(mocks.save).toHaveBeenCalledTimes(1);
-        expect(mocks.save.mock.calls[0][0]).toMatchObject({ formulaId: null, userId: 'u1', profileId: 'ow_lotion' });
+        expect(mocks.save.mock.calls[0][0]).toMatchObject({ formulaId: null, profileId: 'ow_lotion' });
         expect(mocks.save.mock.calls[0][0].ingredients).toHaveLength(1);
         expect(window.location.pathname).toBe('/studio/f-new'); // a reload now reopens this formula
         expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
@@ -152,7 +162,7 @@ describe('FormulationEditor autosave', () => {
 
         expect(mocks.save).toHaveBeenCalledTimes(1);
         const saved = mocks.save.mock.calls[0][0];
-        expect(saved).toMatchObject({ formulaId: 'f1', userId: 'u1', profileId: 'ow_lotion', name: 'Saved Lotion' });
+        expect(saved).toMatchObject({ formulaId: 'f1', profileId: 'ow_lotion', name: 'Saved Lotion' });
         expect(saved.ingredients).toEqual([{ id: 'water', phase: 'A', percentage: 90, isQS: false }]);
         expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
         expect(localStorage.getItem('formularium.draft.f1')).toBeNull();

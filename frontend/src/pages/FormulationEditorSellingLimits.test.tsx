@@ -20,6 +20,24 @@ vi.mock('../contexts/SettingsContext', () => ({
 }));
 vi.mock('../components/FormulationCostCalculator', () => ({ default: () => <div /> }));
 
+// The formula and its product type come from the backend
+vi.mock('../lib/formulasApi', () => {
+    const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
+    const water = { id: 'water', inci_name: 'Aqua', trade_name: 'Distilled Water', function: 'Solvent', solubility: 'water', min_usage_pct: 1, max_usage_pct: 100 };
+    const salicylic = { id: 'sal', inci_name: 'Salicylic Acid', trade_name: 'Salicylic Acid', function: 'Active (Exfoliant)', solubility: 'oil', min_usage_pct: 0.5, max_usage_pct: 2 };
+    return {
+        fetchFormula: () => Promise.resolve({
+            id: 'f1', name: 'Peel', profile_id: 'ow_lotion', target_weight_g: 100, target_ph: 3.5, community_post_id: null,
+            formulation_phases: [{ id: 'pA', phase_letter: 'A', formulation_ingredients: [
+                { percentage: 100 - mocks.salicylic, is_qs: true, ingredients: water },
+                { percentage: mocks.salicylic, is_qs: false, ingredients: salicylic },
+            ] }],
+        }),
+        fetchProfile: () => Promise.resolve(profile),
+        createFormula: vi.fn(),
+    };
+});
+
 vi.mock('../lib/supabase', () => {
     const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
     const water = { id: 'water', inci_name: 'Aqua', trade_name: 'Distilled Water', function: 'Solvent', solubility: 'water', min_usage_pct: 1, max_usage_pct: 100 };

@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
     user: { id: 'u1', email: 'sam@example.com' },
 }));
 
+vi.mock('../lib/formulasApi', () => ({ fetchFormulas: () => Promise.resolve(mocks.formulas), deleteFormula: () => Promise.resolve() }));
+
 vi.mock('../lib/supabase', () => {
     const builder = (table: string): Record<string, unknown> => {
         const b: Record<string, unknown> = {};

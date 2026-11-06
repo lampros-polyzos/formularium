@@ -144,8 +144,7 @@ describe('cloning a community recipe', () => {
         expect(screen.getByRole('button', { name: 'Clone with 1 swap' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Clone as is' }));
         await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/studio/new1'));
-        const [userId, post, lines, name] = mocks.clone.mock.calls[0];
-        expect(userId).toBe('u1');
+        const [post, lines, name] = mocks.clone.mock.calls[0];
         expect(post).toEqual({ id: 'c1', title: 'Body balm' });
         expect(lines.map((l: { ingredient_id: string }) => l.ingredient_id)).toEqual(['oil', 'gel']);
         expect(name).toBe('Body balm (Clone)');
@@ -157,8 +156,8 @@ describe('cloning a community recipe', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Everything' }));
         fireEvent.click(screen.getByRole('button', { name: 'Clone with 1 swap' }));
         await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/studio/new1'));
-        expect(mocks.clone.mock.calls[0][2].map((l: { ingredient_id: string }) => l.ingredient_id)).toEqual(['butter', 'gel']);
-        expect(mocks.clone.mock.calls[0][3]).toBe('Body balm (Clone with swaps)');
+        expect(mocks.clone.mock.calls[0][1].map((l: { ingredient_id: string }) => l.ingredient_id)).toEqual(['butter', 'gel']);
+        expect(mocks.clone.mock.calls[0][2]).toBe('Body balm (Clone with swaps)');
     });
 
     it('does not offer a swap clone when nothing needs swapping, and never for your own formulas', () => {

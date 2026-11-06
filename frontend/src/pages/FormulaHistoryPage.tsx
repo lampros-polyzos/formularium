@@ -57,7 +57,7 @@ export default function FormulaHistoryPage() {
         if (!ok) return;
         setBusy(true);
         try {
-            await restoreVersion(id, user.id, version);
+            await restoreVersion(id, version);
             navigate(`/studio/${id}`);
         } catch (e) {
             void alert(e instanceof Error ? e.message : 'Something went wrong.', { tone: 'error', title: "Couldn't go back" });
@@ -66,11 +66,11 @@ export default function FormulaHistoryPage() {
     };
 
     const handleDelete = async (version: FormulaVersion) => {
-        if (!version.id) return;
+        if (!version.id || !id) return;
         if (!(await confirm(`Delete ${versionLabel(version).toLowerCase()}? This cannot be undone.`, { title: 'Delete this version?', confirmLabel: 'Delete version', tone: 'danger' }))) return;
         setBusy(true);
         try {
-            await deleteVersion(version.id);
+            await deleteVersion(id, version.id);
             // Selections that pointed at it fall back to the defaults
             if (fromKey === version.id) setFromKey(null);
             if (toKey === version.id) setToKey(null);

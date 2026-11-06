@@ -1,6 +1,4 @@
-import { supabase } from './supabase';
-
-type Client = Pick<typeof supabase, 'from'>;
+import { addVersion, fetchFormula, fetchVersions, removeVersion, type VersionRow } from './formulasApi';
 
 /** One ingredient of a saved version. */
 export interface VersionLine {
@@ -33,11 +31,11 @@ export interface VersionInput {
     ingredients: { id: string; inci_name: string; trade_name: string; phase: string; percentage: number; isQS: boolean }[];
 }
 
-const COLUMNS = 'id, version_number, note, name, profile_id, target_weight_g, target_ph, lines, created_at';
 const num = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
 
-function fail(what: string, error: { message?: string } | null): never {
-    throw new Error(`Could not ${what}${error?.message ? `: ${error.message}` : '.'}`);
+function fail(what: string, error: unknown): never {
+    const message = error instanceof Error ? error.message : '';
+    throw new Error(`Could not ${what}${message ? `: ${message}` : '.'}`);
 }
 
 /** The lines of a formula as stored in a version: by phase, largest first, the way the formula itself is saved. */
@@ -54,71 +52,61 @@ export function toVersionLines(ingredients: VersionInput['ingredients']): Versio
         }));
 }
 
-function fromRow(row: Record<string, unknown>): FormulaVersion {
+function fromRow(row: VersionRow): FormulaVersion {
     return {
-        id: row.id as string,
+        id: row.id,
         version_number: Number(row.version_number),
-        note: (row.note as string | null) ?? null,
-        name: row.name as string,
-        profile_id: (row.profile_id as string | null) ?? null,
+        note: row.note ?? null,
+        name: row.name,
+        profile_id: row.profile_id ?? null,
         target_weight_g: num(row.target_weight_g),
         target_ph: num(row.target_ph),
-        lines: ((row.lines as VersionLine[] | null) ?? []).map(l => ({ ...l, percentage: Number(l.percentage) || 0 })),
-        created_at: (row.created_at as string | null) ?? null,
+        lines: (row.lines ?? []).map(l => ({ ...l, percentage: Number(l.percentage) || 0 })),
+        created_at: row.created_at ?? null,
     };
 }
 
 /** Saved versions of a formula, newest first. */
-export async function listVersions(formulaId: string, client: Client = supabase): Promise<FormulaVersion[]> {
-    const { data, error } = await client.from('formulation_versions').select(COLUMNS).eq('formulation_id', formulaId).order('version_number', { ascending: false });
-    if (error) fail('load the history', error);
-    return ((data ?? []) as Record<string, unknown>[]).map(fromRow);
+export async function listVersions(formulaId: string): Promise<FormulaVersion[]> {
+    try {
+        return (await fetchVersions(formulaId)).map(fromRow);
+    } catch (e) {
+        return fail('load the history', e);
+    }
 }
 
 /** Keeps a copy of the formula as it is now, with a note on what changed and why. Returns the new version. */
-export async function saveVersion(formulaId: string, input: VersionInput, note: string, client: Client = supabase): Promise<FormulaVersion> {
-    const { data, error } = await client
-        .from('formulation_versions')
-        .insert([{
-            formulation_id: formulaId,
+export async function saveVersion(formulaId: string, input: VersionInput, note: string): Promise<FormulaVersion> {
+    try {
+        return fromRow(await addVersion(formulaId, {
             note: note.trim() || null,
             name: input.name,
             profile_id: input.profileId || null,
             target_weight_g: input.targetWeight,
             target_ph: input.targetPh,
             lines: toVersionLines(input.ingredients),
-        }])
-        .select(COLUMNS)
-        .single();
-    if (error) fail('save the version', error);
-    return fromRow(data as Record<string, unknown>);
+        }));
+    } catch (e) {
+        return fail('save the version', e);
+    }
 }
 
-export async function deleteVersion(versionId: string, client: Client = supabase): Promise<void> {
-    const { error } = await client.from('formulation_versions').delete().eq('id', versionId);
-    if (error) fail('delete the version', error);
-}
-
-interface NestedFormula {
-    name: string;
-    profile_id: string | null;
-    target_weight_g: number | string | null;
-    target_ph: number | string | null;
-    formulation_phases: {
-        phase_letter: string;
-        formulation_ingredients: { percentage: number | string; is_qs: boolean | null; ingredients: { id: string; inci_name: string | null; trade_name: string | null } | null }[];
-    }[];
+export async function deleteVersion(formulaId: string, versionId: string): Promise<void> {
+    try {
+        await removeVersion(formulaId, versionId);
+    } catch (e) {
+        fail('delete the version', e);
+    }
 }
 
 /** The formula as it is saved right now, in the same shape as a version so the two can be compared. */
-export async function loadCurrent(formulaId: string, client: Client = supabase): Promise<FormulaVersion> {
-    const { data, error } = await client
-        .from('formulations')
-        .select('name, profile_id, target_weight_g, target_ph, formulation_phases(phase_letter, formulation_ingredients(percentage, is_qs, ingredients(id, inci_name, trade_name)))')
-        .eq('id', formulaId)
-        .single();
-    if (error) fail('load the formula', error);
-    const f = data as unknown as NestedFormula;
+export async function loadCurrent(formulaId: string): Promise<FormulaVersion> {
+    let f;
+    try {
+        f = await fetchFormula(formulaId);
+    } catch (e) {
+        return fail('load the formula', e);
+    }
     const ingredients = (f.formulation_phases ?? []).flatMap(phase =>
         (phase.formulation_ingredients ?? []).filter(fi => fi.ingredients).map(fi => ({
             id: fi.ingredients!.id,

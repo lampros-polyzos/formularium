@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { listBatches } from './batches';
+import { fetchFormulasWithLines } from './formulasApi';
 import { fetchFavorites } from './libraryApi';
 import { loadIngredients, loadStash } from './pantryData';
 import type { MetricBatch, MetricFavorite, MetricFormula, MetricLine, MetricsInput } from './metrics';
@@ -61,13 +62,14 @@ export async function loadFavorites(): Promise<MetricFavorite[]> {
     }
 }
 
-export async function loadFormulaSummaries(userId: string, client: Client = supabase): Promise<MetricFormula[]> {
-    const { data, error } = await client
-        .from('formulations')
-        .select('id, name, created_at, formulation_phases(formulation_ingredients(id))')
-        .eq('user_id', userId);
-    if (error) fail('your formulas', error);
-    return ((data ?? []) as unknown as { id: string; name: string; created_at: string | null; formulation_phases: { formulation_ingredients: unknown[] }[] }[])
+export async function loadFormulaSummaries(): Promise<MetricFormula[]> {
+    let data;
+    try {
+        data = await fetchFormulasWithLines();
+    } catch (e) {
+        return fail('your formulas', e as Error);
+    }
+    return data
         .map(f => ({
             id: f.id,
             name: f.name,
@@ -92,7 +94,7 @@ export async function loadMetricsInput(userId: string, client: Client = supabase
         loadMetricBatches(client),
         loadMetricLines(client),
         loadFavorites(),
-        loadFormulaSummaries(userId, client),
+        loadFormulaSummaries(),
         countSharedRecipes(userId, client),
         loadStash(),
     ]);

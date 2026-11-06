@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
 import RecommendationsPanel from '../components/RecommendationsPanel';
-import { supabase } from '../lib/supabase';
 import { authFetch } from '../lib/authClient';
 import { fetchIngredientByInci, fetchStash, searchIngredients } from '../lib/libraryApi';
+import { createFormula, fetchFormula, fetchProfile } from '../lib/formulasApi';
 import { saveFormulation } from '../lib/saveFormulation';
 import { settleQS } from '../lib/qs';
 import { applyImmediateFix, isFixApplicable } from '../lib/fixes';
@@ -20,7 +20,6 @@ import { useAutosave } from '../hooks/useAutosave';
 import { useFavorites } from '../hooks/useFavorites';
 import { useCatalogCandidates } from '../hooks/useCatalogCandidates';
 import { useLineage } from '../hooks/useLineage';
-import { withLineage } from '../lib/lineage';
 import { determinePhase } from '../lib/phases';
 import LineageNotice from '../components/LineageNotice';
 import StarterNotice, { type StarterNoticeData } from '../components/editor/StarterNotice';
@@ -163,18 +162,12 @@ const FormulationEditor = () => {
             if (!id || id === 'new') return;
 
             try {
-                // 1. Fetch top-level formulation data
-                const { data: formulation, error: formError } = await supabase
-                    .from('formulations')
-                    .select('*')
-                    .eq('id', id)
-                    .single();
-
-                if (formError) throw formError;
+                // 1. The formula, with its phases and ingredients
+                const formulation = await fetchFormula(id);
 
                 setFormulaId(formulation.id);
                 setProjectName(formulation.name);
-                setProfileId(formulation.profile_id);
+                setProfileId(formulation.profile_id ?? '');
                 setCommunityPostId(formulation.community_post_id);
                 setRemixedFromPostId(formulation.remixed_from_post_id ?? null);
                 setClonedFromFormulationId(formulation.cloned_from_formulation_id ?? null);
@@ -182,11 +175,7 @@ const FormulationEditor = () => {
                 if (formulation.target_ph) setTargetPh(formulation.target_ph);
 
                 if (formulation.profile_id) {
-                    const { data: profileData } = await supabase
-                        .from('formulation_profiles')
-                        .select('*')
-                        .eq('id', formulation.profile_id)
-                        .single();
+                    const profileData = await fetchProfile(formulation.profile_id).catch(() => null);
 
                     if (profileData) {
                         setActiveProfile(profileData);
@@ -196,21 +185,8 @@ const FormulationEditor = () => {
                     }
                 }
 
-                // 2. Fetch phases and associated ingredients
-                const { data: phaseData, error: phaseError } = await supabase
-                    .from('formulation_phases')
-                    .select(`
-                        id,
-                        phase_letter,
-                        formulation_ingredients (
-                            percentage,
-                            is_qs,
-                            ingredients (*)
-                        )
-                    `)
-                    .eq('formulation_id', id);
-
-                if (phaseError) throw phaseError;
+                // 2. Its phases and the ingredients in them
+                const phaseData = formulation.formulation_phases;
 
                 const loadedIngredients: FormulaIngredient[] = [];
 
@@ -475,13 +451,9 @@ const FormulationEditor = () => {
     const handleProfileChange = async (newProfileId: string) => {
         setProfileId(newProfileId);
 
-        const { data: profileData, error: profileError } = await supabase
-            .from('formulation_profiles')
-            .select('*')
-            .eq('id', newProfileId)
-            .single();
+        const profileData = await fetchProfile(newProfileId).catch(() => null);
 
-        if (!profileError && profileData) {
+        if (profileData) {
             setActiveProfile(profileData);
 
             if (profileData.default_ph_min && profileData.default_ph_max) {
@@ -645,7 +617,6 @@ const FormulationEditor = () => {
         const existingId = formulaId ?? createdIdRef.current;
         const savedId = await saveFormulation({
             formulaId: existingId,
-            userId: user.id,
             name: projectName,
             profileId,
             targetWeight,
@@ -691,7 +662,7 @@ const FormulationEditor = () => {
         setProfileId(draft.profileId);
         setFormulaIngredients(draft.ingredients as unknown as FormulaIngredient[]);
         if (draft.profileId) {
-            const { data } = await supabase.from('formulation_profiles').select('*').eq('id', draft.profileId).single();
+            const data = await fetchProfile(draft.profileId).catch(() => null);
             if (data) setActiveProfile(data);
         }
     };
@@ -755,63 +726,23 @@ const FormulationEditor = () => {
         const clonedProjectName = `${projectName} Copy`;
 
         try {
-            const formulationData = {
+            // The copy remembers what it was copied from, and keeps the community recipe the original started as
+            const sortedIngredients = [...formulaIngredients].sort((a, b) => {
+                if (a.phase < b.phase) return -1;
+                if (a.phase > b.phase) return 1;
+                return (b.percentage || 0) - (a.percentage || 0);
+            });
+            const copy = await createFormula({
                 name: clonedProjectName,
                 profile_id: profileId,
                 target_weight_g: targetWeight,
                 target_ph: targetPh,
-                user_id: user.id,
-                status: 'Draft'
-            };
-
-            // The copy remembers what it was copied from, and keeps the community recipe the original started as
-            const { data: newFormulation, error: insertError } = await withLineage(
-                extra => supabase.from('formulations').insert([{ ...formulationData, ...extra }]).select('id').single(),
-                { cloned_from_formulation_id: formulaId, remixed_from_post_id: remixedFromPostId },
-            );
-
-            if (insertError) throw insertError;
-            const newFormulationId = newFormulation.id;
-
-            const uniquePhases = Array.from(new Set(formulaIngredients.map(ing => ing.phase)));
-
-            if (uniquePhases.length > 0) {
-                const phasesToInsert = uniquePhases.map(phaseLetter => ({
-                    formulation_id: newFormulationId,
-                    phase_letter: phaseLetter
-                }));
-
-                const { data: insertedPhases, error: phaseError } = await supabase
-                    .from('formulation_phases')
-                    .insert(phasesToInsert)
-                    .select('id, phase_letter');
-
-                if (phaseError) throw phaseError;
-
-                const sortedIngredients = [...formulaIngredients].sort((a, b) => {
-                    if (a.phase < b.phase) return -1;
-                    if (a.phase > b.phase) return 1;
-                    return (b.percentage || 0) - (a.percentage || 0);
-                });
-
-                const ingredientsToInsert = sortedIngredients.map(ing => {
-                    const matchedPhase = insertedPhases.find(p => p.phase_letter === ing.phase);
-                    return {
-                        phase_id: matchedPhase!.id,
-                        ingredient_id: ing.id,
-                        percentage: ing.percentage,
-                        is_qs: ing.isQS || false
-                    };
-                });
-
-                const { error: ingredientsError } = await supabase
-                    .from('formulation_ingredients')
-                    .insert(ingredientsToInsert);
-
-                if (ingredientsError) throw ingredientsError;
-
-                setFormulaIngredients(sortedIngredients);
-            }
+                cloned_from_formulation_id: formulaId,
+                remixed_from_post_id: remixedFromPostId,
+                ingredients: sortedIngredients.map(ing => ({ ingredient_id: ing.id, phase_letter: ing.phase, percentage: ing.percentage || 0, is_qs: ing.isQS || false })),
+            });
+            const newFormulationId = copy.id;
+            if (sortedIngredients.length > 0) setFormulaIngredients(sortedIngredients);
 
             setProjectName(clonedProjectName);
             setFormulaId(newFormulationId);

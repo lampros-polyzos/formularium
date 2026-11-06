@@ -139,7 +139,7 @@ describe('the version history page', () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Go back to this' })[1]);
         await waitFor(() => expect(screen.getByText('EDITOR')).toBeInTheDocument());
         expect(mocks.confirm).toHaveBeenCalledWith(expect.stringContaining('kept as a new version first'), expect.objectContaining({ title: 'Go back to version 1?' }));
-        expect(mocks.restore).toHaveBeenCalledWith('f1', 'u1', V1);
+        expect(mocks.restore).toHaveBeenCalledWith('f1', V1);
     });
 
     it('does nothing when you decline, and explains when going back fails', async () => {
@@ -160,7 +160,7 @@ describe('the version history page', () => {
         ready([V2, V1]);
         renderPage();
         fireEvent.click(screen.getByRole('button', { name: 'Delete Version 1' }));
-        await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith('v1'));
+        await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith('f1', 'v1'));
         expect(mocks.confirm).toHaveBeenCalledWith(expect.stringContaining('cannot be undone'), expect.objectContaining({ tone: 'danger' }));
         await waitFor(() => expect(mocks.reload).toHaveBeenCalled());
     });

@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
     calls: [] as { table: string; steps: [string, unknown[]][] }[],
 }));
 
+const formulas = vi.hoisted(() => ({ fetchFormula: vi.fn() }));
+vi.mock('./formulasApi', () => formulas);
+
 vi.mock('./supabase', () => ({
     supabase: {
         from: (table: string) => {
@@ -95,9 +98,9 @@ describe('lookups', () => {
     });
 
     it('finds the formula a copy was made from', async () => {
-        mocks.result = { data: { id: 'f1', name: 'My Lotion' }, error: null };
+        formulas.fetchFormula.mockResolvedValue({ id: 'f1', name: 'My Lotion', profile_id: 'ow_lotion', formulation_phases: [] });
         expect(await fetchFormulaSummary('f1')).toEqual({ id: 'f1', name: 'My Lotion' });
-        mocks.result = { data: null, error: null }; // someone else's private formula: no row
+        formulas.fetchFormula.mockRejectedValue(new Error('That formula does not exist.')); // someone else's private formula: the backend says it is not there
         expect(await fetchFormulaSummary('f1')).toBeNull();
     });
 

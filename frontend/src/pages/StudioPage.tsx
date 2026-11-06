@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { deleteFormula, fetchFormulas as loadFormulas } from '../lib/formulasApi';
 import CustomModal from '../components/CustomModal';
 import { useSettings } from '../contexts/SettingsContext';
 import CheckInPrompt from '../components/CheckInPrompt';
@@ -39,12 +39,7 @@ const StudioPage = () => {
   useEffect(() => {
     const fetchFormulas = async () => {
       try {
-        const { data, error } = await supabase
-          .from('formulations')
-          .select('*');
-
-        if (error) throw error;
-        if (data) setFormulas(data);
+        setFormulas((await loadFormulas()) as unknown as SavedFormula[]);
       } catch (error) {
         console.error("Error fetching formulations:", error);
       } finally {
@@ -86,12 +81,7 @@ const StudioPage = () => {
 
   const executeDelete = async () => {
     try {
-      const { error } = await supabase
-        .from('formulations')
-        .delete()
-        .eq('id', modal.targetId);
-
-      if (error) throw error;
+      await deleteFormula(modal.targetId);
 
       setFormulas(prev => prev.filter(formula => formula.id !== modal.targetId));
       setModal(prev => ({ ...prev, isOpen: false }));
@@ -102,9 +92,7 @@ const StudioPage = () => {
         isOpen: true,
         type: 'error',
         title: 'Delete Failed',
-        message: error.code === '23503'
-          ? "Please ensure your database is set to CASCADE deletes for formulation_phases."
-          : error.message || "An unexpected error occurred.",
+        message: error.message || "An unexpected error occurred.",
         targetId: ''
       });
     }

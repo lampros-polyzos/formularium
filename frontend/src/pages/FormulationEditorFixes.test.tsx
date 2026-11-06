@@ -40,6 +40,17 @@ vi.mock('../lib/libraryApi', async () => {
     };
 });
 
+// The formula and its product type come from the backend
+vi.mock('../lib/formulasApi', () => {
+    const formulation = { id: 'f1', name: 'Day Cream', profile_id: 'ow_lotion', target_weight_g: 100, target_ph: 4.5, community_post_id: null };
+    const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
+    return {
+        fetchFormula: () => Promise.resolve({ ...formulation, formulation_phases: mocks.phases }),
+        fetchProfile: () => Promise.resolve(profile),
+        createFormula: vi.fn(),
+    };
+});
+
 vi.mock('../lib/supabase', () => {
     const formulation = { id: 'f1', name: 'Day Cream', profile_id: 'ow_lotion', target_weight_g: 100, target_ph: 4.5, community_post_id: null };
     const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };

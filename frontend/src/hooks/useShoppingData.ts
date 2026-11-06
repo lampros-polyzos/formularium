@@ -25,7 +25,7 @@ export function useShoppingData(userId: string | undefined) {
         let cancelled = false;
         (async () => {
             try {
-                const [formulas, lots] = await Promise.all([loadOwnRecipes(userId), loadStash()]);
+                const [formulas, lots] = await Promise.all([loadOwnRecipes(), loadStash()]);
                 const stashIngredients = await loadIngredients(lots.map(l => l.ingredient_id));
                 if (!cancelled) setState({ status: 'ready', data: { formulas, lots, stashIngredients } });
             } catch (e) {

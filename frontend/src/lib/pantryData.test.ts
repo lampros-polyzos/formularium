@@ -5,8 +5,9 @@ import { loadCommunityRecipes, loadIngredients, loadOwnRecipes, loadStash } from
 vi.mock('./supabase', () => ({ supabase: {} }));
 
 // The stash and the ingredient rows come from the backend
-const api = vi.hoisted(() => ({ fetchStash: vi.fn(), fetchIngredientsByIds: vi.fn() }));
+const api = vi.hoisted(() => ({ fetchStash: vi.fn(), fetchIngredientsByIds: vi.fn(), fetchFormulasWithLines: vi.fn() }));
 vi.mock('./libraryApi', () => api);
+vi.mock('./formulasApi', () => api);
 beforeEach(() => {
     api.fetchStash.mockReset();
     api.fetchIngredientsByIds.mockReset().mockResolvedValue([]);
@@ -66,16 +67,14 @@ describe('loadIngredients', () => {
 
 describe('loadOwnRecipes', () => {
     it('flattens phases into lines, converts numbers and skips empty formulas', async () => {
-        const { client } = fakeClient({
-            formulations: [
-                { id: 'f1', name: 'Lotion', target_ph: 5.5, target_weight_g: '250', formulation_phases: [
-                    { phase_letter: 'A', formulation_ingredients: [{ percentage: '70.5', is_qs: true, ingredients: ing('aqua') }] },
-                    { phase_letter: 'B', formulation_ingredients: [{ percentage: 5, is_qs: false, ingredients: ing('oil') }, { percentage: 1, is_qs: false, ingredients: null }] },
-                ] },
-                { id: 'f2', name: 'Empty', target_ph: null, target_weight_g: null, formulation_phases: [] },
-            ],
-        });
-        const recipes = await loadOwnRecipes('u1', client);
+        api.fetchFormulasWithLines.mockResolvedValue([
+            { id: 'f1', name: 'Lotion', target_ph: 5.5, target_weight_g: '250', formulation_phases: [
+                { phase_letter: 'A', formulation_ingredients: [{ percentage: '70.5', is_qs: true, ingredients: ing('aqua') }] },
+                { phase_letter: 'B', formulation_ingredients: [{ percentage: 5, is_qs: false, ingredients: ing('oil') }, { percentage: 1, is_qs: false, ingredients: null }] },
+            ] },
+            { id: 'f2', name: 'Empty', target_ph: null, target_weight_g: null, formulation_phases: [] },
+        ]);
+        const recipes = await loadOwnRecipes();
         expect(recipes).toHaveLength(1);
         expect(recipes[0]).toMatchObject({ id: 'f1', source: 'own', name: 'Lotion', targetPh: 5.5, targetWeightG: 250 });
         expect(recipes[0].lines.map(l => [l.ingredient.id, l.phase, l.percentage, l.isQS])).toEqual([['aqua', 'A', 70.5, true], ['oil', 'B', 5, false]]);
