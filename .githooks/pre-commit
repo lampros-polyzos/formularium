@@ -79,4 +79,10 @@ if [ "$found" -ne 0 ]; then
   echo "Not a secret? Commit anyway with:  git commit --no-verify" >&2
   exit 1
 fi
+
+# The frontend tests, when frontend files are part of the commit (this replaces the old husky hook)
+if git diff --cached --name-only | grep -q '^frontend/'; then
+  echo "Running the frontend tests..." >&2
+  (cd frontend && npm test --silent) || { echo "Commit blocked: the frontend tests fail. Fix them, or commit anyway with: git commit --no-verify" >&2; exit 1; }
+fi
 exit 0
