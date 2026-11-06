@@ -40,7 +40,7 @@ interface Draft {
 
 interface RecipeRatingsProps {
     postId: string;
-    authorId: string;
+    authorId: string | null;
     versions: number[];
     activeVersion: number;
 }

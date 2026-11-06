@@ -12,12 +12,13 @@ import ReportModal from '../components/ReportModal';
 import EditPostModal from '../components/EditPostModal';
 import { useCommunityMutes } from '../hooks/useCommunityMutes';
 import { useIsModerator } from '../hooks/useIsModerator';
-import { addComment, deleteComment, deletePost, fetchComments, fetchPost, fetchVersions, setAnswered } from '../lib/communityApi';
+import { addComment, deleteComment, deletePost, fetchComments, fetchPost, fetchVersions, setAnswered, type CommunityPost, type RecipeLine } from '../lib/communityApi';
+import { errorText } from '../lib/errorText';
 import { COMMENT_MAX, SAFETY_NOTICE, communityErrorMessage } from '../lib/communityLimits';
 
 interface Snapshot {
     version: number;
-    formulation_data: any[];
+    formulation_data: RecipeLine[];
     release_notes: string | null;
     created_at: string;
 }
@@ -37,7 +38,7 @@ export default function PostDetail() {
     const { formatDate } = useSettings();
     const { alert, confirm } = useDialog();
 
-    const [post, setPost] = useState<any>(null);
+    const [post, setPost] = useState<CommunityPost | null>(null);
     const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
     const [activeVersion, setActiveVersion] = useState<number>(1);
     const [isLoading, setIsLoading] = useState(true);
@@ -99,10 +100,10 @@ export default function PostDetail() {
     const recipe = currentSnapshot?.formulation_data || [];
 
     // Helper to calculate visual diffs
-    const getDiffBadge = (currentItem: any) => {
+    const getDiffBadge = (currentItem: RecipeLine) => {
         if (!previousSnapshot) return null; // No diff on v1
 
-        const prevItem = previousSnapshot.formulation_data.find((p: any) => p.inci_name === currentItem.inci_name || p.name === currentItem.name);
+        const prevItem = previousSnapshot.formulation_data.find(p => p.inci_name === currentItem.inci_name || p.name === currentItem.name);
 
         if (!prevItem) return <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold ml-2">NEW</span>;
 
@@ -129,7 +130,7 @@ export default function PostDetail() {
             if (data) setComments(prev => [...prev, data]);
             setNewComment('');
 
-        } catch (error: any) {
+        } catch (error) {
             void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't post your comment" });
         } finally {
             setIsSubmittingComment(false);
@@ -144,15 +145,15 @@ export default function PostDetail() {
         try {
             const newId = await cloneRecipeToStudio(
                 post,
-                recipe.map((ing: any) => ({ ingredient_id: ing.id || ing.ingredient_id, percentage: ing.percentage, phase: ing.phase })),
+                recipe.map(ing => ({ ingredient_id: ing.id || ing.ingredient_id || '', percentage: ing.percentage ?? 0, phase: ing.phase ?? 'A' })),
             );
 
             // Straight to the new private clone
             navigate(`/studio/${newId}`);
 
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error cloning:", error);
-            void alert(`Failed to clone: ${error.message}`, { tone: "error", title: "Couldn't clone the recipe" });
+            void alert(`Failed to clone: ${errorText(error)}`, { tone: "error", title: "Couldn't clone the recipe" });
         } finally {
             setIsCloning(false);
         }
@@ -168,7 +169,7 @@ export default function PostDetail() {
 
             // Navigate back to the hub after successful deletion
             navigate('/community');
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error deleting post:", error);
             void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't delete the post" });
             setIsDeleting(false);
@@ -185,7 +186,7 @@ export default function PostDetail() {
     const handleToggleAnswered = async () => {
         try {
             const answeredAt = await setAnswered(post.id, !post.answered_at);
-            setPost((prev: Record<string, unknown>) => ({ ...prev, answered_at: answeredAt }));
+            setPost(prev => prev && { ...prev, answered_at: answeredAt });
         } catch (error) {
             void alert(communityErrorMessage(error), { tone: "error", title: "Couldn't update the post" });
         }
@@ -256,7 +257,7 @@ export default function PostDetail() {
                                     {user && !isAuthor && (
                                         <>
                                             <button onClick={() => setReporting({ type: 'post', id: post.id })} className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors">Report</button>
-                                            {post.author_id && <button onClick={() => handleMute(post.author_id, post.author_name || 'this member')} className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors">Mute author</button>}
+                                            {post.author_id && <button onClick={() => handleMute(post.author_id as string, post.author_name || 'this member')} className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors">Mute author</button>}
                                         </>
                                     )}
                                     {canRemovePost && (
@@ -452,7 +453,7 @@ export default function PostDetail() {
                 <EditPostModal
                     post={post}
                     onClose={() => setEditing(false)}
-                    onSaved={(changes) => { setPost((prev: Record<string, unknown>) => ({ ...prev, ...changes, edited_at: new Date().toISOString() })); setEditing(false); }}
+                    onSaved={(changes) => { setPost(prev => prev && { ...prev, ...changes, edited_at: new Date().toISOString() }); setEditing(false); }}
                 />
             )}
         </div>

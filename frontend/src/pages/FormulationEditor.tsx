@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import FormulationCompanion from '../components/FormulationCompanion';
-import RecommendationsPanel from '../components/RecommendationsPanel';
+import RecommendationsPanel, { type RecommendationItem } from '../components/RecommendationsPanel';
 import { authFetch } from '../lib/authClient';
 import { fetchIngredientByInci, fetchStash, searchIngredients } from '../lib/libraryApi';
 import { createFormula, fetchFormula, fetchProfile } from '../lib/formulasApi';
@@ -55,6 +55,7 @@ import { fixToolLink } from '../lib/toolLinks';
 import type { DatabaseIngredient, FormulaIngredient, ProfileConfig } from '../types/formulation';
 import { buildExportPayload, toApiIngredient } from '../lib/formulationApi';
 import { downloadPdf, pdfFilename } from '../lib/exportPdf';
+import { errorText } from '../lib/errorText';
 import {
     analyzeFormula,
     linesNeedingSubstitutes,
@@ -84,7 +85,7 @@ const FormulationEditor = () => {
     // Validation state
     const [profileId, setProfileId] = useState('');
     const [alerts, setAlerts] = useState<{ type: 'error' | 'warning' | 'success', message: string, fix?: Fix }[]>([]);
-    const [recommendations, setRecommendations] = useState<any[]>([]);
+    const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
     const [activeProfile, setActiveProfile] = useState<ProfileConfig | null>(null);
     const [formulaId, setFormulaId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -191,11 +192,11 @@ const FormulationEditor = () => {
                 const loadedIngredients: FormulaIngredient[] = [];
 
                 phaseData?.forEach(phase => {
-                    phase.formulation_ingredients?.forEach((fi: any) => {
+                    phase.formulation_ingredients?.forEach(fi => {
                         if (fi.ingredients) {
                             loadedIngredients.push({
                                 ...fi.ingredients,
-                                phase: phase.phase_letter,
+                                phase: phase.phase_letter as FormulaIngredient['phase'], // the database stores plain text; the editor only ever writes A, B or C
                                 percentage: Number(fi.percentage),
                                 isQS: fi.is_qs || false,
                                 originalIndex: loadedIngredients.length
@@ -748,9 +749,9 @@ const FormulationEditor = () => {
             setFormulaId(newFormulationId);
             navigate(`/studio/${newFormulationId}`, { replace: true });
             setModal({ isOpen: true, type: 'success', title: 'Clone Successful', message: 'Your project has been cloned successfully.' });
-        } catch (error: any) {
-            console.error("Error cloning formula:", error.message || error);
-            setModal({ isOpen: true, type: 'error', title: 'Clone Failed', message: `Failed to clone project: ${error.message || "Check the console for details."}` });
+        } catch (error) {
+            console.error("Error cloning formula:", errorText(error) || error);
+            setModal({ isOpen: true, type: 'error', title: 'Clone Failed', message: `Failed to clone project: ${errorText(error) || "Check the console for details."}` });
         } finally {
             setIsSaving(false);
         }

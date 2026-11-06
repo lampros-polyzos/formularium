@@ -62,7 +62,7 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
             setSelectedTags([]);
             onSuccess();
             onClose();
-        } catch (err: any) {
+        } catch (err) {
             console.error("Error creating post:", err);
             setError(communityErrorMessage(err) || "Failed to create post.");
         } finally {

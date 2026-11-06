@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { addVersion, createPost, editPost, fetchVersions } from '../lib/communityApi';
+import { addVersion, createPost, editPost, fetchVersions, type RecipeLine } from '../lib/communityApi';
+import { errorText } from '../lib/errorText';
 import { linkFormulaToPost } from '../lib/formulasApi';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -7,7 +8,7 @@ interface ShareFormulaModalProps {
     isOpen: boolean;
     onClose: () => void;
     currentProjectName: string;
-    recipeData: any[];
+    recipeData: RecipeLine[];
     activeProfileName: string | null;
     formulaId: string | null;
     communityPostId: string | null;
@@ -96,8 +97,8 @@ export default function ShareFormulaModal({
             setSuccess(true);
             setTimeout(() => onClose(), 2000);
 
-        } catch (err: any) {
-            setError(err.message || "Failed to share formulation.");
+        } catch (err) {
+            setError(errorText(err) || "Failed to share formulation.");
         } finally {
             setIsSubmitting(false);
         }

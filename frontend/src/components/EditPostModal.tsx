@@ -3,7 +3,7 @@ import { editPost } from '../lib/communityApi';
 import { SOURCES_MAX, TEXT_MAX, TITLE_MAX, communityErrorMessage } from '../lib/communityLimits';
 
 interface EditPostModalProps {
-    post: { id: string; title: string; write_up: string | null; sources?: string | null; post_type: string };
+    post: { id: string; title: string; write_up: string | null; sources?: string | null; post_type: string | null };
     onClose: () => void;
     onSaved: (changes: { title: string; write_up: string; sources: string | null }) => void;
 }

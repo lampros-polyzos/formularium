@@ -7,6 +7,7 @@ import CheckInPrompt from '../components/CheckInPrompt';
 import StudioLayout from '../components/StudioLayout';
 import GuidedTour from '../components/GuidedTour';
 import { STUDIO_TOUR_SEEN_KEY, STUDIO_WIDE_BREAKPOINT, studioTourSteps } from '../components/studioTourSteps';
+import { errorText } from '../lib/errorText';
 
 // Define the formula type based on your database schema
 type SavedFormula = {
@@ -86,13 +87,13 @@ const StudioPage = () => {
       setFormulas(prev => prev.filter(formula => formula.id !== modal.targetId));
       setModal(prev => ({ ...prev, isOpen: false }));
 
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting formulation:", error);
       setModal({
         isOpen: true,
         type: 'error',
         title: 'Delete Failed',
-        message: error.message || "An unexpected error occurred.",
+        message: errorText(error) || "An unexpected error occurred.",
         targetId: ''
       });
     }

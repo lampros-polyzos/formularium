@@ -55,9 +55,21 @@ export interface CommunityComment {
     created_at: string;
 }
 
+/** One ingredient line of a shared recipe. Older versions stored slightly different names, so most fields are optional. */
+export interface RecipeLine {
+    id?: string;
+    ingredient_id?: string;
+    name?: string;
+    trade_name?: string;
+    inci_name?: string | null;
+    phase?: string;
+    percentage?: number | string;
+    function?: string | null;
+}
+
 export interface RecipeVersion {
     version: number;
-    formulation_data: Record<string, unknown>[];
+    formulation_data: RecipeLine[];
     release_notes: string | null;
     created_at: string;
 }

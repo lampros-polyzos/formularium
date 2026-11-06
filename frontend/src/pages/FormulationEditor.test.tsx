@@ -59,7 +59,7 @@ vi.mock('../lib/formulasApi', () => ({
 
 // Mock the Companion component
 vi.mock('../components/FormulationCompanion', () => ({
-  default: ({ alerts }: { alerts: any[] }) => (
+  default: ({ alerts }: { alerts: { message: string }[] }) => (
     <div data-testid="mock-companion">
       {alerts.map((a, i) => <span key={i} data-testid="alert">{a.message}</span>)}
     </div>
@@ -119,8 +119,8 @@ describe('FormulationEditor Profile Selector', () => {
 
     // Extract the body sent to fetch to verify the payload structure
     // (other requests, such as the header's count of check-ins that are due, go through the same mocked fetch)
-    const fetchCallArgs = (globalThis.fetch as any).mock.calls.find((call: unknown[]) => String(call[0]).includes('/api/v1/validate'));
-    const requestBody = JSON.parse(fetchCallArgs[1].body);
+    const fetchCallArgs = vi.mocked(globalThis.fetch).mock.calls.find((call: unknown[]) => String(call[0]).includes('/api/v1/validate'));
+    const requestBody = JSON.parse(String(fetchCallArgs?.[1]?.body));
 
     expect(requestBody).toMatchObject({
       profileId: 'ow_lotion',

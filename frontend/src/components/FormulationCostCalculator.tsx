@@ -63,7 +63,7 @@ export default function FormulationCostCalculator({
             try {
                 const [stashData, containerData] = await Promise.all([fetchStash(), fetchContainers()]);
 
-                const formattedStash = (stashData || []).map((item: any) => ({
+                const formattedStash = (stashData || []).map(item => ({
                     id: item.id,
                     ingredient_id: item.ingredient_id,
                     ingredient_name: item.ingredients?.trade_name || item.ingredients?.inci_name || 'Unknown Ingredient',

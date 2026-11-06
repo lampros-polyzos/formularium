@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchUnreadNotifications, markNotificationRead } from '../lib/communityApi';
+import { fetchUnreadNotifications, markNotificationRead, type Notification as AppNotification } from '../lib/communityApi';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function NotificationBell() {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [notifications, setNotifications] = useState<any[]>([]);
+    const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
 
     useEffect(() => {

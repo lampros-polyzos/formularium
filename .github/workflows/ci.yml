@@ -1,14 +1,23 @@
-name: Full Stack CI Pipeline
+name: CI
 
-# Triggers the workflow on pushes and pull requests to the main branch
+# Runs on pushes and pull requests to main
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
+# A new push cancels the older run of the same branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  frontend-tests:
+  frontend:
+    name: Frontend (lint, typecheck and build, tests)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -16,19 +25,29 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x' # Use your local Node version
-          
+          node-version: '20.x'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: Install Dependencies
         run: npm ci # ci is strictly for automated environments
-        
+
+      - name: Lint
+        run: npm run lint
+
+      # "npm run build" type-checks first (tsc -b) and then builds with Vite
+      - name: Typecheck and Build
+        run: npm run build
+
       - name: Run React Tests
         run: npm test
 
-  backend-tests:
+  backend:
+    name: Backend (tests)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,21 +55,23 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        
+
       - name: Set up JDK 27
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '27'
           distribution: 'temurin'
-          
+
       - name: Cache Maven packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-      
+          restore-keys: ${{ runner.os }}-m2-
+
       - name: Grant execute permission for mvnw
         run: chmod +x mvnw
 
+      # Compiles, then runs every test against H2: no database or secrets needed
       - name: Run Spring Boot Tests
         run: ./mvnw clean test

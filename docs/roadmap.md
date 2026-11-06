@@ -20,6 +20,7 @@
 4. **Shared sign-in throttling** (database or Redis) so more than one backend instance can run
 5. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
 6. **Small admin tool** to grant moderator rights without hand-written SQL
+7. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
 
 ## Known limitations
 
