@@ -9,7 +9,7 @@
 - Community: posts, comments, recipe versions and remixes, ratings, reports, muting, moderation, notifications
 - Own authentication: JWT access tokens, rotating refresh cookie, Google sign-in, bot check, email confirmation, password reset
 - Data export and account deletion
-- Supabase reduced to a plain PostgreSQL host; every rule moved to tested Java ([the story](spring-owns-auth-and-data.md))
+- Supabase reduced to a plain PostgreSQL host; every rule moved to tested Java ([ADR 0008](decisions/0008-move-to-spring-in-slices.md))
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 
 ## Next
@@ -27,5 +27,7 @@
 - Notifications are fetched every 30 seconds; there is no push.
 - Regional limits cover the EU only.
 - Moderator rights are granted by inserting a row in `community_moderators`.
+- `unique_inci_name` makes an INCI name unique across the library, so a powder and a solution of the same ingredient cannot both be rows.
+- Copying a community recipe leaves out lines that use another member's private ingredient; the copy is still made.
 - Accounts from the earlier Supabase-auth days were not imported (a fresh start was chosen).
 - The app supports a formulator's own safety checks. It is **not** a substitute for a professional safety assessment.

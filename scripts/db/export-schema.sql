@@ -1,7 +1,7 @@
 -- Run this in the Supabase dashboard: SQL Editor > New query > paste > Run.
 -- It returns ONE cell with the structure of the public schema as JSON: tables and columns, keys, indexes, row-level security policies,
 -- database functions and triggers. It contains no row data and no secrets.
--- Copy the cell (or download the result) and save it as docs/schema-dump.json.
+-- Copy the cell (or download the result) and keep it out of git (it describes your database).
 
 select jsonb_pretty(jsonb_build_object(
   'tables', (
