@@ -6,7 +6,18 @@ create table if not exists app_users (
   google_sub varchar(100) unique,
   username varchar(40) not null unique,
   created_at timestamp with time zone not null default current_timestamp,
-  last_login_at timestamp with time zone
+  last_login_at timestamp with time zone,
+  email_verified_at timestamp with time zone
+);
+
+create table if not exists email_tokens (
+  id uuid primary key,
+  user_id uuid not null references app_users (id) on delete cascade,
+  purpose varchar(20) not null,
+  token_hash varchar(100) not null unique,
+  created_at timestamp with time zone not null,
+  expires_at timestamp with time zone not null,
+  used_at timestamp with time zone
 );
 
 create table if not exists refresh_tokens (

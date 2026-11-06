@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AuthError, login, loginWithGoogle, register } from '../lib/authClient';
+import { AuthError, forgotPassword, login, loginWithGoogle, register, resendVerification } from '../lib/authClient';
 import GoogleSignInButton from './GoogleSignInButton';
 import { Beaker, X } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -18,6 +18,19 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // 'form' is sign in / sign up. 'confirm' asks you to click the link we emailed. 'forgot' asks for the email to send a reset link to.
+  const [view, setView] = useState<'form' | 'confirm' | 'forgot'>('form');
+  const [notice, setNotice] = useState('');
+  // Each bot check can be used once, so a screen that needs another one starts with a fresh widget
+  const [widgetKey, setWidgetKey] = useState(0);
+
+  const goTo = (next: 'form' | 'confirm' | 'forgot', note = '') => {
+    setView(next);
+    setNotice(note);
+    setMessage('');
+    setCaptchaToken(null);
+    setWidgetKey(k => k + 1);
+  };
 
   useEffect(() => {
     if (isOpen) document.body.style.overflow = 'hidden';
@@ -35,11 +48,37 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
     try {
       if (!captchaToken) throw new Error("Please complete the security check.");
 
-      if (isSignUp) await register({ email, password, username: username.trim(), captchaToken });
-      else await login({ email, password, captchaToken });
+      if (isSignUp) {
+        const user = await register({ email, password, username: username.trim(), captchaToken });
+        if (!user) { goTo('confirm', `We sent a confirmation link to ${email.trim()}.`); return; }   // not signed in until the link is clicked
+      } else {
+        await login({ email, password, captchaToken });
+      }
       onClose();   // signed in: the page behind the form notices and moves on
     } catch (error) {
+      if (error instanceof AuthError && error.code === 'email_not_verified') { goTo('confirm', 'Your email address is not confirmed yet. Open the link we sent you, or ask for a new one.'); return; }
       setMessage(error instanceof AuthError || error instanceof Error ? error.message : 'An error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Asks for a new confirmation link, or a reset link. The answer is the same whether or not the address has an account.
+  const handleSendLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setMessage('');
+    try {
+      if (!captchaToken) throw new Error("Please complete the security check.");
+      if (view === 'forgot') await forgotPassword({ email, captchaToken });
+      else await resendVerification({ email, captchaToken });
+      setCaptchaToken(null);
+      setWidgetKey(k => k + 1);
+      setNotice(view === 'forgot'
+        ? 'If that address has an account, we sent a link to choose a new password. It works for one hour.'
+        : 'If that address needs confirming, we sent a new link. The old one no longer works.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'An error occurred.');
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +118,41 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
             {isSignUp ? 'Join the community of formulators.' : 'Sign in to access your studio.'}
           </p>
 
+          {view !== 'form' && (
+            <form className="space-y-5" onSubmit={handleSendLink}>
+              <h3 className="text-center text-lg font-bold text-[#1f382a]">{view === 'forgot' ? 'Reset your password' : 'Check your email'}</h3>
+              <p role="status" className="text-center text-sm text-[#3a5a4a]">
+                {notice || (view === 'forgot' ? 'Enter your email and we will send you a link to choose a new password.' : 'Open the link in your email to finish creating your account.')}
+              </p>
+              <div>
+                <label htmlFor="link-email" className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
+                <input
+                  id="link-email"
+                  type="email"
+                  required
+                  className="w-full px-4 py-3 bg-[#f7f8f6] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2c4c3b] focus:bg-white transition-colors"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-center py-2">
+                <Turnstile key={widgetKey} siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY} onSuccess={(token) => setCaptchaToken(token)} />
+              </div>
+              {message && <div role="alert" className="text-sm font-medium p-3 rounded-xl bg-red-50 text-red-700">{message}</div>}
+              <button
+                type="submit"
+                disabled={isLoading || !captchaToken}
+                className="w-full py-3.5 px-4 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] focus:outline-none disabled:opacity-50 transition-colors"
+              >
+                {isLoading ? 'Sending...' : (view === 'forgot' ? 'Send reset link' : 'Send a new link')}
+              </button>
+              <button type="button" onClick={() => goTo('form')} className="block w-full text-center text-sm font-medium text-[#3a5a4a] hover:text-[#1f382a]">
+                Back to sign in
+              </button>
+            </form>
+          )}
+
+          {view === 'form' && (<>
           <GoogleSignInButton onCredential={handleGoogleCredential} onError={setMessage} />
 
           <div className="relative mb-6">
@@ -138,6 +212,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
             {/* Turnstile is now always rendered for both Sign In and Sign Up */}
             <div className="flex justify-center py-2">
               <Turnstile
+                key={widgetKey}
                 siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY}
                 onSuccess={(token) => setCaptchaToken(token)}
               />
@@ -158,6 +233,13 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
             </button>
           </form>
 
+          {!isSignUp && (
+            <button type="button" onClick={() => goTo('forgot')} className="mt-4 block w-full text-center text-sm font-medium text-[#3a5a4a] hover:text-[#1f382a] underline">
+              Forgot your password?
+            </button>
+          )}
+          </>)}
+
           {/* Applies to email and Google sign-in alike */}
           <p className="mt-5 text-center text-xs text-gray-500 leading-relaxed">
             By continuing, you agree to our{' '}
@@ -173,6 +255,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
             onClick={() => {
               setIsSignUp(!isSignUp);
               setMessage('');
+              setView('form');
+              setNotice('');
               // Do not reset captchaToken here, otherwise switching tabs forces them to solve it again
             }}
             className="text-sm font-medium text-[#3a5a4a] hover:text-[#1f382a] transition-colors"

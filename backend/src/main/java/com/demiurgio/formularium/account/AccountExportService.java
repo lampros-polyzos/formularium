@@ -51,6 +51,7 @@ public class AccountExportService {
     static final List<String> NOT_EXPORTED = List.of(
             "app_users",            // exported separately, without the password hash
             "refresh_tokens",       // sign-in secrets
+            "email_tokens",         // one-time links sent by email, also secrets
             "community_moderators"  // a role given by the operators, not the member's own data
     );
 

@@ -2,6 +2,8 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import ScrollManager from './components/ScrollManager';
 import './App.css'
 import LandingPage from './pages/LandingPage';
@@ -45,6 +47,8 @@ function App() {
             <Route path="/blog/:slug" element={<BlogArticlePage />} />
             <Route path="/learn" element={<LearnHubPage />} />
             <Route path="/tools" element={<ToolsPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/privacy" element={<LegalPage document={PRIVACY_POLICY} />} />
             <Route path="/terms" element={<LegalPage document={TERMS_OF_USE} />} />
 

@@ -1,16 +1,25 @@
 # Local settings for the backend. Copy this file to config/application.properties (same folder) and fill in the values.
 # Spring Boot reads config/application.properties automatically when you start it from the backend folder.
-# config/application.properties is ignored by git: never commit the real values.
+# config/application.properties is ignored by git: never commit the real values, and never type them into THIS file or into src/main/resources.
 
-# Supabase dashboard > Connect > "Session pooler", written as a JDBC address
-spring.datasource.url=jdbc:jdbc:postgresql://aws-0-eu-west-1.pooler.supabase.com:6543/postgres?user=postgres.fjunaevqrmxmocsotpfo&password=Paeixalalihoraiakrema!
+# Supabase dashboard > Connect > "Session pooler", written as a JDBC address (user and password go in the two lines below)
+spring.datasource.url=jdbc:postgresql://aws-0-REGION.pooler.supabase.com:6543/postgres
 # The pooler user is postgres.<your-project-ref>
-spring.datasource.username=postgres.fjunaevqrmxmocsotpfo
-spring.datasource.password=Paeixalalihoraiakrema!
+spring.datasource.username=postgres.YOUR_PROJECT_REF
+spring.datasource.password=YOUR_DATABASE_PASSWORD
 
 # 32+ random characters. Generate one with:  openssl rand -base64 48
-auth.jwt-secret=s7XwDtqkbTkrPavFa4tMMTzwY332YIsuWEEhnS/asAagA+NuNnmRY5PTdOHR+QXr
+auth.jwt-secret=GENERATE_A_LONG_RANDOM_SECRET
 
 # Optional while developing
-auth.google-client-id=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
-auth.turnstile-secret=0x4AAAAAAFkVGd-jcmVlUV32
+auth.google-client-id=
+auth.turnstile-secret=
+
+# Email (confirmation and password reset links). Any SMTP server; for Gmail use an app password, never your real password.
+# Leave spring.mail.host empty to only log the emails instead of sending them.
+spring.mail.host=
+spring.mail.port=587
+spring.mail.username=
+spring.mail.password=
+auth.mail-from=Formularium <no-reply@example.com>
+auth.app-url=http://localhost:5173

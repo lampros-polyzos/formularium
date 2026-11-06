@@ -59,6 +59,15 @@ const LandingPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const accountDeleted = searchParams.get('account') === 'deleted';
 
+  // The pages that follow an email link (confirmed, password changed) send people here to sign in
+  const wantsSignIn = searchParams.get('signin') === '1';
+  useEffect(() => {
+    if (!wantsSignIn) return;
+    setAuthMode('signin');
+    setIsAuthModalOpen(true);
+    setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('signin'); return next; }, { replace: true });
+  }, [wantsSignIn, setSearchParams]);
+
   // Resume the navigation the visitor asked for before they were prompted to sign in
   useEffect(() => {
     if (!user) return;

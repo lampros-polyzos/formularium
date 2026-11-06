@@ -14,11 +14,14 @@ import java.time.Duration;
  * @param googleClientId the OAuth client id of the site's "Sign in with Google" button; leave empty to turn Google sign-in off
  * @param turnstileSecret Cloudflare Turnstile secret key; leave empty to skip the bot check (development)
  * @param cookieSecure   send the refresh cookie over HTTPS only. Must be true in production.
+ * @param requireVerifiedEmail sign-in needs a confirmed email address (accounts made with Google already have one)
+ * @param appUrl         the website's address, used for the links in emails
+ * @param mailFrom       the sender shown on emails
  * @param cookieSameSite Lax when the site and API share a registrable domain, None when they do not (needs cookieSecure)
  */
 @ConfigurationProperties("auth")
 public record AuthProperties(String jwtSecret, Duration accessTtl, Duration refreshTtl, String issuer, String googleClientId,
-                             String turnstileSecret, boolean cookieSecure, String cookieSameSite) {
+                             String turnstileSecret, boolean cookieSecure, String cookieSameSite, boolean requireVerifiedEmail, String appUrl, String mailFrom) {
 
     public AuthProperties {
         if (jwtSecret == null || jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
@@ -27,6 +30,9 @@ public record AuthProperties(String jwtSecret, Duration accessTtl, Duration refr
         if (accessTtl == null) accessTtl = Duration.ofMinutes(15);
         if (refreshTtl == null) refreshTtl = Duration.ofDays(30);
         if (issuer == null || issuer.isBlank()) issuer = "formularium";
+        if (appUrl == null || appUrl.isBlank()) appUrl = "http://localhost:5173";
+        if (appUrl.endsWith("/")) appUrl = appUrl.substring(0, appUrl.length() - 1);
+        if (mailFrom == null || mailFrom.isBlank()) mailFrom = "Formularium <no-reply@localhost>";
         if (cookieSameSite == null || cookieSameSite.isBlank()) cookieSameSite = "Lax";
     }
 }

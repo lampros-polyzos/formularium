@@ -185,3 +185,47 @@ describe('signing out and deleting the account', () => {
         expect(client.getAccessToken()).toBe('token-1');
     });
 });
+
+describe('confirming an email address and resetting a password', () => {
+    it('signing up with email confirmation switched on signs nobody in, and says so with null', async () => {
+        fetchMock.mockResolvedValue(reply(202, { verification_required: true, email: 'sam@example.com' }));
+        const seen: unknown[] = [];
+        client.onAuthChange(u => seen.push(u));
+        expect(await client.register({ email: 'sam@example.com', password: 'a long password', username: 'sam' })).toBeNull();
+        expect(client.getAccessToken()).toBeNull();
+        expect(seen).toEqual([]);
+    });
+
+    it('a sign-in that is refused because the email is not confirmed carries that code', async () => {
+        fetchMock.mockResolvedValue(error(403, 'email_not_verified', 'Please confirm your email address first.'));
+        await expect(client.login({ email: 'a@b.co', password: 'x' })).rejects.toMatchObject({ code: 'email_not_verified', status: 403 });
+    });
+
+    it('sends the token from the link to be confirmed', async () => {
+        fetchMock.mockResolvedValue(reply(204));
+        await client.verifyEmail('abc123');
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(String(url)).toBe('/api/v1/auth/verify-email');
+        expect(JSON.parse(init.body)).toEqual({ token: 'abc123' });
+    });
+
+    it('turns a used or expired link into an AuthError with the reason', async () => {
+        fetchMock.mockResolvedValue(error(400, 'invalid_token', 'This link has expired or was already used.'));
+        await expect(client.verifyEmail('old')).rejects.toMatchObject({ code: 'invalid_token', message: 'This link has expired or was already used.' });
+    });
+
+    it('asks for a new confirmation link and for a reset link, which answer with nothing to read', async () => {
+        fetchMock.mockImplementation(() => Promise.resolve(new Response(null, { status: 202 })));
+        await expect(client.resendVerification({ email: 'sam@example.com', captchaToken: 'c' })).resolves.toBeUndefined();
+        await expect(client.forgotPassword({ email: 'sam@example.com', captchaToken: 'c' })).resolves.toBeUndefined();
+        expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/v1/auth/resend-verification', '/api/v1/auth/forgot-password']);
+        expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ email: 'sam@example.com', captchaToken: 'c' });
+    });
+
+    it('sets a new password with the token, and does not sign anyone in', async () => {
+        fetchMock.mockResolvedValue(reply(204));
+        await client.resetPassword({ token: 't', password: 'a brand new password' });
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ token: 't', password: 'a brand new password' });
+        expect(client.getAccessToken()).toBeNull();
+    });
+});

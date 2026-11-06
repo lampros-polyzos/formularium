@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -35,8 +36,37 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    ResponseEntity<AuthResponse> register(@Valid @RequestBody AuthRequests.Register body, HttpServletRequest request) {
-        return respond(HttpStatus.CREATED, auth.register(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+    ResponseEntity<?> register(@Valid @RequestBody AuthRequests.Register body, HttpServletRequest request) {
+        AuthService.Session session = auth.register(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT));
+        if (session == null) {
+            // The account exists but must confirm its email before signing in: no session yet
+            return ResponseEntity.accepted().header(HttpHeaders.CACHE_CONTROL, "no-store").body(Map.of("verification_required", true, "email", body.email().trim().toLowerCase()));
+        }
+        return respond(HttpStatus.CREATED, session);
+    }
+
+    @PostMapping("/verify-email")
+    ResponseEntity<Void> verifyEmail(@Valid @RequestBody AuthRequests.Token body) {
+        auth.verifyEmail(body.token());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/resend-verification")
+    ResponseEntity<Void> resendVerification(@Valid @RequestBody AuthRequests.EmailOnly body, HttpServletRequest request) {
+        auth.resendVerification(body, request.getRemoteAddr());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/forgot-password")
+    ResponseEntity<Void> forgotPassword(@Valid @RequestBody AuthRequests.EmailOnly body, HttpServletRequest request) {
+        auth.forgotPassword(body, request.getRemoteAddr());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/reset-password")
+    ResponseEntity<Void> resetPassword(@Valid @RequestBody AuthRequests.ResetPassword body) {
+        auth.resetPassword(body);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/login")

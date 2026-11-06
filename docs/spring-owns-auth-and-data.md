@@ -84,8 +84,12 @@ PostgreSQL client tools installed.)
   Google sign-up alike, and the three recipes now live in code (`StarterFormulas`). Run `supabase/migrations/20261118000000_starter_formulas_in_spring.sql` to remove the
   old database trigger and function, at the same time as you deploy the backend. Accounts that already have their starter formulas keep them.
 
-- **No email confirmation yet.** Supabase sent a confirmation link on sign-up; the Spring sign-up signs people in immediately. Add email verification (an SMTP provider, a one-time token table and a verify endpoint) before opening sign-ups to the public.
-- **No password reset yet.** Same reason: it needs email. Plan it together with email confirmation.
+- **Email confirmation and password reset are built.** Needs `20261123000000_email_verification_and_reset.sql` (existing accounts are marked confirmed, so nobody is locked out).
+  Sign-up sends a link (valid 24 hours, once) and the account cannot sign in until it is clicked; Google accounts are confirmed already. "Forgot your password?" sends a link
+  (valid one hour, once) that sets a new password, confirms the address and signs the account out everywhere. Neither endpoint reveals whether an email has an account,
+  and a new link is not sent more than once a minute. Emails go through any SMTP server: set `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` and `APP_URL`
+  (the website's address, used in the links). Without `MAIL_HOST` the emails are only written to the backend log, links included, which is enough to try it locally.
+  `AUTH_REQUIRE_VERIFIED_EMAIL=false` switches the confirmation requirement off (development only).
 - Until the data slices are done, anything that reads Supabase tables directly (library, stash, formulas, community, notifications) and the data export see no signed-in user and will not work on this branch.
 - Account deletion removes the account and, through foreign keys, whatever cascades from it. The old `delete_my_account` function may do more: it is replaced in slice 7.
 - The `profiles` table is now unused by Spring (the username lives in `app_users`). It is dropped in the final step, together with the unused `users` and `reviews` tables.

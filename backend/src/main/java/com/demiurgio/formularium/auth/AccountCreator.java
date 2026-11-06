@@ -32,8 +32,8 @@ class AccountCreator {
 
     /** @throws org.springframework.dao.DuplicateKeyException when the email, username or Google id is already used (nothing is kept) */
     @Transactional
-    UserAccount create(String email, String passwordHash, String googleSub, String username) {
-        UserAccount account = users.insert(email, passwordHash, googleSub, username);
+    UserAccount create(String email, String passwordHash, String googleSub, String username, java.time.Instant verifiedAt) {
+        UserAccount account = users.insert(email, passwordHash, googleSub, username, verifiedAt);
         starterFormulas.createFor(account.id());
         return account;
     }

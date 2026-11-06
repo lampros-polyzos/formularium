@@ -64,14 +64,29 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
         throw new AuthError('network', 'Could not reach the server. Check your connection and try again.', 0);
     }
     if (!res.ok) throw await toError(res);
-    return (res.status === 204 ? undefined : await res.json()) as T;
+    const text = await res.text();   // 204 and 202 answers have no body
+    return (text ? JSON.parse(text) : undefined) as T;
 }
 
-export async function register(input: { email: string; password: string; username: string; captchaToken?: string | null }): Promise<AuthUser> {
-    const response = await post<AuthResponse>('/api/v1/auth/register', input);
+/** Returns the new user, who is signed in, or null when the email must be confirmed first (a link was sent and the account cannot sign in until it is clicked). */
+export async function register(input: { email: string; password: string; username: string; captchaToken?: string | null }): Promise<AuthUser | null> {
+    const response = await post<AuthResponse | { verification_required: true }>('/api/v1/auth/register', input);
+    if ('verification_required' in response) return null;
     setSession(response);
     return response.user;
 }
+
+/** Confirms the email address with the token from the link in the email. */
+export const verifyEmail = (token: string) => post<void>('/api/v1/auth/verify-email', { token });
+
+/** Sends a new confirmation link. The answer is the same whether or not the address has an account. */
+export const resendVerification = (input: { email: string; captchaToken?: string | null }) => post<void>('/api/v1/auth/resend-verification', input);
+
+/** Sends a password reset link. The answer is the same whether or not the address has an account. */
+export const forgotPassword = (input: { email: string; captchaToken?: string | null }) => post<void>('/api/v1/auth/forgot-password', input);
+
+/** Sets a new password with the token from the reset email. Everything signed in with the old password is signed out. */
+export const resetPassword = (input: { token: string; password: string }) => post<void>('/api/v1/auth/reset-password', input);
 
 export async function login(input: { email: string; password: string; captchaToken?: string | null }): Promise<AuthUser> {
     const response = await post<AuthResponse>('/api/v1/auth/login', input);

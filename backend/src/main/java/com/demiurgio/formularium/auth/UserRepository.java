@@ -12,14 +12,14 @@ import java.util.UUID;
 
 @Repository
 class UserRepository {
-    private static final String COLUMNS = "id, email, password_hash, google_sub, username";
+    private static final String COLUMNS = "id, email, password_hash, google_sub, username, email_verified_at";
 
     private final JdbcClient jdbc;
 
     UserRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
     private static UserAccount map(ResultSet rs, int row) throws SQLException {
-        return new UserAccount(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("password_hash"), rs.getString("google_sub"), rs.getString("username"));
+        return new UserAccount(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("password_hash"), rs.getString("google_sub"), rs.getString("username"), rs.getTimestamp("email_verified_at") != null);
     }
 
     Optional<UserAccount> findByEmail(String email) {
@@ -39,11 +39,21 @@ class UserRepository {
     }
 
     /** @throws org.springframework.dao.DuplicateKeyException when the email, username or Google id is already used */
-    UserAccount insert(String email, String passwordHash, String googleSub, String username) {
+    UserAccount insert(String email, String passwordHash, String googleSub, String username, Instant verifiedAt) {
         UUID id = UUID.randomUUID();
-        jdbc.sql("insert into app_users (id, email, password_hash, google_sub, username) values (:id, :email, :hash, :sub, :username)")
-                .param("id", id).param("email", email).param("hash", passwordHash).param("sub", googleSub).param("username", username).update();
-        return new UserAccount(id, email, passwordHash, googleSub, username);
+        jdbc.sql("insert into app_users (id, email, password_hash, google_sub, username, email_verified_at) values (:id, :email, :hash, :sub, :username, :verified)")
+                .param("id", id).param("email", email).param("hash", passwordHash).param("sub", googleSub).param("username", username)
+                .param("verified", verifiedAt == null ? null : Timestamp.from(verifiedAt)).update();
+        return new UserAccount(id, email, passwordHash, googleSub, username, verifiedAt != null);
+    }
+
+    /** Marks the address as confirmed (keeps the first date if it already was). */
+    void markEmailVerified(UUID id, Instant now) {
+        jdbc.sql("update app_users set email_verified_at = coalesce(email_verified_at, :now) where id = :id").param("now", Timestamp.from(now)).param("id", id).update();
+    }
+
+    void setPassword(UUID id, String passwordHash) {
+        jdbc.sql("update app_users set password_hash = :hash where id = :id").param("hash", passwordHash).param("id", id).update();
     }
 
     boolean usernameTakenByAnother(UUID id, String username) {

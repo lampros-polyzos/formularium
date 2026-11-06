@@ -44,6 +44,11 @@ class RefreshTokenRepository {
         jdbc.sql("update refresh_tokens set revoked_at = :epoch where family_id = :family and revoked_at is null").param("epoch", Timestamp.from(Instant.EPOCH)).param("family", familyId).update();
     }
 
+    /** Signs the person out everywhere (after a password reset). */
+    void revokeAllForUser(UUID userId) {
+        jdbc.sql("update refresh_tokens set revoked_at = :epoch where user_id = :user and revoked_at is null").param("epoch", Timestamp.from(Instant.EPOCH)).param("user", userId).update();
+    }
+
     void deleteExpired(Instant now) {
         jdbc.sql("delete from refresh_tokens where expires_at < :now").param("now", Timestamp.from(now)).update();
     }

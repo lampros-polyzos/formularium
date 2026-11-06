@@ -29,12 +29,14 @@ public class AuthService {
     private final CaptchaVerifier captcha;
     private final GoogleTokenVerifier google;
     private final AuthProperties properties;
+    private final EmailTokenRepository emailTokens;
+    private final EmailSender mail;
     private final Clock clock;
     /** Checked against when the email is unknown, so a wrong email and a wrong password take equally long. */
     private final String decoyHash;
 
     AuthService(UserRepository users, AccountCreator accounts, RefreshTokenRepository refreshTokens, TokenService tokens, PasswordEncoder passwords, LoginAttemptLimiter limiter,
-                CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, Clock clock) {
+                CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
         this.users = users;
         this.accounts = accounts;
         this.refreshTokens = refreshTokens;
@@ -44,20 +46,30 @@ public class AuthService {
         this.captcha = captcha;
         this.google = google;
         this.properties = properties;
+        this.emailTokens = emailTokens;
+        this.mail = mail;
         this.clock = clock;
         this.decoyHash = passwords.encode(UUID.randomUUID().toString());
     }
 
     static String normalizeEmail(String email) { return email.trim().toLowerCase(Locale.ROOT); }
 
+    /** The confirmation link is valid for a day, the reset link for an hour; a new one is not sent more than once a minute. */
+    static final Duration VERIFY_TTL = Duration.ofDays(1);
+    static final Duration RESET_TTL = Duration.ofHours(1);
+    static final Duration RESEND_GAP = Duration.ofMinutes(1);
+
+    /** @return the new session, or null when the email must be confirmed first (a link was sent) */
     public Session register(AuthRequests.Register request, String ip, String userAgent) {
         requireCaptcha(request.captchaToken(), ip);
         String email = normalizeEmail(request.email());
         String username = request.username().trim();
         if (users.findByEmail(email).isPresent() || users.usernameTaken(username)) throw accountExists();
         try {
-            UserAccount user = accounts.create(email, passwords.encode(request.password()), null, username);
-            return startSession(user, userAgent);
+            UserAccount user = accounts.create(email, passwords.encode(request.password()), null, username, properties.requireVerifiedEmail() ? null : clock.instant());
+            if (!properties.requireVerifiedEmail()) return startSession(user, userAgent);
+            sendVerification(user);
+            return null;
         } catch (DuplicateKeyException e) {
             throw accountExists();   // lost a race with another sign-up
         }
@@ -76,6 +88,10 @@ public class AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "The email or password is not right.");
         }
         limiter.succeeded(key);
+        if (properties.requireVerifiedEmail() && !user.emailVerified()) {
+            // Said only after the password was right, so this does not tell strangers which emails have accounts
+            throw new ApiException(HttpStatus.FORBIDDEN, "email_not_verified", "Please confirm your email address first. We sent you a link.");
+        }
         users.touchLogin(user.id(), clock.instant());
         return startSession(user, userAgent);
     }
@@ -92,7 +108,8 @@ public class AuthService {
             if (byEmail != null) {
                 // Same verified email: it is the same person, so the accounts are joined
                 users.linkGoogle(byEmail.id(), who.sub());
-                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username());
+                users.markEmailVerified(byEmail.id(), clock.instant());   // Google vouched for the address
+                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username(), true);
             } else {
                 user = createGoogleUser(email, who);
             }
@@ -117,6 +134,47 @@ public class AuthService {
         if (!refreshTokens.revoke(stored.id(), now)) throw new ApiException(HttpStatus.CONFLICT, "refresh_in_progress", "The session was just renewed. Try again.");
         UserAccount user = users.findById(stored.userId()).orElseThrow(AuthService::noSession);
         return issue(user, stored.familyId(), userAgent);
+    }
+
+    /** Confirms an address from the link in the email. */
+    public void verifyEmail(String token) {
+        Instant now = clock.instant();
+        EmailTokenRepository.Found found = emailTokens.findUsable(TokenService.hash(token), EmailTokenRepository.VERIFY, now).orElseThrow(AuthService::badLink);
+        if (!emailTokens.markUsed(found.id(), now)) throw badLink();
+        users.markEmailVerified(found.userId(), now);
+    }
+
+    /** Sends a new confirmation link. Answers the same whether or not the email has an account that needs one. */
+    public void resendVerification(AuthRequests.EmailOnly request, String ip) {
+        requireCaptcha(request.captchaToken(), ip);
+        users.findByEmail(normalizeEmail(request.email())).filter(u -> !u.emailVerified()).ifPresent(this::sendVerification);
+    }
+
+    /** Sends a password reset link. Answers the same whether or not the email has an account. */
+    public void forgotPassword(AuthRequests.EmailOnly request, String ip) {
+        requireCaptcha(request.captchaToken(), ip);
+        users.findByEmail(normalizeEmail(request.email())).ifPresent(user -> {
+            Instant now = clock.instant();
+            if (recentlySent(user.id(), EmailTokenRepository.RESET, now)) return;
+            emailTokens.cancelUnused(user.id(), EmailTokenRepository.RESET, now);
+            String token = tokens.newRefreshToken();
+            emailTokens.insert(user.id(), EmailTokenRepository.RESET, TokenService.hash(token), now, now.plus(RESET_TTL));
+            mail.send(user.email(), "Reset your Formularium password",
+                    "Someone asked to reset the password of your Formularium account.\n\nChoose a new password here (the link works once, for one hour):\n"
+                            + properties.appUrl() + "/reset-password?token=" + token
+                            + "\n\nIf it was not you, you can ignore this email: your password stays as it is.");
+        });
+    }
+
+    /** Sets a new password from the link in the email, and signs the account out everywhere. */
+    public void resetPassword(AuthRequests.ResetPassword request) {
+        Instant now = clock.instant();
+        EmailTokenRepository.Found found = emailTokens.findUsable(TokenService.hash(request.token()), EmailTokenRepository.RESET, now).orElseThrow(AuthService::badLink);
+        if (!emailTokens.markUsed(found.id(), now)) throw badLink();
+        users.setPassword(found.userId(), passwords.encode(request.password()));
+        users.markEmailVerified(found.userId(), now);   // the link reached their inbox, so the address is theirs
+        emailTokens.cancelUnused(found.userId(), EmailTokenRepository.RESET, now);
+        refreshTokens.revokeAllForUser(found.userId());
     }
 
     public void logout(String refreshToken) {
@@ -147,6 +205,7 @@ public class AuthService {
 
     public void purgeExpiredTokens() {
         refreshTokens.deleteExpired(clock.instant());
+        emailTokens.deleteExpired(clock.instant());
     }
 
     private UserAccount createGoogleUser(String email, GoogleTokenVerifier.Identity who) {
@@ -157,12 +216,32 @@ public class AuthService {
         for (int attempt = 0; attempt < 5; attempt++) {
             String username = attempt == 0 && !users.usernameTaken(base) ? base : base + "_" + UUID.randomUUID().toString().substring(0, 5);
             try {
-                return accounts.create(email, null, who.sub(), username);
+                return accounts.create(email, null, who.sub(), username, clock.instant());
             } catch (DuplicateKeyException e) {
                 // a username (or, in a race, the account) was taken a moment ago: try the next name
             }
         }
         throw new ApiException(HttpStatus.CONFLICT, "account_exists", "An account with this email already exists.");
+    }
+
+    private void sendVerification(UserAccount user) {
+        Instant now = clock.instant();
+        if (recentlySent(user.id(), EmailTokenRepository.VERIFY, now)) return;
+        emailTokens.cancelUnused(user.id(), EmailTokenRepository.VERIFY, now);
+        String token = tokens.newRefreshToken();
+        emailTokens.insert(user.id(), EmailTokenRepository.VERIFY, TokenService.hash(token), now, now.plus(VERIFY_TTL));
+        mail.send(user.email(), "Confirm your email for Formularium",
+                "Welcome to Formularium, " + user.username() + "!\n\nConfirm your email address here (the link works once, for 24 hours):\n"
+                        + properties.appUrl() + "/verify-email?token=" + token
+                        + "\n\nIf you did not create this account, you can ignore this email.");
+    }
+
+    private boolean recentlySent(UUID userId, String purpose, Instant now) {
+        return emailTokens.lastSent(userId, purpose).filter(sent -> sent.plus(RESEND_GAP).isAfter(now)).isPresent();
+    }
+
+    private static ApiException badLink() {
+        return new ApiException(HttpStatus.BAD_REQUEST, "invalid_token", "This link has expired or was already used. Please ask for a new one.");
     }
 
     private Session startSession(UserAccount user, String userAgent) {

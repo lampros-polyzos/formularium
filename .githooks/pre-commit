@@ -1,0 +1,82 @@
+#!/bin/sh
+# Blocks a commit that would put a secret into git.
+#
+# It looks at the lines you are ADDING and stops the commit when one of them
+#   1. contains a real secret from your own git-ignored files (backend/config/application.properties, frontend/.env.local, ...), or
+#   2. looks like a well-known kind of key (Google OAuth secret, private key, AWS key, long Gmail app password next to "password").
+# It never prints the secret itself, only the file and line number.
+#
+# Turned on with:  git config core.hooksPath .githooks      (see scripts/install-hooks.sh)
+# To commit anyway (only when you are sure it is a false alarm):  git commit --no-verify
+
+root=$(git rev-parse --show-toplevel) || exit 0
+cd "$root" || exit 0
+
+added=$(mktemp) || exit 0
+secrets=$(mktemp) || exit 0
+trap 'rm -f "$added" "$secrets"' EXIT
+
+# Added lines of everything staged, with the file name and line number in front
+git diff --cached --no-color --unified=0 --diff-filter=ACMR -M | awk '
+  /^\+\+\+ b\// { file = substr($0, 7); next }
+  /^@@/ { match($0, /\+[0-9]+/); line = substr($0, RSTART + 1, RLENGTH - 1) + 0; next }
+  /^\+/ && !/^\+\+\+/ { print file ":" line ":" substr($0, 2); line++ }
+' > "$added"
+
+# The hooks themselves spell out the patterns they look for, so they are not checked
+grep -v '^\.githooks/' "$added" > "$added.x"; mv "$added.x" "$added"
+
+[ -s "$added" ] || exit 0
+
+# 1. The real values from the local, ignored settings files
+for f in backend/config/application.properties backend/config/*.properties frontend/.env.local frontend/.env.development frontend/.env .env .env.local; do
+  [ -f "$f" ] || continue
+  # key=value lines whose key mentions a secret
+  grep -iE '^[[:space:]]*[A-Za-z0-9_.-]*(password|secret|token|key|credential)[A-Za-z0-9_.-]*[[:space:]]*[=:]' "$f" 2>/dev/null \
+    | sed -E 's/^[^=:]*[=:][[:space:]]*//; s/^["'\'']//; s/["'\'']\r?$//; s/\r$//' >> "$secrets"
+  # passwords written inside a connection address (...?user=x&password=y)
+  grep -oiE '(password|pwd)=[^&[:space:]]+' "$f" 2>/dev/null | sed -E 's/^[^=]*=//; s/\r$//' >> "$secrets"
+done
+# Only values long enough to be real secrets, and not placeholders like ${VAR:default}
+awk 'length($0) >= 8 && $0 !~ /^\$\{/ && $0 !~ /^(YOUR_|GENERATE_)/' "$secrets" | sort -u > "$secrets.tmp" && mv "$secrets.tmp" "$secrets"
+
+# Prints "path line N: key = ****" for lines given as path:line:content (the new version of the file, never the secret itself)
+report() {
+  awk -F: 'NF >= 3 { path = $1; line = $2; sub(/^[^:]*:[^:]*:/, ""); gsub(/^[ 	]+/, ""); key = $0; sub(/[=:].*$/, "", key);
+         if (key == $0) key = "(value)"; print path "	" line "	" key }' | sort -u | while IFS="$(printf '	')" read -r path line key; do
+    echo "  $path, line $line: $key = ****" >&2
+    if ! git diff --quiet -- "$path" 2>/dev/null; then
+      echo "    (this file was edited after it was staged: fix it, then run  git add $path  again)" >&2
+    fi
+  done
+}
+
+found=0
+if [ -s "$secrets" ]; then
+  hits=$(grep -nF -f "$secrets" "$added" | cut -d: -f2-)
+  if [ -n "$hits" ]; then
+    echo "Commit blocked: a real secret from your local settings is in what you are about to commit:" >&2
+    echo "$hits" | report
+    found=1
+  fi
+fi
+
+# 2. Well-known shapes of keys
+patterns='GOCSPX-[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|sk_live_[0-9A-Za-z]{16,}|xox[baprs]-[0-9A-Za-z-]{20,}|ghp_[0-9A-Za-z]{30,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|service_role'
+shape=$(grep -nE "$patterns" "$added" | cut -d: -f2-)
+# A password typed into a settings file as a literal default: ${NAME:value} where the name mentions a secret
+literal=$(grep -nE '\$\{[A-Z0-9_]*(PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*:[^}]{6,}\}' "$added" | cut -d: -f2-)
+if [ -n "$shape$literal" ]; then
+  echo "Commit blocked: this looks like a secret (a key, a token, or a password written as a default value):" >&2
+  printf '%s\n%s\n' "$shape" "$literal" | report
+  found=1
+fi
+
+if [ "$found" -ne 0 ]; then
+  echo "" >&2
+  echo "Keep real values in backend/config/application.properties or in environment variables, never in tracked files." >&2
+  echo "If you already pushed one, change that secret at its provider: removing it from git does not make it safe again." >&2
+  echo "Not a secret? Commit anyway with:  git commit --no-verify" >&2
+  exit 1
+fi
+exit 0
