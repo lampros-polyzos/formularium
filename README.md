@@ -57,6 +57,10 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 - **Privacy and secret hygiene.** Self-service data export and account deletion, plus a pre-commit hook that blocks leaked secrets.
 - **Decisions are written down.** See [`docs/spring-owns-auth-and-data.md`](docs/spring-owns-auth-and-data.md) for the migration from Supabase-owned to Spring-owned auth and data, the trade-offs, and the known gaps.
 
+## Documentation
+
+[Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Decision records](docs/decisions/README.md) · [Testing](docs/testing.md) · [Engineering journal](docs/engineering-journal.md) · [Roadmap](docs/roadmap.md) · [Backend](backend/README.md) · [Frontend](frontend/README.md)
+
 ## Run it locally
 
 **Requirements:** JDK 27, Node 20+, and a PostgreSQL database (a free Supabase project works).
@@ -67,7 +71,7 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 
 # 2. Backend (http://localhost:8080)
 cd backend
-cp config/application.properties.example config/application.properties   # fill in database, JWT secret, optional Google/Turnstile/SMTP
+cp config/application.properties.example config/application.properties   # fill in database, JWT secret, optional Google/Turnstile/SMTP; every setting is listed in .env.example
 ./mvnw spring-boot:run
 
 # 3. Frontend (http://localhost:5173)
@@ -83,6 +87,6 @@ Without an SMTP server the backend only logs emails, links included, so sign-up 
 
 ## Status and limits
 
-A working solo project, still evolving. Honest gaps: there is no single baseline schema file yet for creating a database from scratch, sign-in throttling is in memory (fine for one instance, needs a shared store for several), notifications poll every 30 seconds instead of streaming, and regional limits cover the EU only. It supports a formulator's own safety checks and is **not** a substitute for a professional safety assessment.
+A working solo project, still evolving. Honest gaps (the full list is in the [roadmap](docs/roadmap.md)): there is no single baseline schema file yet for creating a database from scratch, sign-in throttling is in memory (fine for one instance, needs a shared store for several), notifications poll every 30 seconds instead of streaming, and regional limits cover the EU only. It supports a formulator's own safety checks and is **not** a substitute for a professional safety assessment.
 
-Built by [Lampros Polyzos](https://github.com/lampros-polyzos).
+Built by [Lampros Polyzos](https://github.com/lampros-polyzos). Released under the [MIT License](LICENSE).

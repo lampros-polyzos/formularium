@@ -58,7 +58,7 @@ delete them once you are sure you do not need them.
 8. ~~**Close the door**~~ **done**: `20261122000000_close_the_door.sql` removes `export_my_data`, `delete_my_account` and `account_owned_tables` and revokes every browser-role
    (`anon`, `authenticated`) privilege in `public`. `@supabase/supabase-js`, `lib/supabase.ts` and the `VITE_SUPABASE_*` variables are gone from the frontend.
    The backend must connect with the database owner role (the `postgres` user or the pooler string from Supabase), not `anon`/`authenticated`.
-   The tables the app no longer uses (`profiles`, `users`, `reviews`, `ingredient_safety_updates`) are removed by `20261124000000_drop_unused_tables.sql`; look at `docs/review-unused-tables.sql` first.
+   The tables the app no longer uses (`profiles`, `users`, `reviews`, `ingredient_safety_updates`) are removed by `20261124000000_drop_unused_tables.sql`; look at `docs/sql/review-unused-tables.sql` first.
 
 Each slice: the Spring endpoints enforce who may see and change what in Java (this replaces the row-level policies), with a test for every rule, then the
 frontend screens switch to them.
@@ -66,7 +66,7 @@ frontend screens switch to them.
 ## What is needed to continue
 
 The real table definitions. They are not in the repository and the API will not show them without the service key. Easiest way, no tools to install:
-open the Supabase dashboard, SQL Editor, paste the contents of `docs/export-schema.sql` and run it. It returns one cell with the structure of the public
+open the Supabase dashboard, SQL Editor, paste the contents of `docs/sql/export-schema.sql` and run it. It returns one cell with the structure of the public
 schema (tables, columns, keys, access policies, functions, triggers) and no data. Save that cell as `docs/schema-dump.json`.
 
 (If you prefer the command line, `pg_dump --schema-only --schema=public` and a query on `pg_policies` give the same information, but they need the

@@ -1,4 +1,4 @@
--- Removes the tables the app no longer uses. Run docs/review-unused-tables.sql first and look at what it lists.
+-- Removes the tables the app no longer uses. Run docs/sql/review-unused-tables.sql first and look at what it lists.
 --
 -- Kept (the app reads and writes these): app_users, refresh_tokens, email_tokens, ingredients, user_starred_ingredients, favorite_ingredients, user_stash,
 -- user_containers, formulation_profiles, formulations, formulation_phases, formulation_ingredients, formulation_versions, batches, batch_ingredients,
