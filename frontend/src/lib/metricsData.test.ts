@@ -5,6 +5,8 @@ vi.mock('./supabase', () => ({ supabase: {} }));
 
 // Favourites, the stash and the ingredient rows come from the backend
 const api = vi.hoisted(() => ({ fetchFavorites: vi.fn(), fetchStash: vi.fn(), fetchIngredientsByIds: vi.fn(), fetchFormulasWithLines: vi.fn() }));
+const batches = vi.hoisted(() => ({ listBatches: vi.fn(), listBatchLines: vi.fn() }));
+vi.mock('./batches', () => batches);
 vi.mock('./libraryApi', () => api);
 vi.mock('./formulasApi', () => api);
 
@@ -33,55 +35,42 @@ function fakeClient(tables: Record<string, Table>) {
 }
 
 describe('loadMetricBatches', () => {
-    it('turns what the database sends into plain numbers and lists, and keeps the check-ins', async () => {
-        const { client } = fakeClient({
-            batches: [{
-                id: 'b1', formulation_id: null, name: 'Lotion', lot_number: 'L1', batch_size_g: '120.5', made_on: '2026-11-01', status: 'active',
-                final_weight_g: '118', ingredient_cost: '4.25', unpriced_count: 1, container_name: 'Jar', container_volume_ml: '50', container_count: '2.5', container_unit_price: '0.4',
-                batch_checks: [{ id: 'c1', label: '24 hours', due_on: '2026-11-02', checked_at: '2026-11-02T00:00:00Z', result: 'good', observations: null }],
-            }, { id: 'b2', name: 'Bare', batch_size_g: 50, made_on: '2026-11-02', status: 'discarded', batch_checks: [] }],
-        });
-        const [a, b] = await loadMetricBatches(client);
+    it('turns what the backend sends into plain numbers and lists, and keeps the check-ins', async () => {
+        batches.listBatches.mockResolvedValue([{
+            id: 'b1', formulation_id: null, name: 'Lotion', lot_number: 'L1', batch_size_g: '120.5', made_on: '2026-11-01', status: 'active',
+            final_weight_g: '118', ingredient_cost: '4.25', unpriced_count: 1, container_name: 'Jar', container_volume_ml: '50', container_count: '2.5', container_unit_price: '0.4',
+            batch_checks: [{ id: 'c1', label: '24 hours', due_on: '2026-11-02', checked_at: '2026-11-02T00:00:00Z', result: 'good', observations: null }],
+        }, { id: 'b2', name: 'Bare', batch_size_g: 50, made_on: '2026-11-02', status: 'discarded', batch_checks: [] }]);
+        const [a, b] = await loadMetricBatches();
         expect(a).toMatchObject({ batch_size_g: 120.5, final_weight_g: 118, ingredient_cost: 4.25, container_volume_ml: 50, container_count: 2.5, container_unit_price: 0.4, container_name: 'Jar' });
         expect(a.checks).toEqual([{ result: 'good', observations: [], checked_at: '2026-11-02T00:00:00Z' }]);
         expect(b).toMatchObject({ final_weight_g: null, ingredient_cost: null, container_name: null, unpriced_count: 0 });
     });
 
     it('says what could not be loaded', async () => {
-        await expect(loadMetricBatches(fakeClient({ batches: { error: 'boom' } }).client)).rejects.toThrow('boom');
+        batches.listBatches.mockRejectedValue(new Error('boom'));
+        await expect(loadMetricBatches()).rejects.toThrow('boom');
     });
 });
 
 describe('loadMetricLines', () => {
-    const row = (n: number) => ({ batch_id: 'b', ingredient_id: `i${n}`, name: `Item ${n}`, actual_g: String(n), cost: n % 2 ? null : '0.5' });
-
-    it('reads every page until one comes back short, converting the numbers', async () => {
-        const { client, calls } = fakeClient({
-            batch_ingredients: range => Array.from({ length: range![0] === 0 ? 1000 : range![0] === 1000 ? 1000 : 250 }, (_, n) => row(n)),
-        });
-        const lines = await loadMetricLines(client);
-        expect(lines).toHaveLength(2250);
-        expect(calls.map(c => c.range)).toEqual([[0, 999], [1000, 1999], [2000, 2999]]);
-        expect(lines[2]).toMatchObject({ actual_g: 2, cost: 0.5 });
-        expect(lines[1].cost).toBeNull();
+    it('converts the numbers of every line', async () => {
+        batches.listBatchLines.mockResolvedValue([
+            { batch_id: 'b', ingredient_id: 'i1', name: 'Item 1', actual_g: '1', cost: null },
+            { batch_id: 'b', ingredient_id: null, name: 'Item 2', actual_g: 2, cost: '0.5' },
+        ]);
+        const lines = await loadMetricLines();
+        expect(lines).toEqual([
+            { batch_id: 'b', ingredient_id: 'i1', name: 'Item 1', actual_g: 1, cost: null },
+            { batch_id: 'b', ingredient_id: null, name: 'Item 2', actual_g: 2, cost: 0.5 },
+        ]);
     });
 
-    it('stops after one short page, and after an empty one', async () => {
-        const short = fakeClient({ batch_ingredients: [row(1), row(2)] });
-        expect(await loadMetricLines(short.client)).toHaveLength(2);
-        expect(short.calls).toHaveLength(1);
-        const none = fakeClient({ batch_ingredients: [] });
-        expect(await loadMetricLines(none.client)).toEqual([]);
-    });
-
-    it('does not read forever', async () => {
-        const { client, calls } = fakeClient({ batch_ingredients: () => Array.from({ length: 1000 }, (_, n) => row(n)) });
-        expect(await loadMetricLines(client)).toHaveLength(20_000);
-        expect(calls).toHaveLength(20);
-    });
-
-    it('says what could not be loaded', async () => {
-        await expect(loadMetricLines(fakeClient({ batch_ingredients: { error: 'boom' } }).client)).rejects.toThrow('Could not load what went into your batches: boom');
+    it('gives nothing when there are no batches, and passes on a failure', async () => {
+        batches.listBatchLines.mockResolvedValue([]);
+        expect(await loadMetricLines()).toEqual([]);
+        batches.listBatchLines.mockRejectedValue(new Error('Could not load what went into your batches.'));
+        await expect(loadMetricLines()).rejects.toThrow('Could not load what went into your batches');
     });
 });
 
@@ -118,11 +107,9 @@ describe('the rest', () => {
 
 describe('loadMetricsInput', () => {
     it('brings it all together, naming what is in the stash', async () => {
-        const { client } = fakeClient({
-            batches: [{ id: 'b1', name: 'Lotion', batch_size_g: 100, made_on: '2026-11-01', status: 'active', batch_checks: [] }],
-            batch_ingredients: [{ batch_id: 'b1', ingredient_id: 'i1', name: 'Shea', actual_g: 10, cost: null }],
-            community_posts: { count: 2 },
-        });
+        const { client } = fakeClient({ community_posts: { count: 2 } });
+        batches.listBatches.mockResolvedValue([{ id: 'b1', name: 'Lotion', batch_size_g: 100, made_on: '2026-11-01', status: 'active', batch_checks: [] }]);
+        batches.listBatchLines.mockResolvedValue([{ batch_id: 'b1', ingredient_id: 'i1', name: 'Shea', actual_g: 10, cost: null }]);
         api.fetchFormulasWithLines.mockResolvedValue([]);
         api.fetchFavorites.mockResolvedValue([]);
         api.fetchStash.mockResolvedValue([{ id: 'l1', ingredient_id: 'i1', amount_left_g: 50 }]);
@@ -136,7 +123,9 @@ describe('loadMetricsInput', () => {
     });
 
     it('fails as a whole if any part fails', async () => {
-        const { client } = fakeClient({ batches: [], batch_ingredients: [], community_posts: { count: 0 } });
+        const { client } = fakeClient({ community_posts: { count: 0 } });
+        batches.listBatches.mockResolvedValue([]);
+        batches.listBatchLines.mockResolvedValue([]);
         api.fetchFormulasWithLines.mockResolvedValue([]);
         api.fetchFavorites.mockRejectedValue(new Error('nope'));
         api.fetchStash.mockResolvedValue([]);

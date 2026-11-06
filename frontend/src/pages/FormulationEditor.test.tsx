@@ -35,11 +35,18 @@ vi.mock('../contexts/SettingsContext', () => ({
 vi.mock('../lib/libraryApi', () => ({
   searchIngredients: () => Promise.resolve([]),
   fetchStash: () => Promise.resolve([]),
+  fetchContainers: () => Promise.resolve([]),
   fetchIngredientByInci: () => Promise.resolve(null),
   fetchFavorites: () => Promise.resolve([]),
   addFavorite: () => Promise.resolve(),
   removeFavorite: () => Promise.resolve(),
 }));
+
+// Signed in: the validation request goes straight to the mocked fetch below
+vi.mock('../lib/authClient', async () => {
+  const { apiUrl } = await import('../lib/api');
+  return { authFetch: (path: string, init?: RequestInit) => globalThis.fetch(apiUrl(path), init) };
+});
 
 // The product types come from the backend
 vi.mock('../lib/formulasApi', () => ({
@@ -147,7 +154,8 @@ describe('FormulationEditor Profile Selector', () => {
     });
 
     // Extract the body sent to fetch to verify the payload structure
-    const fetchCallArgs = (globalThis.fetch as any).mock.calls[0];
+    // (other requests, such as the header's count of check-ins that are due, go through the same mocked fetch)
+    const fetchCallArgs = (globalThis.fetch as any).mock.calls.find((call: unknown[]) => String(call[0]).includes('/api/v1/validate'));
     const requestBody = JSON.parse(fetchCallArgs[1].body);
 
     expect(requestBody).toMatchObject({

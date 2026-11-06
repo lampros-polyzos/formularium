@@ -1,22 +1,15 @@
-import { supabase } from './supabase';
+import { request } from './apiClient';
 import type { Allocation } from './batchPlan';
 import type { Batch, BatchCheck, BatchLine, BatchStashUse, BatchStatus, CheckResult } from '../types/batches';
 
-type Client = Pick<typeof supabase, 'from' | 'rpc'>;
-
-interface DbError { code?: string; message?: string }
-
-const MIGRATION_HINT = "The batch log isn't set up in your database yet. Run supabase/migrations/20261105000000_batch_log.sql in the Supabase SQL Editor.";
-
-/** Turns a database error into something a person can act on. */
-export function friendlyError(error: DbError | null | undefined, fallback = 'Something went wrong.'): Error {
-    const message = error?.message ?? '';
-    if (error?.code === 'PGRST202' || error?.code === 'PGRST205' || error?.code === '42P01' || /could not find the (function|table)/i.test(message)) {
-        return new Error(MIGRATION_HINT);
-    }
-    if (error?.code === '23505') return new Error('That lot number is already used by another batch. Pick a different one.');
-    if (error?.code === '23514') return new Error('One of the values is out of range. Check the amounts and try again.');
-    if (!error?.code && /failed to fetch|network/i.test(message)) return new Error("Couldn't reach the server. Check your connection and try again.");
+/**
+ * Turns whatever went wrong into something a person can act on. The backend's own messages (for example "Not enough Shea Butter left in your
+ * stash") are kept as they are; a request that never reached the server is explained.
+ */
+export function friendlyError(error: unknown, fallback = 'Something went wrong.'): Error {
+    const message = error instanceof Error ? error.message : '';
+    if (error instanceof Error && 'status' in error) return new Error(message || fallback);   // the backend answered: its message is written for people
+    if (/failed to fetch|network|could not reach/i.test(message)) return new Error("Couldn't reach the server. Check your connection and try again.");
     return new Error(message || fallback);
 }
 
@@ -62,36 +55,39 @@ export interface CreateBatchInput {
 }
 
 /**
- * Saves the batch and takes the allocated grams out of the stash in a single transaction. What the batch cost is
- * worked out from the stash lots' prices inside the same transaction.
- * This is the only function that can change the stash, and only for lines that carry allocations.
+ * Saves the batch and takes the allocated grams out of the stash in a single transaction, on the backend. What the batch cost is
+ * worked out from the stash lots' prices inside the same transaction. If any lot no longer holds enough, nothing is saved or taken.
+ * This is the only call that can change the stash, and only for lines that carry allocations.
  */
-export async function createBatch(input: CreateBatchInput, client: Client = supabase): Promise<string> {
-    const args = {
-        p_formulation_id: input.formulationId,
-        p_name: input.name,
-        p_lot_number: input.lotNumber.trim(),
-        p_batch_size_g: input.batchSizeG,
-        p_target_ph: input.targetPh,
-        p_notes: input.notes,
-        p_lines: input.lines,
-        p_made_on: isoDate(),
-    };
-    let { data, error } = await client.rpc('create_batch', { ...args, p_container: input.container ?? null });
-    if (error?.code === 'PGRST202') {
-        // The database hasn't been updated with costs and containers yet. Nothing ran, so start the batch the
-        // way it was done before: it is recorded and the stash is still handled, just without costs.
-        console.warn('Batch costs and containers are not available yet (database migration pending); starting without them.');
-        ({ data, error } = await client.rpc('create_batch', args));
+export async function createBatch(input: CreateBatchInput): Promise<string> {
+    try {
+        const { id } = await request<{ id: string }>('/api/v1/batches', {
+            method: 'POST',
+            body: {
+                formulation_id: input.formulationId,
+                name: input.name,
+                lot_number: input.lotNumber.trim(),
+                batch_size_g: input.batchSizeG,
+                target_ph: input.targetPh,
+                notes: input.notes,
+                lines: input.lines,
+                made_on: isoDate(),
+                container: input.container ?? null,
+            },
+        });
+        return id;
+    } catch (error) {
+        throw friendlyError(error, 'Could not start the batch.');
     }
-    if (error) throw friendlyError(error, 'Could not start the batch.');
-    return data as string;
 }
 
 /** Marks the batch undone and puts what it took back into the stash. */
-export async function voidBatch(batchId: string, client: Client = supabase): Promise<void> {
-    const { error } = await client.rpc('void_batch', { p_batch_id: batchId });
-    if (error) throw friendlyError(error, 'Could not undo the batch.');
+export async function voidBatch(batchId: string): Promise<void> {
+    try {
+        await request<void>(`/api/v1/batches/${batchId}/void`, { method: 'POST' });
+    } catch (error) {
+        throw friendlyError(error, 'Could not undo the batch.');
+    }
 }
 
 /**
@@ -99,25 +95,25 @@ export async function voidBatch(batchId: string, client: Client = supabase): Pro
  * and from the metrics. With `restoreStash`, what it took from the stash is put back first (by undoing it), so the
  * worst that can happen if the removal then fails is that the batch is left marked as undone.
  */
-export async function deleteBatch(batchId: string, { restoreStash = false }: { restoreStash?: boolean } = {}, client: Client = supabase): Promise<void> {
-    if (restoreStash) await voidBatch(batchId, client);
-    const { data, error } = await client.from('batches').delete().eq('id', batchId).select('id');
-    if (error) throw friendlyError(error, 'Could not delete the batch.');
-    if (!data || data.length === 0) throw new Error('Batch not found, or it was already deleted.');
+export async function deleteBatch(batchId: string, { restoreStash = false }: { restoreStash?: boolean } = {}): Promise<void> {
+    if (restoreStash) await voidBatch(batchId);
+    try {
+        await request<void>(`/api/v1/batches/${batchId}`, { method: 'DELETE' });
+    } catch (error) {
+        throw friendlyError(error, 'Could not delete the batch.');
+    }
 }
 
 // ---------- Reading ----------
 
 export type BatchListItem = Batch & { batch_checks: Pick<BatchCheck, 'id' | 'label' | 'due_on' | 'checked_at' | 'result' | 'observations'>[] };
 
-export async function listBatches(client: Client = supabase): Promise<BatchListItem[]> {
-    const { data, error } = await client
-        .from('batches')
-        .select('*, batch_checks(id, label, due_on, checked_at, result, observations)')
-        .order('made_on', { ascending: false })
-        .order('created_at', { ascending: false });
-    if (error) throw friendlyError(error, 'Could not load your batches.');
-    return (data ?? []) as BatchListItem[];
+export async function listBatches(): Promise<BatchListItem[]> {
+    try {
+        return await request<BatchListItem[]>('/api/v1/batches');
+    } catch (error) {
+        throw friendlyError(error, 'Could not load your batches.');
+    }
 }
 
 export interface BatchDetail {
@@ -127,60 +123,51 @@ export interface BatchDetail {
     checks: BatchCheck[];
 }
 
-export async function getBatch(id: string, client: Client = supabase): Promise<BatchDetail> {
-    const [batch, lines, usage, checks] = await Promise.all([
-        client.from('batches').select('*').eq('id', id).single(),
-        client.from('batch_ingredients').select('*').eq('batch_id', id).order('phase').order('percentage', { ascending: false }),
-        client.from('batch_stash_usage').select('id, batch_ingredient_id, grams, label').eq('batch_id', id),
-        client.from('batch_checks').select('*').eq('batch_id', id).order('due_on'),
-    ]);
-    if (batch.error) throw friendlyError(batch.error, 'Could not load this batch.');
-    for (const part of [lines, usage, checks]) if (part.error) throw friendlyError(part.error, 'Could not load this batch.');
-    return {
-        batch: batch.data as Batch,
-        lines: (lines.data ?? []) as BatchLine[],
-        usage: (usage.data ?? []) as BatchStashUse[],
-        checks: (checks.data ?? []) as BatchCheck[],
-    };
+export async function getBatch(id: string): Promise<BatchDetail> {
+    try {
+        return await request<BatchDetail>(`/api/v1/batches/${id}`);
+    } catch (error) {
+        throw friendlyError(error, 'Could not load this batch.');
+    }
 }
 
 /** Lot numbers already used today, for suggesting the next one. */
-export async function lotNumbersLike(prefix: string, client: Client = supabase): Promise<string[]> {
-    const { data, error } = await client.from('batches').select('lot_number').like('lot_number', `${prefix}%`);
-    if (error) return []; // a suggestion only; the database still rejects duplicates
-    return (data ?? []).map((r: { lot_number: string }) => r.lot_number);
+export async function lotNumbersLike(prefix: string): Promise<string[]> {
+    try {
+        return await request<string[]>(`/api/v1/batches/lot-numbers?prefix=${encodeURIComponent(prefix)}`);
+    } catch {
+        return []; // a suggestion only; the backend still rejects duplicates
+    }
 }
 
 /** How many check-ins are due or overdue on batches still in progress. */
-export async function countDueChecks(client: Client = supabase, today: Date = new Date()): Promise<number> {
-    const { count, error } = await client
-        .from('batch_checks')
-        .select('id, batches!inner(status)', { count: 'exact', head: true })
-        .is('checked_at', null)
-        .lte('due_on', isoDate(today))
-        .eq('batches.status', 'active');
-    if (error) throw friendlyError(error);
-    return count ?? 0;
+export async function countDueChecks(today: Date = new Date()): Promise<number> {
+    try {
+        return (await request<{ count: number }>(`/api/v1/batches/checks/due/count?today=${isoDate(today)}`)).count;
+    } catch (error) {
+        throw friendlyError(error);
+    }
 }
 
 /** A check-in that is due or overdue, with the batch it belongs to, so it can be answered without opening the batch. */
 export type DueCheck = BatchCheck & { batch: Pick<Batch, 'id' | 'name' | 'lot_number' | 'target_ph'> };
 
 /** The oldest due or overdue check-ins on batches still in progress. */
-export async function listDueChecks(client: Client = supabase, today: Date = new Date(), limit = 3): Promise<DueCheck[]> {
-    const { data, error } = await client
-        .from('batch_checks')
-        .select('id, batch_id, label, due_on, checked_at, result, observations, measured_ph, notes, batches!inner(id, name, lot_number, target_ph, status)')
-        .is('checked_at', null)
-        .lte('due_on', isoDate(today))
-        .eq('batches.status', 'active')
-        .order('due_on')
-        .limit(limit);
-    if (error) throw friendlyError(error);
-    return ((data ?? []) as unknown as (BatchCheck & { batches: DueCheck['batch'] | DueCheck['batch'][] })[]).map(({ batches, ...check }) => {
-        const owner = Array.isArray(batches) ? batches[0] : batches;
-        return { ...check, batch: { id: owner.id, name: owner.name, lot_number: owner.lot_number, target_ph: owner.target_ph } };
-    });
+export async function listDueChecks(today: Date = new Date(), limit = 3): Promise<DueCheck[]> {
+    try {
+        return await request<DueCheck[]>(`/api/v1/batches/checks/due?today=${isoDate(today)}&limit=${limit}`);
+    } catch (error) {
+        throw friendlyError(error);
+    }
+}
+
+/** What went into every batch you have made (for the metrics). */
+export async function listBatchLines(): Promise<{ batch_id: string; ingredient_id: string | null; name: string; actual_g: number | string; cost: number | string | null }[]> {
+    try {
+        return await request('/api/v1/batches/lines');
+    } catch (error) {
+        throw friendlyError(error, 'Could not load what went into your batches.');
+    }
 }
 
 // ---------- Editing ----------
@@ -188,10 +175,12 @@ export async function listDueChecks(client: Client = supabase, today: Date = new
 export async function updateBatch(
     id: string,
     patch: Partial<Pick<Batch, 'status' | 'measured_ph' | 'final_weight_g' | 'notes' | 'lot_number'>>,
-    client: Client = supabase,
 ): Promise<void> {
-    const { error } = await client.from('batches').update(patch).eq('id', id);
-    if (error) throw friendlyError(error, 'Could not save your changes.');
+    try {
+        await request<void>(`/api/v1/batches/${id}`, { method: 'PATCH', body: patch });
+    } catch (error) {
+        throw friendlyError(error, 'Could not save your changes.');
+    }
 }
 
 export interface CheckInInput {
@@ -201,23 +190,23 @@ export interface CheckInInput {
     notes: string;
 }
 
-export async function completeCheck(checkId: string, input: CheckInInput, client: Client = supabase): Promise<void> {
-    const { error } = await client
-        .from('batch_checks')
-        .update({
-            checked_at: new Date().toISOString(),
-            result: input.result,
-            observations: input.observations,
-            measured_ph: input.measured_ph,
-            notes: input.notes.trim() || null,
-        })
-        .eq('id', checkId);
-    if (error) throw friendlyError(error, 'Could not save the check-in.');
+export async function completeCheck(checkId: string, input: CheckInInput): Promise<void> {
+    try {
+        await request<void>(`/api/v1/batches/checks/${checkId}`, {
+            method: 'PUT',
+            body: { result: input.result, observations: input.observations, measured_ph: input.measured_ph, notes: input.notes.trim() || null },
+        });
+    } catch (error) {
+        throw friendlyError(error, 'Could not save the check-in.');
+    }
 }
 
-export async function addCheck(batchId: string, label: string, dueOn: string, client: Client = supabase): Promise<void> {
-    const { error } = await client.from('batch_checks').insert([{ batch_id: batchId, label: label.trim(), due_on: dueOn }]);
-    if (error) throw friendlyError(error, 'Could not add the check-in.');
+export async function addCheck(batchId: string, label: string, dueOn: string): Promise<void> {
+    try {
+        await request<void>(`/api/v1/batches/${batchId}/checks`, { method: 'POST', body: { label: label.trim(), due_on: dueOn } });
+    } catch (error) {
+        throw friendlyError(error, 'Could not add the check-in.');
+    }
 }
 
 export const ACTIVE_STATUSES: BatchStatus[] = ['active'];

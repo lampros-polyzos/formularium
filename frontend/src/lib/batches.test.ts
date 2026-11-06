@@ -1,24 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
-import { completeCheck, countDueChecks, createBatch, friendlyError, getBatch, isoDate, listDueChecks, lotNumbersLike, voidBatch, deleteBatch } from './batches';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+    addCheck, completeCheck, countDueChecks, createBatch, deleteBatch, friendlyError, getBatch, isoDate, listBatchLines, listBatches, listDueChecks, lotNumbersLike, updateBatch, voidBatch,
+} from './batches';
+import { ApiError } from './apiClient';
 
-// The tests pass their own fake client, so the real one (which needs the .env.local keys) must never load
-vi.mock('./supabase', () => ({ supabase: {} }));
+const mocks = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('./apiClient', async (importOriginal) => ({ ...(await importOriginal<typeof import('./apiClient')>()), request: mocks.request }));
 
-/** A chainable fake that records every call and resolves with `result` when awaited. */
-function fakeClient(result: unknown = { data: [], error: null }, rpcResult: unknown = { data: 'batch-1', error: null }) {
-    const calls: { method: string; args: unknown[] }[] = [];
-    const chain: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'lte', 'like', 'order', 'limit', 'update', 'insert', 'delete']) {
-        chain[method] = (...args: unknown[]) => { calls.push({ method, args }); return chain; };
-    }
-    chain.single = async () => result;
-    chain.then = (resolve: (v: unknown) => void) => resolve(result);
-    const client = {
-        from: (table: string) => { calls.push({ method: 'from', args: [table] }); return chain; },
-        rpc: vi.fn(async (name: string, args: unknown) => { calls.push({ method: `rpc:${name}`, args: [args] }); return rpcResult; }),
-    };
-    return { client: client as never, calls, rpc: client.rpc };
-}
+const calls = () => mocks.request.mock.calls.map(([path, init]) => ({ path: path as string, method: (init?.method ?? 'GET') as string, body: init?.body as Record<string, unknown> | undefined }));
+
+beforeEach(() => { mocks.request.mockReset().mockResolvedValue(undefined); });
 
 describe('createBatch', () => {
     const input = {
@@ -29,193 +20,155 @@ describe('createBatch', () => {
         }],
     };
 
-    it('sends the batch and the exact stash allocations in one call', async () => {
-        const { client, rpc } = fakeClient();
-        const id = await createBatch(input, client);
-        expect(id).toBe('batch-1');
-        expect(rpc).toHaveBeenCalledTimes(1);
-        expect(rpc).toHaveBeenCalledWith('create_batch', expect.objectContaining({
-            p_formulation_id: 'f1', p_name: 'Day Cream', p_lot_number: '261103-1', p_batch_size_g: 100, p_target_ph: 5.5, p_notes: 'first try',
-            p_lines: input.lines, p_made_on: isoDate(),
-        }));
-    });
-
-    it('sends no allocations when the batch is only recorded', async () => {
-        const { client, rpc } = fakeClient();
-        await createBatch({ ...input, lines: [{ ...input.lines[0], allocations: [] }] }, client);
-        const sent = rpc.mock.calls[0][1] as { p_lines: { allocations: unknown[] }[] };
-        expect(sent.p_lines.every(l => l.allocations.length === 0)).toBe(true);
+    it('sends the batch and the exact stash allocations in one request, and returns the new id', async () => {
+        mocks.request.mockResolvedValue({ id: 'batch-1' });
+        expect(await createBatch(input)).toBe('batch-1');
+        expect(calls()).toHaveLength(1);
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/batches', method: 'POST' });
+        expect(calls()[0].body).toMatchObject({
+            formulation_id: 'f1', name: 'Day Cream', lot_number: '261103-1', batch_size_g: 100, target_ph: 5.5, notes: 'first try', lines: input.lines, made_on: isoDate(), container: null,
+        });
     });
 
     it('sends the container, and the price to use for grams that are not taken from the stash', async () => {
-        const { client, rpc } = fakeClient();
+        mocks.request.mockResolvedValue({ id: 'b' });
         const container = { id: 'c1', name: '50 ml bottle', volume_ml: 50, count: 3.4, unit_price: 0.8, density_g_ml: 0.97 };
-        await createBatch({ ...input, container, lines: [{ ...input.lines[0], est_price_per_g: 0.03 }] }, client);
-        expect(rpc).toHaveBeenCalledTimes(1);
-        const sent = rpc.mock.calls[0][1] as { p_container: unknown; p_lines: { est_price_per_g: number }[] };
-        expect(sent.p_container).toEqual(container);
-        expect(sent.p_lines[0].est_price_per_g).toBe(0.03);
+        await createBatch({ ...input, container, lines: [{ ...input.lines[0], est_price_per_g: 0.03 }] });
+        const body = calls()[0].body as { container: unknown; lines: { est_price_per_g: number }[] };
+        expect(body.container).toEqual(container);
+        expect(body.lines[0].est_price_per_g).toBe(0.03);
     });
 
-    it('sends no container when none was picked', async () => {
-        const { client, rpc } = fakeClient();
-        await createBatch(input, client);
-        expect((rpc.mock.calls[0][1] as { p_container: unknown }).p_container).toBeNull();
+    it('never retries a failure: a retry could take from the stash twice', async () => {
+        mocks.request.mockRejectedValue(new ApiError(409, 'stash_changed', 'Not enough Glycerin left in your stash.'));
+        await expect(createBatch(input)).rejects.toThrow('Not enough Glycerin left in your stash.');
+        expect(mocks.request).toHaveBeenCalledTimes(1);
     });
 
-    it('starts the batch the old way if the database has not been updated yet, and still returns its id', async () => {
-        const rpc = vi.fn()
-            .mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.create_batch(p_container, ...)' } })
-            .mockResolvedValueOnce({ data: 'batch-2', error: null });
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const id = await createBatch({ ...input, container: { id: null, name: 'Jar', volume_ml: 100, count: 1, unit_price: 1, density_g_ml: 1 } }, { rpc } as never);
-        expect(id).toBe('batch-2');
-        expect(rpc).toHaveBeenCalledTimes(2);
-        expect(rpc.mock.calls[0][1]).toHaveProperty('p_container');
-        expect(rpc.mock.calls[1][1]).not.toHaveProperty('p_container');
-        expect(rpc.mock.calls[1][1]).toMatchObject({ p_lot_number: '261103-1', p_lines: input.lines }); // the same batch, same stash allocations
-        vi.restoreAllMocks();
-    });
-
-    it('does not retry other failures: a retry could take from the stash twice', async () => {
-        const rpc = vi.fn().mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Not enough Glycerin left in your stash.' } });
-        await expect(createBatch(input, { rpc } as never)).rejects.toThrow(/Not enough Glycerin/);
-        expect(rpc).toHaveBeenCalledTimes(1);
-    });
-
-    it('turns database errors into plain language', async () => {
-        for (const [error, expected] of [
-            [{ code: '23505', message: 'duplicate key value violates unique constraint' }, /lot number is already used/],
-            [{ code: 'PGRST202', message: 'Could not find the function public.create_batch' }, /isn't set up in your database yet/],
-            [{ code: 'P0001', message: 'Not enough Glycerin left in your stash. It may have changed.' }, /Not enough Glycerin left/],
-            [{ code: '', message: 'TypeError: Failed to fetch' }, /Couldn't reach the server/],
-        ] as const) {
-            const { client } = fakeClient(undefined, { data: null, error });
-            await expect(createBatch(input, client)).rejects.toThrow(expected);
-        }
+    it('explains a lot number that is taken, and a server that cannot be reached', async () => {
+        mocks.request.mockRejectedValue(new ApiError(409, 'lot_number_taken', 'That lot number is already used by another batch. Pick a different one.'));
+        await expect(createBatch(input)).rejects.toThrow('That lot number is already used');
+        mocks.request.mockRejectedValue(new TypeError('Failed to fetch'));
+        await expect(createBatch(input)).rejects.toThrow("Couldn't reach the server");
     });
 });
 
-describe('voidBatch', () => {
-    it('asks the database to undo the batch', async () => {
-        const { client, rpc } = fakeClient(undefined, { data: null, error: null });
-        await voidBatch('b1', client);
-        expect(rpc).toHaveBeenCalledWith('void_batch', { p_batch_id: 'b1' });
+describe('undoing and deleting', () => {
+    it('asks the backend to undo the batch, and says why it failed', async () => {
+        await voidBatch('b1');
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/batches/b1/void', method: 'POST' });
+        mocks.request.mockRejectedValue(new ApiError(404, 'not_found', 'Batch not found, or it was already undone.'));
+        await expect(voidBatch('b1')).rejects.toThrow('already undone');
     });
 
-    it('surfaces why it failed', async () => {
-        const { client } = fakeClient(undefined, { data: null, error: { code: 'P0001', message: 'Batch not found, or it was already undone.' } });
-        await expect(voidBatch('b1', client)).rejects.toThrow('already undone');
+    it('deletes just that batch', async () => {
+        await deleteBatch('b1');
+        expect(calls()).toEqual([{ path: '/api/v1/batches/b1', method: 'DELETE', body: undefined }]);
+    });
+
+    it('puts the stash back first when asked, and only then deletes', async () => {
+        await deleteBatch('b1', { restoreStash: true });
+        expect(calls().map(c => `${c.method} ${c.path}`)).toEqual(['POST /api/v1/batches/b1/void', 'DELETE /api/v1/batches/b1']);
+    });
+
+    it('does not delete anything if the stash could not be put back', async () => {
+        mocks.request.mockRejectedValueOnce(new ApiError(404, 'not_found', 'Batch not found, or it was already undone.'));
+        await expect(deleteBatch('b1', { restoreStash: true })).rejects.toThrow('already undone');
+        expect(calls().map(c => c.method)).toEqual(['POST']);
+    });
+
+    it('says so when there was nothing to delete (not yours, or already gone)', async () => {
+        mocks.request.mockRejectedValue(new ApiError(404, 'not_found', 'Batch not found, or it was already deleted.'));
+        await expect(deleteBatch('b1')).rejects.toThrow('already deleted');
     });
 });
 
-describe('getBatch', () => {
-    it('loads the batch with its lines, stash usage and check-ins', async () => {
-        const { client, calls } = fakeClient({ data: [{ id: 'x' }], error: null });
-        const detail = await getBatch('b1', client);
-        expect(calls.filter(c => c.method === 'from').map(c => c.args[0])).toEqual(['batches', 'batch_ingredients', 'batch_stash_usage', 'batch_checks']);
-        expect(detail.lines).toEqual([{ id: 'x' }]);
+describe('reading', () => {
+    it('lists your batches and loads one with its lines, stash usage and check-ins', async () => {
+        mocks.request.mockResolvedValue([{ id: 'b1', batch_checks: [] }]);
+        expect(await listBatches()).toEqual([{ id: 'b1', batch_checks: [] }]);
+        expect(calls()[0].path).toBe('/api/v1/batches');
+
+        mocks.request.mockResolvedValue({ batch: { id: 'b1' }, lines: [], usage: [], checks: [] });
+        expect((await getBatch('b1')).batch.id).toBe('b1');
+        expect(calls()[1].path).toBe('/api/v1/batches/b1');
     });
 
-    it('fails clearly when the tables do not exist yet', async () => {
-        const { client } = fakeClient({ data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.batches'" } });
-        await expect(getBatch('b1', client)).rejects.toThrow(/isn't set up/);
-    });
-});
-
-describe('check-ins and counts', () => {
-    it('records a check-in with the time it was done', async () => {
-        const { client, calls } = fakeClient({ data: null, error: null });
-        await completeCheck('c1', { result: 'minor', observations: ['odor'], measured_ph: 5.4, notes: '  slight  ' }, client);
-        const update = calls.find(c => c.method === 'update')!.args[0] as Record<string, unknown>;
-        expect(update).toMatchObject({ result: 'minor', observations: ['odor'], measured_ph: 5.4, notes: 'slight' });
-        expect(typeof update.checked_at).toBe('string');
+    it('gives a plain message when a batch cannot be loaded', async () => {
+        mocks.request.mockRejectedValue(new ApiError(404, 'not_found', 'That batch does not exist.'));
+        await expect(getBatch('nope')).rejects.toThrow('That batch does not exist.');
     });
 
-    it('counts only unfinished check-ins that are due, on batches still in progress', async () => {
-        const { client, calls } = fakeClient({ count: 3, error: null });
-        expect(await countDueChecks(client, new Date(2026, 10, 3))).toBe(3);
-        expect(calls.find(c => c.method === 'lte')!.args).toEqual(['due_on', '2026-11-03']);
-        expect(calls.find(c => c.method === 'eq')!.args).toEqual(['batches.status', 'active']);
-        expect(calls.some(c => c.method === 'is' && c.args[0] === 'checked_at')).toBe(true);
+    it('reads every line of every batch for the metrics', async () => {
+        mocks.request.mockResolvedValue([{ batch_id: 'b1', ingredient_id: 'i', name: 'Shea', actual_g: '10', cost: null }]);
+        expect(await listBatchLines()).toHaveLength(1);
+        expect(calls()[0].path).toBe('/api/v1/batches/lines');
     });
 
     it('suggestions for lot numbers never fail the form', async () => {
-        const { client } = fakeClient({ data: null, error: { message: 'boom' } });
-        expect(await lotNumbersLike('261103', client)).toEqual([]);
+        mocks.request.mockResolvedValue(['261103-1']);
+        expect(await lotNumbersLike('261103-')).toEqual(['261103-1']);
+        expect(calls()[0].path).toBe('/api/v1/batches/lot-numbers?prefix=261103-');
+        mocks.request.mockRejectedValue(new Error('down'));
+        expect(await lotNumbersLike('x')).toEqual([]);
+    });
+
+    it('encodes the prefix so it cannot change the request', async () => {
+        mocks.request.mockResolvedValue([]);
+        await lotNumbersLike('a&b=c');
+        expect(calls()[0].path).toBe('/api/v1/batches/lot-numbers?prefix=a%26b%3Dc');
+    });
+});
+
+describe('editing', () => {
+    it('saves changes to a batch with PATCH', async () => {
+        await updateBatch('b1', { status: 'archived', measured_ph: 5.6 });
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/batches/b1', method: 'PATCH', body: { status: 'archived', measured_ph: 5.6 } });
+    });
+
+    it('records a check-in, with the note trimmed or left out', async () => {
+        await completeCheck('c1', { result: 'minor', observations: ['odor'], measured_ph: 5.2, notes: '  a bit thin  ' });
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/batches/checks/c1', method: 'PUT', body: { result: 'minor', observations: ['odor'], measured_ph: 5.2, notes: 'a bit thin' } });
+        await completeCheck('c1', { result: 'good', observations: [], measured_ph: null, notes: '   ' });
+        expect(calls()[1].body?.notes).toBeNull();
+    });
+
+    it('adds a check-in with a trimmed label', async () => {
+        await addCheck('b1', '  6 months ', '2027-05-06');
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/batches/b1/checks', method: 'POST', body: { label: '6 months', due_on: '2027-05-06' } });
+    });
+});
+
+describe('check-ins that are due', () => {
+    const today = new Date(2026, 10, 6);
+
+    it('counts the due check-ins from the person\'s own date', async () => {
+        mocks.request.mockResolvedValue({ count: 4 });
+        expect(await countDueChecks(today)).toBe(4);
+        expect(calls()[0].path).toBe('/api/v1/batches/checks/due/count?today=2026-11-06');
+    });
+
+    it('lists the oldest ones, with their batch', async () => {
+        mocks.request.mockResolvedValue([{ id: 'c1', label: '24 hours', batch: { id: 'b1', name: 'Day Cream', lot_number: 'L1', target_ph: 5.5 } }]);
+        const due = await listDueChecks(today, 5);
+        expect(due[0].batch.name).toBe('Day Cream');
+        expect(calls()[0].path).toBe('/api/v1/batches/checks/due?today=2026-11-06&limit=5');
+    });
+
+    it('gives an empty list when nothing is due, and a plain error when it fails', async () => {
+        mocks.request.mockResolvedValue([]);
+        expect(await listDueChecks(today)).toEqual([]);
+        mocks.request.mockRejectedValue(new ApiError(500, 'error', 'Something went wrong. Please try again.'));
+        await expect(listDueChecks(today)).rejects.toThrow('Something went wrong');
+        await expect(countDueChecks(today)).rejects.toThrow('Something went wrong');
     });
 });
 
 describe('friendlyError', () => {
-    it('keeps unknown messages and has a fallback', () => {
-        expect(friendlyError({ code: 'XX000', message: 'odd' }).message).toBe('odd');
-        expect(friendlyError(null, 'fallback').message).toBe('fallback');
-    });
-});
-
-describe('listDueChecks', () => {
-    const row = (id: string, batches: unknown) => ({ id, batch_id: `b-${id}`, label: '1 week', due_on: '2026-11-08', checked_at: null, result: null, observations: [], measured_ph: null, notes: null, batches });
-    const owner = { id: 'b1', name: 'Day Cream', lot_number: '261101-1', target_ph: 5.5, status: 'active' };
-
-    it('asks for unanswered check-ins that are due, on batches in progress, oldest first', async () => {
-        const { client, calls } = fakeClient({ data: [], error: null });
-        await listDueChecks(client, new Date(2026, 10, 8), 3);
-        const steps = Object.fromEntries(calls.map(c => [c.method, c.args]));
-        expect(steps.from).toEqual(['batch_checks']);
-        expect(steps.is).toEqual(['checked_at', null]);
-        expect(steps.lte).toEqual(['due_on', '2026-11-08']);
-        expect(steps.eq).toEqual(['batches.status', 'active']);
-        expect(steps.order).toEqual(['due_on']);
-        expect(steps.limit).toEqual([3]);
-    });
-
-    it('attaches the batch, whether it comes back as an object or a one-item list, and drops its status', async () => {
-        const { client } = fakeClient({ data: [row('1', owner), row('2', [owner])], error: null });
-        const due = await listDueChecks(client);
-        expect(due).toHaveLength(2);
-        for (const check of due) {
-            expect(check.batch).toEqual({ id: 'b1', name: 'Day Cream', lot_number: '261101-1', target_ph: 5.5 });
-            expect(check).not.toHaveProperty('batches');
-        }
-        expect(due[0]).toMatchObject({ id: '1', label: '1 week', due_on: '2026-11-08' });
-    });
-
-    it('gives an empty list when nothing is due, and a plain error when it fails', async () => {
-        expect(await listDueChecks(fakeClient({ data: null, error: null }).client)).toEqual([]);
-        await expect(listDueChecks(fakeClient({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } }).client)).rejects.toThrow(/isn't set up in your database yet/);
-    });
-});
-
-describe('deleteBatch', () => {
-    it('deletes just that batch and reports it gone', async () => {
-        const { client, calls, rpc } = fakeClient({ data: [{ id: 'b1' }], error: null });
-        await deleteBatch('b1', {}, client);
-        expect(calls.map(c => c.method)).toEqual(['from', 'delete', 'eq', 'select']);
-        expect(calls[0].args).toEqual(['batches']);
-        expect(calls[2].args).toEqual(['id', 'b1']);
-        expect(rpc).not.toHaveBeenCalled(); // the stash is left alone unless asked
-    });
-
-    it('puts the stash back first when asked, and only then deletes', async () => {
-        const { client, calls } = fakeClient({ data: [{ id: 'b1' }], error: null }, { data: null, error: null });
-        await deleteBatch('b1', { restoreStash: true }, client);
-        const order = calls.map(c => c.method);
-        expect(order[0]).toBe('rpc:void_batch');
-        expect(order.indexOf('delete')).toBeGreaterThan(0);
-        expect(calls[0].args).toEqual([{ p_batch_id: 'b1' }]);
-    });
-
-    it('does not delete anything if the stash could not be put back', async () => {
-        const { client, calls } = fakeClient({ data: [{ id: 'b1' }], error: null }, { data: null, error: { message: 'Batch not found, or it was already undone.' } });
-        await expect(deleteBatch('b1', { restoreStash: true }, client)).rejects.toThrow('already undone');
-        expect(calls.map(c => c.method)).not.toContain('delete');
-    });
-
-    it('says so when there was nothing to delete (not yours, or already gone)', async () => {
-        await expect(deleteBatch('b1', {}, fakeClient({ data: [], error: null }).client)).rejects.toThrow('Batch not found, or it was already deleted.');
-    });
-
-    it('turns a database error into something readable', async () => {
-        await expect(deleteBatch('b1', {}, fakeClient({ data: null, error: { code: '42P01', message: 'relation does not exist' } }).client)).rejects.toThrow();
+    it('keeps the backend\'s message, explains a network failure, and has a fallback', () => {
+        expect(friendlyError(new ApiError(409, 'x', 'Pick a different lot number.')).message).toBe('Pick a different lot number.');
+        expect(friendlyError(new TypeError('Failed to fetch')).message).toMatch(/reach the server/);
+        expect(friendlyError(undefined, 'Nope').message).toBe('Nope');
+        expect(friendlyError(new Error('plain')).message).toBe('plain');
     });
 });

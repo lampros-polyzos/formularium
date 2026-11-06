@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { listBatches } from './batches';
+import { listBatchLines, listBatches } from './batches';
 import { fetchFormulasWithLines } from './formulasApi';
 import { fetchFavorites } from './libraryApi';
 import { loadIngredients, loadStash } from './pantryData';
@@ -7,16 +7,12 @@ import type { MetricBatch, MetricFavorite, MetricFormula, MetricLine, MetricsInp
 
 type Client = Pick<typeof supabase, 'from'>;
 
-const PAGE = 1000;
-/** Most pages read for the ingredients of all batches (so up to 20,000 rows). */
-const MAX_PAGES = 20;
-
 function fail(what: string, error: { message?: string } | null): never {
     throw new Error(`Could not load ${what}${error?.message ? `: ${error.message}` : '.'}`);
 }
 
-export async function loadMetricBatches(client: Client = supabase): Promise<MetricBatch[]> {
-    const batches = await listBatches(client as typeof supabase);
+export async function loadMetricBatches(): Promise<MetricBatch[]> {
+    const batches = await listBatches();
     return batches.map(b => ({
         id: b.id,
         formulation_id: b.formulation_id,
@@ -35,23 +31,10 @@ export async function loadMetricBatches(client: Client = supabase): Promise<Metr
     }));
 }
 
-/** What went into every batch you have made, read a page at a time. */
-export async function loadMetricLines(client: Client = supabase): Promise<MetricLine[]> {
-    const lines: MetricLine[] = [];
-    for (let page = 0; page < MAX_PAGES; page++) {
-        const { data, error } = await client
-            .from('batch_ingredients')
-            .select('batch_id, ingredient_id, name, actual_g, cost')
-            .order('id')
-            .range(page * PAGE, (page + 1) * PAGE - 1);
-        if (error) fail('what went into your batches', error);
-        const rows = (data ?? []) as { batch_id: string; ingredient_id: string | null; name: string; actual_g: number | string; cost: number | string | null }[];
-        for (const r of rows) {
-            lines.push({ batch_id: r.batch_id, ingredient_id: r.ingredient_id, name: r.name, actual_g: Number(r.actual_g), cost: r.cost === null ? null : Number(r.cost) });
-        }
-        if (rows.length < PAGE) break;
-    }
-    return lines;
+/** What went into every batch you have made. */
+export async function loadMetricLines(): Promise<MetricLine[]> {
+    const rows = await listBatchLines();
+    return rows.map(r => ({ batch_id: r.batch_id, ingredient_id: r.ingredient_id, name: r.name, actual_g: Number(r.actual_g), cost: r.cost === null ? null : Number(r.cost) }));
 }
 
 export async function loadFavorites(): Promise<MetricFavorite[]> {
@@ -91,8 +74,8 @@ export async function countSharedRecipes(userId: string, client: Client = supaba
 /** Everything the Metrics page works from. */
 export async function loadMetricsInput(userId: string, client: Client = supabase): Promise<MetricsInput> {
     const [batches, lines, favorites, formulas, sharedCount, lots] = await Promise.all([
-        loadMetricBatches(client),
-        loadMetricLines(client),
+        loadMetricBatches(),
+        loadMetricLines(),
         loadFavorites(),
         loadFormulaSummaries(),
         countSharedRecipes(userId, client),

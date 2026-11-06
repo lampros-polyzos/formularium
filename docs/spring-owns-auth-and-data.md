@@ -46,7 +46,9 @@ delete them once you are sure you do not need them.
 3. ~~**Formulas**~~ **done**: product types (profiles), formulas with their phases and ingredients, saving, copying, deleting, linking a formula to its shared post, and the
    version history (`backend/.../formulas/`, `frontend/src/lib/formulasApi.ts`). A save writes the details and the whole contents in one transaction.
    Needs `20261118000000_starter_formulas_in_spring.sql` and `20261119000000_formula_versions_in_spring.sql`. Still on Supabase: batches, community, notifications.
-4. **Batches**: batches, checks, ingredients, stash usage, `create_batch`, `void_batch`.
+4. ~~**Batches**~~ **done**: starting a batch (the stash is deducted and the cost worked out in one transaction), undoing and deleting it, editing it, the check-ins
+   and the lists the metrics read (`backend/.../batches/`, `frontend/src/lib/batches.ts`). Needs `20261120000000_batches_in_spring.sql`, which removes the old
+   `create_batch` and `void_batch` functions. Still on Supabase: community, notifications, the data export.
 5. **Community**: posts, comments, ratings, reports, mutes, snapshots, moderators, `public_recipe_previews`, `is_moderator`.
 6. **Notifications**: replace the Supabase realtime channel with server-sent events.
 7. **Data export and account deletion**: replace the `export_my_data` and `delete_my_account` functions.

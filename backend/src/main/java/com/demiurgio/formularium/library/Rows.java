@@ -28,6 +28,14 @@ public final class Rows {
         if (value instanceof Timestamp t) return t.toInstant().toString();
         if (value instanceof Date d) return d.toLocalDate().toString();
         if (value instanceof java.time.OffsetDateTime o) return o.toInstant().toString();
+        if (value instanceof java.sql.Array a) {
+            // A text[] column becomes a plain list
+            try {
+                return java.util.Arrays.asList((Object[]) a.getArray());
+            } catch (SQLException e) {
+                return java.util.List.of();
+            }
+        }
         return value;
     }
 }

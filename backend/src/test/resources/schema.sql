@@ -168,3 +168,69 @@ create table if not exists formulation_versions (
   created_at timestamp with time zone not null default current_timestamp,
   unique (formulation_id, version_number)
 );
+
+-- ---- batches
+create table if not exists batches (
+  id uuid primary key,
+  user_id uuid not null references app_users (id) on delete cascade,
+  formulation_id uuid references formulations (id) on delete set null,
+  name varchar(200) not null,
+  lot_number varchar(60) not null,
+  batch_size_g numeric not null check (batch_size_g > 0),
+  made_on date not null default current_date,
+  status varchar(20) not null default 'active' check (status in ('active', 'archived', 'discarded', 'voided')),
+  target_ph numeric,
+  measured_ph numeric,
+  final_weight_g numeric,
+  notes text,
+  stash_deducted boolean not null default false,
+  created_at timestamp with time zone not null default current_timestamp,
+  container_id uuid references user_containers (id) on delete set null,
+  container_name varchar(200),
+  container_volume_ml numeric,
+  container_count numeric,
+  container_unit_price numeric,
+  density_g_ml numeric,
+  ingredient_cost numeric,
+  unpriced_count integer not null default 0,
+  unique (user_id, lot_number)
+);
+
+create table if not exists batch_ingredients (
+  id uuid primary key,
+  batch_id uuid not null references batches (id) on delete cascade,
+  user_id uuid not null references app_users (id) on delete cascade,
+  ingredient_id uuid references ingredients (id) on delete set null,
+  name varchar(200) not null,
+  inci_name varchar(200),
+  phase varchar(10) not null,
+  percentage numeric not null,
+  planned_g numeric not null,
+  actual_g numeric not null,
+  cost numeric,
+  cost_estimated boolean not null default false
+);
+
+create table if not exists batch_stash_usage (
+  id uuid primary key,
+  batch_id uuid not null references batches (id) on delete cascade,
+  batch_ingredient_id uuid references batch_ingredients (id) on delete cascade,
+  user_id uuid not null references app_users (id) on delete cascade,
+  stash_id uuid references user_stash (id) on delete set null,
+  grams numeric not null check (grams > 0),
+  label varchar(200),
+  price_per_g numeric
+);
+
+create table if not exists batch_checks (
+  id uuid primary key,
+  batch_id uuid not null references batches (id) on delete cascade,
+  user_id uuid not null references app_users (id) on delete cascade,
+  label varchar(100) not null,
+  due_on date not null,
+  checked_at timestamp with time zone,
+  result varchar(10) check (result is null or result in ('good', 'minor', 'failed')),
+  observations varchar(60) array not null default array[],
+  measured_ph numeric,
+  notes text
+);
