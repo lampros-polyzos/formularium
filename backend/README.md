@@ -7,23 +7,12 @@ The Spring Boot API behind [Formularium](../README.md): sign-in, every read and 
 ## Run it
 
 ```bash
-cp config/application.properties.example config/application.properties   # fill in the values; this file is git-ignored
-./mvnw spring-boot:run                                                    # http://localhost:8080
-./mvnw test                                                               # no database needed: tests use H2
+cp .env.example .env     # then fill it in; git-ignored. Required: the database and AUTH_JWT_SECRET
+./mvnw spring-boot:run  # http://localhost:8080
+./mvnw test            # no database needed: tests use H2
 ```
 
-Spring reads `config/application.properties` when started from this folder. The same settings can come from environment variables on a host. The full list, with dummy values, is in the root [`.env.example`](../.env.example).
-
-| Setting (environment variable) | Meaning |
-|---|---|
-| `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD` | PostgreSQL connection (JDBC address, owner credentials) |
-| `AUTH_JWT_SECRET` | Signs access tokens, 32+ characters. **The app will not start without it.** |
-| `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE` | Refresh cookie flags. `true` in production |
-| `AUTH_REQUIRE_VERIFIED_EMAIL` | Default `true`: new email accounts must confirm before signing in |
-| `GOOGLE_CLIENT_ID` | Enables "Sign in with Google" (the OAuth client ID, not the secret) |
-| `TURNSTILE_SECRET` | Enables the Cloudflare bot check; empty skips it |
-| `APP_URL`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | Email links and SMTP. No `MAIL_HOST` means emails are only logged |
-| `CORS_ALLOWED_ORIGIN` | Website address(es) allowed to call the API |
+Spring reads `backend/.env` when started from this folder; on a host, set the same names as real environment variables. **Every setting is explained in [`.env.example`](.env.example)**, which is the only list. The app will not start without `AUTH_JWT_SECRET`. A `config/application.properties` file also still works, for the same settings in Spring property form.
 
 ## API
 

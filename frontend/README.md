@@ -8,20 +8,13 @@ The React app for [Formularium](../README.md): the formula studio, batches, stas
 
 ```bash
 npm ci
-cp .env.example .env.local     # then fill in the values below
+cp .env.example .env.local     # then fill it in
 npm run dev                    # http://localhost:5173
 ```
 
-The API must be running too (default `http://localhost:8080`, see the backend's README section in the root [README](../README.md)).
+The API must be running too (default `http://localhost:8080`, see the [backend README](../backend/README.md)).
 
-| Variable | Needed for |
-|---|---|
-| `VITE_API_BASE_URL` | Where the API lives. Empty means the same origin as the site. |
-| `VITE_TURNSTILE_SITE_KEY` | The Cloudflare Turnstile bot check on the sign-in forms (public key). |
-| `VITE_GOOGLE_CLIENT_ID` | "Sign in with Google". Must be the OAuth **client ID** (ends `.apps.googleusercontent.com`), never the client secret. Empty hides the button. |
-| `VITE_SITE_URL` | The public address used at build time for canonical links, the sitemap, `llms.txt` and structured data. |
-
-These are baked into the bundle and visible to anyone, so only public values belong here. Real secrets live in the backend. `.env.local` is git-ignored.
+Every variable is explained in [`.env.example`](.env.example), which is the only list. They are baked into the bundle and visible to anyone, so only public values belong there; real secrets live in the backend. `.env.local` is git-ignored.
 
 ## Scripts
 

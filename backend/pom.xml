@@ -100,6 +100,17 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<!-- Tests use only src/test/resources/application.properties (H2). Without this, a developer's local
+						     config/application.properties or .env would point the tests at the real database. -->
+						<spring.config.location>classpath:/application.properties</spring.config.location>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

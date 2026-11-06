@@ -2,7 +2,7 @@
 # Blocks a commit that would put a secret into git.
 #
 # It looks at the lines you are ADDING and stops the commit when one of them
-#   1. contains a real secret from your own git-ignored files (backend/config/application.properties, frontend/.env.local, ...), or
+#   1. contains a real secret from your own git-ignored files (backend/.env, frontend/.env.local, ...), or
 #   2. looks like a well-known kind of key (Google OAuth secret, private key, AWS key, long Gmail app password next to "password").
 # It never prints the secret itself, only the file and line number.
 #
@@ -29,7 +29,7 @@ grep -v '^\.githooks/' "$added" > "$added.x"; mv "$added.x" "$added"
 [ -s "$added" ] || exit 0
 
 # 1. The real values from the local, ignored settings files
-for f in backend/config/application.properties backend/config/*.properties frontend/.env.local frontend/.env.development frontend/.env .env .env.local; do
+for f in backend/.env backend/.env.local backend/config/application.properties backend/config/*.properties frontend/.env.local frontend/.env.development frontend/.env .env .env.local; do
   [ -f "$f" ] || continue
   # key=value lines whose key mentions a secret
   grep -iE '^[[:space:]]*[A-Za-z0-9_.-]*(password|secret|token|key|credential)[A-Za-z0-9_.-]*[[:space:]]*[=:]' "$f" 2>/dev/null \
@@ -74,7 +74,7 @@ fi
 
 if [ "$found" -ne 0 ]; then
   echo "" >&2
-  echo "Keep real values in backend/config/application.properties or in environment variables, never in tracked files." >&2
+  echo "Keep real values in backend/.env or in environment variables, never in tracked files." >&2
   echo "If you already pushed one, change that secret at its provider: removing it from git does not make it safe again." >&2
   echo "Not a secret? Commit anyway with:  git commit --no-verify" >&2
   exit 1
