@@ -1,75 +1,69 @@
-# React + TypeScript + Vite
+# Formularium frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React app for [Formularium](../README.md): the formula studio, batches, stash, community and public guides. It talks only to the Spring Boot API in [`../backend`](../backend); there is no other backend.
 
-Currently, two official plugins are available:
+**Stack:** React 19, TypeScript, Vite, Tailwind CSS 4, React Router 7, Vitest + Testing Library (happy-dom).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Run it
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm ci
+cp .env.example .env.local     # then fill in the values below
+npm run dev                    # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+The API must be running too (default `http://localhost:8080`, see the backend's README section in the root [README](../README.md)).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Variable | Needed for |
+|---|---|
+| `VITE_API_BASE_URL` | Where the API lives. Empty means the same origin as the site. |
+| `VITE_TURNSTILE_SITE_KEY` | The Cloudflare Turnstile bot check on the sign-in forms (public key). |
+| `VITE_GOOGLE_CLIENT_ID` | "Sign in with Google". Must be the OAuth **client ID** (ends `.apps.googleusercontent.com`), never the client secret. Empty hides the button. |
+| `VITE_SITE_URL` | The public address used at build time for canonical links, the sitemap, `llms.txt` and structured data. |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+These are baked into the bundle and visible to anyone, so only public values belong here. Real secrets live in the backend. `.env.local` is git-ignored.
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server with hot reload |
+| `npm test` | All tests once (`vitest run`) |
+| `npm run lint` | ESLint |
+| `npm run build` | Type-check (`tsc -b`), build, then prerender the public pages |
+| `npm run preview` | Serve the production build locally |
+| `npm run build:annex3` | Regenerate the EU Annex III limits data |
+
+## How the code is organised
 
 ```
+src/
+  pages/        One file per route (studio, batches, stash, community, guides...)
+  components/   UI pieces, grouped by area (editor, bench, metrics, pantry, tools...)
+  lib/          Plain TypeScript with no React: the API clients, calculators,
+                auto-balancing, regional limits, batch planning, parsers
+  hooks/        React glue around lib/ (autosave, bench session, data loading)
+  contexts/     Auth, settings and dialog state
+  content/      Guides, blog articles and the legal texts
+  seo/          Per-page titles, meta tags, structured data and prerender
+  db/           SQL migration tests run on an in-process Postgres (PGlite)
+```
+
+A few conventions worth knowing:
+
+- **Domain logic stays out of components.** Calculations and rules live in `lib/` as small functions with their own tests, so they can be checked without rendering anything.
+- **One door to the backend.** `lib/apiClient.ts` (`request`) adds the access token, turns error responses into `ApiError` with a message safe to show, and retries once after a silent token refresh. Feature modules (`formulasApi`, `libraryApi`, `batches`, `communityApi`) build on it, and components never call `fetch` themselves.
+- **Auth.** The short-lived access token lives only in memory (`lib/authClient.ts`). The refresh token is an HttpOnly cookie that scripts cannot read, so a page reload quietly signs you back in. Parallel requests that hit an expired token share a single refresh.
+- **Work is not lost.** The editor autosaves, keeps a local draft, and records version history that can be restored.
+
+## Tests
+
+`npm test` runs everything (1,600+ tests). A few patterns:
+
+- **Component and page tests** use Testing Library and mock the API modules (`vi.mock('../lib/communityApi')`), so they drive the UI the way a person does and need no server.
+- **`lib/` tests** are plain unit tests with no DOM.
+- **`db/*.sql.test.ts`** apply the SQL migrations from `../supabase/migrations` to a real Postgres engine (PGlite) and check what they do. A migration's file is copied into `src/db/fixtures/` for the test.
+
+## Public pages and SEO
+
+The app is a single-page app, but the landing page, guides, blog and legal pages are prerendered at the end of `vite build` (`scripts/prerenderPages.ts`). Each gets its own HTML with title, description, canonical link, social tags, structured data and readable content, plus a `sitemap.xml` and `llms.txt`. Set `VITE_SITE_URL` for production builds so the absolute links can be written.
