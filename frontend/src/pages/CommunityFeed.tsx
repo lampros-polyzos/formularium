@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { fetchPosts, fetchRatingScores } from '../lib/communityApi';
 import NewPostModal from '../components/NewPostModal';
 import Header from '../components/Header';
 import RatingSummary from '../components/RatingSummary';
@@ -47,16 +47,7 @@ export default function CommunityFeed() {
     // Ratings are a bonus: if they can't be loaded, the feed still works without them
     const loadRatings = async (recipeIds: string[]) => {
         try {
-            const rows: RatingRow[] = [];
-            for (let i = 0; i < recipeIds.length; i += 100) { // keep each request's address short
-                const { data, error } = await supabase
-                    .from('recipe_ratings')
-                    .select('post_id, overall, made_it')
-                    .in('post_id', recipeIds.slice(i, i + 100));
-                if (error) throw error;
-                rows.push(...((data ?? []) as RatingRow[]));
-            }
-            setRatingStats(summarizeRatings(rows));
+            setRatingStats(summarizeRatings((await fetchRatingScores(recipeIds)) as RatingRow[]));
         } catch (error) {
             console.error("Error fetching recipe ratings:", error);
             setRatingStats(new Map());
@@ -64,28 +55,17 @@ export default function CommunityFeed() {
     };
 
     useEffect(() => {
-        const fetchPosts = async () => {
+        const loadPosts = async () => {
             setIsLoading(true);
             try {
-                let query = supabase
-                    .from('community_posts')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-
-                if (activeTab !== 'all') {
-                    query = query.in('post_type', storedTypesFor(activeTab));
-                }
-
-                const { data, error } = await query;
-
-                if (error) throw error;
+                const data = await fetchPosts(activeTab !== 'all' ? storedTypesFor(activeTab) : undefined);
 
                 const formattedData = (data || []).map(post => ({
                     ...post,
                     tags: Array.isArray(post.tags) ? post.tags : (post.tags ? [post.tags] : [])
                 }));
 
-                setPosts(formattedData);
+                setPosts(formattedData as CommunityPost[]);
                 await loadRatings(formattedData.filter(p => p.post_type === 'formulation').map(p => p.id));
             } catch (error) {
                 console.error("Error fetching community posts:", error);
@@ -94,7 +74,7 @@ export default function CommunityFeed() {
             }
         };
 
-        fetchPosts();
+        loadPosts();
     }, [activeTab]);
 
     const toggleTag = (tag: string) => {

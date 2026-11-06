@@ -1,11 +1,9 @@
-import { supabase } from './supabase';
 import { listBatchLines, listBatches } from './batches';
+import { fetchSharedCount } from './communityApi';
 import { fetchFormulasWithLines } from './formulasApi';
 import { fetchFavorites } from './libraryApi';
 import { loadIngredients, loadStash } from './pantryData';
 import type { MetricBatch, MetricFavorite, MetricFormula, MetricLine, MetricsInput } from './metrics';
-
-type Client = Pick<typeof supabase, 'from'>;
 
 function fail(what: string, error: { message?: string } | null): never {
     throw new Error(`Could not load ${what}${error?.message ? `: ${error.message}` : '.'}`);
@@ -61,24 +59,22 @@ export async function loadFormulaSummaries(): Promise<MetricFormula[]> {
         }));
 }
 
-export async function countSharedRecipes(userId: string, client: Client = supabase): Promise<number> {
-    const { count, error } = await client
-        .from('community_posts')
-        .select('id', { count: 'exact', head: true })
-        .eq('author_id', userId)
-        .eq('post_type', 'formulation');
-    if (error) fail('your shared recipes', error);
-    return count ?? 0;
+export async function countSharedRecipes(): Promise<number> {
+    try {
+        return await fetchSharedCount();
+    } catch (e) {
+        return fail('your shared recipes', e as Error);
+    }
 }
 
 /** Everything the Metrics page works from. */
-export async function loadMetricsInput(userId: string, client: Client = supabase): Promise<MetricsInput> {
+export async function loadMetricsInput(): Promise<MetricsInput> {
     const [batches, lines, favorites, formulas, sharedCount, lots] = await Promise.all([
         loadMetricBatches(),
         loadMetricLines(),
         loadFavorites(),
         loadFormulaSummaries(),
-        countSharedRecipes(userId, client),
+        countSharedRecipes(),
         loadStash(),
     ]);
     const stashRows = await loadIngredients(lots.map(l => l.ingredient_id));

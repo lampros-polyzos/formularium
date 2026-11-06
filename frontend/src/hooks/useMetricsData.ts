@@ -15,7 +15,7 @@ export function useMetricsData(userId: string | undefined) {
     useEffect(() => {
         if (!userId) return;
         let cancelled = false;
-        loadMetricsInput(userId)
+        loadMetricsInput()
             .then(input => { if (!cancelled) setState({ status: 'ready', input }); })
             .catch(e => { if (!cancelled) setState({ status: 'error', message: e instanceof Error ? e.message : 'Something went wrong.' }); });
         return () => { cancelled = true; };

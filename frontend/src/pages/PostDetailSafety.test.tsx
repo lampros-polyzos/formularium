@@ -14,8 +14,10 @@ const mocks = vi.hoisted(() => ({
     muted: [] as string[],
     post: {} as Record<string, unknown>,
     comments: [] as Record<string, unknown>[],
-    inserted: [] as { table: string; row: unknown }[],
-    api: { setAnswered: vi.fn(), deleteComment: vi.fn(), reportContent: vi.fn(), editPost: vi.fn() },
+    api: {
+        setAnswered: vi.fn(), deleteComment: vi.fn(), reportContent: vi.fn(), editPost: vi.fn(), addComment: vi.fn(), deletePost: vi.fn(),
+        fetchPost: vi.fn(), fetchComments: vi.fn(), fetchVersions: vi.fn(), fetchRemixes: vi.fn(),
+    },
     mute: vi.fn(),
 }));
 
@@ -24,17 +26,6 @@ vi.mock('../hooks/useCommunityMutes', () => ({ useCommunityMutes: () => ({ muted
 vi.mock('../hooks/useIsModerator', () => ({ useIsModerator: () => mocks.moderator }));
 vi.mock('../components/RecipeRatings', () => ({ default: () => null }));
 vi.mock('../components/Header', () => ({ default: ({ title }: { title: string }) => <h2>{title}</h2> }));
-vi.mock('../lib/supabase', () => {
-    const builder = (table: string) => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'limit', 'in', 'is']) b[m] = () => b;
-        b.insert = (rows: unknown[]) => { mocks.inserted.push({ table, row: rows[0] }); return b; };
-        b.single = () => Promise.resolve({ data: table === 'community_posts' ? mocks.post : table === 'post_comments' ? { id: 'new', author_id: 'me', author_name: 'Me', body: 'hi', created_at: '2026-11-03' } : null, error: null });
-        b.then = (resolve: (v: unknown) => void) => resolve({ data: table === 'post_comments' ? mocks.comments : [], error: null });
-        return b;
-    };
-    return { supabase: { auth: { signOut: vi.fn() }, from: builder, channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, session: null, username: 'Me', isLoading: false }) }));
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ formatDate: (d: string) => d }) }));
 
@@ -64,7 +55,11 @@ beforeEach(() => {
     mocks.muted = [];
     mocks.post = post();
     mocks.comments = [];
-    mocks.inserted = [];
+    mocks.api.fetchPost.mockReset().mockImplementation(() => Promise.resolve(mocks.post));
+    mocks.api.fetchComments.mockReset().mockImplementation(() => Promise.resolve(mocks.comments));
+    mocks.api.fetchVersions.mockReset().mockResolvedValue([]);
+    mocks.api.fetchRemixes.mockReset().mockResolvedValue([]);
+    mocks.api.addComment.mockReset().mockResolvedValue({ id: 'new', author_id: 'me', author_name: 'Me', body: 'hi', created_at: '2026-11-03' });
     mocks.mute.mockReset().mockResolvedValue(undefined);
     mocks.api.setAnswered.mockReset().mockResolvedValue('2026-11-04T00:00:00Z');
     mocks.api.deleteComment.mockReset().mockResolvedValue(undefined);
@@ -245,12 +240,10 @@ describe('comments', () => {
         expect(screen.getByText('5/2,000')).toBeInTheDocument();
     });
 
-    it('do not make the browser send a notification (the database does that)', async () => {
+    it('are sent to the backend, which also notifies the author (the browser sends no notification)', async () => {
         await open();
         fireEvent.change(screen.getByPlaceholderText('Add to the discussion...'), { target: { value: 'A helpful reply' } });
         fireEvent.click(screen.getByRole('button', { name: 'Post Comment' }));
-        await waitFor(() => expect(mocks.inserted.some(i => i.table === 'post_comments')).toBe(true));
-        await settle();
-        expect(mocks.inserted.filter(i => i.table === 'notifications')).toEqual([]);
+        await waitFor(() => expect(mocks.api.addComment).toHaveBeenCalledWith('p1', 'A helpful reply'));
     });
 });

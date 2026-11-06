@@ -32,23 +32,24 @@ vi.mock('../lib/batches', async (importOriginal) => ({
 }));
 vi.mock('../lib/benchAlarm', () => ({ playAlarm: vi.fn(), prepareAlarm: vi.fn() }));
 vi.mock('../components/RecipeRatings', () => ({ default: () => null }));
-vi.mock('../lib/supabase', () => {
-    const builder = (table: string) => {
-        const b: Record<string, unknown> = {};
-        const state = { op: 'select' };
-        for (const m of ['select', 'eq', 'order', 'limit', 'in', 'is']) b[m] = () => b;
-        b.delete = () => { state.op = 'delete'; return b; };
-        b.upsert = () => { state.op = 'upsert'; return b; };
-        b.single = () => Promise.resolve({ data: table === 'community_posts' ? mocks.post : null, error: null });
-        b.then = (resolve: (v: unknown) => void) => {
-            mocks.ops.push(`${state.op}:${table}`);
-            if (state.op === 'upsert') return resolve({ error: mocks.upsertError });
-            return resolve({ data: [], error: null });
-        };
-        return b;
-    };
-    return { supabase: { auth: { signOut: vi.fn() }, from: builder, channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
+vi.mock('../lib/communityApi', () => ({
+    fetchPost: () => (mocks.post ? Promise.resolve(mocks.post) : Promise.reject(new Error('That post no longer exists.'))),
+    fetchVersions: () => Promise.resolve([]),
+    fetchComments: () => Promise.resolve([]),
+    fetchRemixes: () => Promise.resolve([]),
+    deletePost: () => { mocks.ops.push('delete:community_posts'); return Promise.resolve(); },
+    addComment: vi.fn(),
+    deleteComment: vi.fn(),
+    setAnswered: vi.fn(),
+    listMutes: () => Promise.resolve([]),
+    muteMember: vi.fn(),
+    unmuteMember: vi.fn(),
+    isModerator: () => Promise.resolve(false),
+    reportContent: vi.fn(),
+}));
+vi.mock('../lib/authClient', () => ({
+    updateUsername: () => (mocks.upsertError ? Promise.reject(new Error(mocks.upsertError.message)) : Promise.resolve({})),
+}));
 vi.mock('../contexts/AuthContext', () => ({
     useAuth: () => ({ user: mocks.user, session: null, username: mocks.username, isLoading: false }),
 }));
@@ -171,7 +172,7 @@ describe('batch page: discarding and undoing', () => {
 describe('settings: a name that could not be saved', () => {
     it('says so in the app\'s own dialog, and stays open with what was typed so it can be tried again', async () => {
         mocks.user = { id: 'u1', email: 'sam@example.com' };
-        mocks.upsertError = { message: 'permission denied' };
+        mocks.upsertError = { message: 'That display name is already taken.' };
         const onClose = vi.fn();
         render(<DialogProvider><SettingsModal isOpen onClose={onClose} /></DialogProvider>);
 
@@ -181,7 +182,7 @@ describe('settings: a name that could not be saved', () => {
 
         const box = screen.getByRole('alertdialog');
         expect(within(box).getByRole('heading', { name: "Couldn't save your name" })).toBeInTheDocument();
-        expect(box).toHaveTextContent('Failed to save display name.');
+        expect(box).toHaveTextContent('That display name is already taken.');
 
         fireEvent.click(within(box).getByRole('button', { name: 'Close' }));
         await settle();

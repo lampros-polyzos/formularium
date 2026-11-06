@@ -1,146 +1,162 @@
-import { describe, expect, it, vi } from 'vitest';
-import { deleteComment, editPost, fetchRecipePreviews, isModerator, listMutes, listOpenReports, muteMember, reportContent, resolveReport, setAnswered, unmuteMember, type Report } from './communityApi';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+    addComment, addVersion, createPost, deleteComment, deletePost, editPost, fetchCommunityRecipes, fetchPosts, fetchRatingScores, fetchRecipePreviews, fetchSharedCount,
+    fetchUnreadNotifications, isModerator, listMutes, listOpenReports, markNotificationRead, muteMember, rateRecipe, removeRating, reportContent, resolveReport, setAnswered, unmuteMember,
+} from './communityApi';
 import { communityErrorMessage } from './communityLimits';
 
-// The tests pass their own client, so the real one (which needs environment variables) is never created
-vi.mock('./supabase', () => ({ supabase: {} }));
+const mocks = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('./apiClient', async (importOriginal) => ({ ...(await importOriginal<typeof import('./apiClient')>()), request: mocks.request }));
+vi.mock('./api', () => ({ API_BASE_URL: 'http://api.test' }));
 
-type Call = { table?: string; rpc?: string; args?: unknown; op?: string; payload?: unknown; filters: [string, unknown][] };
+const calls = () => mocks.request.mock.calls.map(([path, init]) => ({ path: path as string, method: (init?.method ?? 'GET') as string, body: init?.body as Record<string, unknown> | undefined }));
 
-/** A stand-in for the database client that records what it was asked and answers with the given result. */
-function fakeClient(result: { data?: unknown; error?: { message: string } | null } = {}) {
-    const calls: Call[] = [];
-    const answer = () => ({ data: result.data ?? null, error: result.error ?? null });
-    const client = {
-        from: (table: string) => {
-            const call: Call = { table, filters: [] };
-            calls.push(call);
-            const b: Record<string, unknown> = {};
-            for (const op of ['insert', 'update', 'delete', 'select']) b[op] = (payload?: unknown) => { call.op = op; call.payload = payload; return b; };
-            b.eq = (column: string, value: unknown) => { call.filters.push([column, value]); return b; };
-            b.order = () => b;
-            b.then = (resolve: (v: unknown) => void) => resolve(answer());
-            return b;
-        },
-        rpc: (name: string, args?: unknown) => { calls.push({ rpc: name, args, filters: [] }); return Promise.resolve(answer()); },
-    };
-    return { client: client as never, calls };
-}
+beforeEach(() => { mocks.request.mockReset().mockResolvedValue(undefined); });
+afterEach(() => { vi.unstubAllGlobals(); });
 
-const report = (over: Partial<Report> = {}): Report => ({ id: 'r1', target_type: 'post', target_id: 'p1', post_id: 'p1', target_author_id: 'a', snapshot: 'x', reason: 'spam', details: null, status: 'open', created_at: '2026-11-01', ...over });
-
-describe('reporting', () => {
-    it('sends what was reported and why, trimming the details and leaving them out when empty', async () => {
-        const { client, calls } = fakeClient();
-        await reportContent({ targetType: 'comment', targetId: 'c1', reason: 'spam', details: '  buy now  ' }, client);
-        await reportContent({ targetType: 'post', targetId: 'p1', reason: 'other', details: '   ' }, client);
-        expect(calls[0]).toMatchObject({ table: 'content_reports', op: 'insert', payload: [{ target_type: 'comment', target_id: 'c1', reason: 'spam', details: 'buy now' }] });
-        expect((calls[1].payload as { details: unknown }[])[0].details).toBeNull();
+describe('posts', () => {
+    it('lists all posts, or only the kinds asked for', async () => {
+        await fetchPosts();
+        await fetchPosts(['advice', 'request']);
+        expect(calls().map(c => c.path)).toEqual(['/api/v1/community/posts', '/api/v1/community/posts?types=advice,request']);
     });
 
-    it('does not send who is reporting (the database knows)', async () => {
-        const { client, calls } = fakeClient();
-        await reportContent({ targetType: 'post', targetId: 'p1', reason: 'spam' }, client);
-        expect(Object.keys((calls[0].payload as object[])[0])).not.toContain('reporter_id');
+    it('sends a new post without saying who is writing it', async () => {
+        await createPost({ title: 'Hi', post_type: 'discussion' });
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/community/posts', method: 'POST', body: { title: 'Hi', post_type: 'discussion' } });
+        expect(calls()[0].body).not.toHaveProperty('author_id');
     });
 
-    it('passes on a refusal', async () => {
-        const { client } = fakeClient({ error: { message: 'You cannot report your own content.' } });
-        await expect(reportContent({ targetType: 'post', targetId: 'p1', reason: 'spam' }, client)).rejects.toMatchObject({ message: 'You cannot report your own content.' });
-    });
-});
-
-describe('your own posts and comments', () => {
-    it('edits the title and text, and only touches sources when given', async () => {
-        const { client, calls } = fakeClient();
-        await editPost('p1', { title: ' New ', write_up: ' Text ' }, client);
-        await editPost('p1', { title: 'T', write_up: 'X', sources: '  A book ' }, client);
-        await editPost('p1', { title: 'T', write_up: 'X', sources: '  ' }, client);
-        expect(calls[0].payload).toEqual({ title: 'New', write_up: 'Text' });
-        expect(calls[1].payload).toEqual({ title: 'T', write_up: 'X', sources: 'A book' });
-        expect(calls[2].payload).toEqual({ title: 'T', write_up: 'X', sources: null });
-        expect(calls[0].filters).toEqual([['id', 'p1']]);
+    it('edits only what is given, trimming the text', async () => {
+        await editPost('p1', { title: '  New  ' });
+        await editPost('p1', { sources: null });
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/community/posts/p1', method: 'PATCH', body: { title: 'New' } });
+        expect(calls()[1].body).toEqual({ sources: '' });
     });
 
     it('marks a post answered with a date, or reopens it', async () => {
-        const { client, calls } = fakeClient();
-        const when = await setAnswered('p1', true, client);
-        expect(when).toMatch(/^\d{4}-\d\d-\d\dT/);
-        expect(calls[0].payload).toEqual({ answered_at: when });
-        expect(await setAnswered('p1', false, client)).toBeNull();
-        expect(calls[1].payload).toEqual({ answered_at: null });
+        mocks.request.mockResolvedValueOnce({ answered_at: '2026-11-05' }).mockResolvedValueOnce({ answered_at: null });
+        expect(await setAnswered('p1', true)).toBe('2026-11-05');
+        expect(await setAnswered('p1', false)).toBeNull();
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/community/posts/p1/answered', method: 'PUT', body: { answered: true } });
     });
 
-    it('deletes one comment by id', async () => {
-        const { client, calls } = fakeClient();
-        await deleteComment('c9', client);
-        expect(calls[0]).toMatchObject({ table: 'post_comments', op: 'delete', filters: [['id', 'c9']] });
+    it('deletes a post, and a comment', async () => {
+        await deletePost('p1');
+        await deleteComment('c1');
+        expect(calls().map(c => [c.method, c.path])).toEqual([['DELETE', '/api/v1/community/posts/p1'], ['DELETE', '/api/v1/community/comments/c1']]);
     });
-});
 
-describe('muting', () => {
-    it('lists, adds and removes muted members', async () => {
-        const list = fakeClient({ data: [{ muted_user_id: 'u1' }, { muted_user_id: 'u2' }] });
-        expect(await listMutes(list.client)).toEqual(['u1', 'u2']);
-        const { client, calls } = fakeClient();
-        await muteMember('u3', client);
-        await unmuteMember('u3', client);
-        expect(calls[0]).toMatchObject({ table: 'community_mutes', op: 'insert', payload: [{ muted_user_id: 'u3' }] });
-        expect(calls[1]).toMatchObject({ op: 'delete', filters: [['muted_user_id', 'u3']] });
+    it('adds a comment and a recipe version', async () => {
+        await addComment('p1', 'Nice');
+        await addVersion('p1', [{ id: 'a' }], null);
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/community/posts/p1/comments', method: 'POST', body: { body: 'Nice' } });
+        expect(calls()[1]).toMatchObject({ path: '/api/v1/community/posts/p1/versions', method: 'POST', body: { formulation_data: [{ id: 'a' }], release_notes: null } });
     });
 });
 
-describe('moderation', () => {
-    it('asks the database whether you are a moderator, and says no on any trouble', async () => {
-        expect(await isModerator(fakeClient({ data: true }).client)).toBe(true);
-        expect(await isModerator(fakeClient({ data: false }).client)).toBe(false);
-        expect(await isModerator(fakeClient({ data: true, error: { message: 'nope' } }).client)).toBe(false);
+describe('ratings', () => {
+    it('rates and un-rates a recipe', async () => {
+        await rateRecipe('p1', { version: 1, overall: 5, made_it: true, texture: null, stability: null, ease: null, efficacy: null, skin_type: null, review: null });
+        await removeRating('p1');
+        expect(calls().map(c => [c.method, c.path])).toEqual([['PUT', '/api/v1/community/posts/p1/rating'], ['DELETE', '/api/v1/community/posts/p1/rating']]);
     });
 
-    it('lists open reports', async () => {
-        const { client, calls } = fakeClient({ data: [report()] });
-        expect(await listOpenReports(client)).toHaveLength(1);
-        expect(calls[0].filters).toEqual([['status', 'open']]);
+    it('asks for many scores in requests of at most 200 recipes', async () => {
+        mocks.request.mockImplementation((_p, init) => Promise.resolve((init.body.post_ids as string[]).map(id => ({ post_id: id, overall: 4, made_it: false }))));
+        const ids = Array.from({ length: 450 }, (_, i) => `p${i}`);
+        expect(await fetchRatingScores(ids)).toHaveLength(450);
+        expect(calls().map(c => (c.body!.post_ids as string[]).length)).toEqual([200, 200, 50]);
+    });
+});
+
+describe('reading across posts', () => {
+    it('reads the number of recipes you shared', async () => {
+        mocks.request.mockResolvedValue({ count: 3 });
+        expect(await fetchSharedCount()).toBe(3);
     });
 
-    it('removes the reported post, then closes the report with who and when', async () => {
-        const { client, calls } = fakeClient();
-        await resolveReport(report(), 'resolved', 'mod1', true, client);
-        expect(calls[0]).toMatchObject({ table: 'community_posts', op: 'delete', filters: [['id', 'p1']] });
-        expect(calls[1]).toMatchObject({ table: 'content_reports', op: 'update', filters: [['id', 'r1']] });
-        expect(calls[1].payload).toMatchObject({ status: 'resolved', resolved_by: 'mod1' });
-    });
-
-    it('removes a reported comment from the comments', async () => {
-        const { client, calls } = fakeClient();
-        await resolveReport(report({ target_type: 'comment', target_id: 'c1' }), 'resolved', 'mod1', true, client);
-        expect(calls[0]).toMatchObject({ table: 'post_comments', filters: [['id', 'c1']] });
-    });
-
-    it('only closes the report when dismissing, removing nothing', async () => {
-        const { client, calls } = fakeClient();
-        await resolveReport(report(), 'dismissed', 'mod1', false, client);
-        expect(calls).toHaveLength(1);
-        expect(calls[0].payload).toMatchObject({ status: 'dismissed' });
-    });
-
-    it('leaves the report open if the content could not be removed', async () => {
-        const { client, calls } = fakeClient({ error: { message: 'row-level security' } });
-        await expect(resolveReport(report(), 'resolved', 'mod1', true, client)).rejects.toBeTruthy();
-        expect(calls).toHaveLength(1);
+    it('asks for other members recipes up to a limit', async () => {
+        await fetchCommunityRecipes(50);
+        expect(calls()[0].path).toBe('/api/v1/community/recipes?limit=50');
     });
 });
 
 describe('recipe previews for the home page', () => {
-    it('asks the narrow public function, and turns tags into a list whatever the database returns', async () => {
-        const { client, calls } = fakeClient({ data: [{ id: 'a', title: 'A', excerpt: 'e', tags: ['x'], development_status: null, created_at: 'd' }, { id: 'b', title: 'B', excerpt: '', tags: null, development_status: null, created_at: 'd' }] });
-        const previews = await fetchRecipePreviews(3, client);
-        expect(calls[0]).toMatchObject({ rpc: 'public_recipe_previews', args: { p_limit: 3 } });
-        expect(previews.map(p => p.tags)).toEqual([['x'], []]);
+    it('needs no sign-in, and turns tags into a list whatever comes back', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [
+            { id: 'p1', title: 'T', excerpt: 'e', tags: 'oops', development_status: null, created_at: 'now' },
+            { id: 'p2', title: 'U', excerpt: 'e', tags: ['a'], development_status: null, created_at: 'now' },
+        ] });
+        vi.stubGlobal('fetch', fetchMock);
+        const previews = await fetchRecipePreviews(2);
+        expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/v1/public/recipe-previews?limit=2');
+        expect(previews.map(p => p.tags)).toEqual([[], ['a']]);
+    });
+
+    it('says so when they cannot be loaded', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+        await expect(fetchRecipePreviews()).rejects.toThrow('Could not load the recipes.');
     });
 });
 
-describe('friendly wording for what the database refuses', () => {
+describe('reporting and muting', () => {
+    it('sends what was reported and why, trimming the details and leaving them out when empty, without saying who is reporting', async () => {
+        await reportContent({ targetType: 'post', targetId: 'p1', reason: 'spam', details: '  bad  ' });
+        await reportContent({ targetType: 'comment', targetId: 'c1', reason: 'spam', details: '   ' });
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/community/reports', method: 'POST', body: { target_type: 'post', target_id: 'p1', reason: 'spam', details: 'bad' } });
+        expect(calls()[0].body).not.toHaveProperty('reporter_id');
+        expect(calls()[1].body).toMatchObject({ details: null });
+    });
+
+    it('passes on a refusal', async () => {
+        mocks.request.mockRejectedValue(new Error('You have already reported this.'));
+        await expect(reportContent({ targetType: 'post', targetId: 'p1', reason: 'spam' })).rejects.toThrow('already reported');
+    });
+
+    it('lists, adds and removes muted members', async () => {
+        mocks.request.mockResolvedValueOnce(['u2']);
+        expect(await listMutes()).toEqual(['u2']);
+        await muteMember('u3');
+        await unmuteMember('u3');
+        expect(calls().map(c => [c.method, c.path])).toEqual([['GET', '/api/v1/community/mutes'], ['PUT', '/api/v1/community/mutes/u3'], ['DELETE', '/api/v1/community/mutes/u3']]);
+    });
+});
+
+describe('moderation', () => {
+    it('asks the backend whether you are a moderator, and says no on any trouble', async () => {
+        mocks.request.mockResolvedValueOnce({ moderator: true });
+        expect(await isModerator()).toBe(true);
+        mocks.request.mockResolvedValueOnce({ moderator: false });
+        expect(await isModerator()).toBe(false);
+        mocks.request.mockRejectedValueOnce(new Error('down'));
+        expect(await isModerator()).toBe(false);
+    });
+
+    it('lists open reports', async () => {
+        mocks.request.mockResolvedValue([{ id: 'r1' }]);
+        expect(await listOpenReports()).toEqual([{ id: 'r1' }]);
+        expect(calls()[0].path).toBe('/api/v1/community/reports/open');
+    });
+
+    it('closes a report, and removes what was reported when asked', async () => {
+        const report = { id: 'r1' } as never;
+        await resolveReport(report, 'resolved', true);
+        await resolveReport(report, 'dismissed', false);
+        expect(calls()[0]).toMatchObject({ path: '/api/v1/community/reports/r1/resolve', method: 'POST', body: { outcome: 'resolved', remove: true } });
+        expect(calls()[1].body).toEqual({ outcome: 'dismissed', remove: false });
+    });
+});
+
+describe('notifications', () => {
+    it('lists unread ones and marks one read', async () => {
+        await fetchUnreadNotifications();
+        await markNotificationRead('n1');
+        expect(calls().map(c => [c.method, c.path])).toEqual([['GET', '/api/v1/notifications'], ['PUT', '/api/v1/notifications/n1/read']]);
+    });
+});
+
+describe('friendly wording for what is refused', () => {
     it.each([
         ['You are posting too quickly. Please wait a little and try again.', /posting too quickly/],
         ['new row for relation "community_posts" violates check constraint "community_posts_title_length"', /Titles can be up to 150/],

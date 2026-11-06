@@ -6,12 +6,11 @@ import PostDetail from './PostDetail';
 import ShareFormulaModal from '../components/ShareFormulaModal';
 
 const mocks = vi.hoisted(() => ({
-    inserts: [] as { table: string; row: Record<string, unknown> }[],
+    posted: [] as Record<string, unknown>[],
+    versions: [] as { postId: string; data: unknown; notes: string | null }[],
     /** The copies made of a recipe, as the backend was asked to make them. */
     created: [] as { body: Record<string, unknown>; options?: { copy?: boolean } }[],
     linked: [] as { formulaId: string; postId: string }[],
-    /** Pretend the database has not been migrated: posts saved with a remix link are refused. */
-    unmigrated: false,
     posts: {} as Record<string, Record<string, unknown>>,
     remixes: [] as Record<string, unknown>[],
 }));
@@ -30,50 +29,28 @@ vi.mock('../lib/formulasApi', () => ({
     linkFormulaToPost: (formulaId: string, postId: string) => { mocks.linked.push({ formulaId, postId }); return Promise.resolve(); },
 }));
 
-vi.mock('../lib/supabase', () => {
-    const builder = (table: string) => {
-        const filters: Record<string, unknown> = {};
-        const state = { single: false, inserted: null as Record<string, unknown> | null };
-        const b: Record<string, unknown> = {};
-        const result = (): { data: unknown; error: unknown } => {
-            if (state.inserted) {
-                const refused = mocks.unmigrated && ('remixed_from_post_id' in state.inserted || 'cloned_from_formulation_id' in state.inserted);
-                if (refused) return { data: null, error: { code: '42703', message: 'column does not exist' } };
-                mocks.inserts.push({ table, row: state.inserted });
-                if (table === 'formulation_phases') return { data: [{ id: 'ph-a', phase_letter: 'A' }], error: null };
-                return { data: state.single ? { id: `new-${table}` } : null, error: null };
-            }
-            if (table === 'community_posts') {
-                if (filters.remixed_from_post_id) return { data: mocks.remixes, error: null };
-                return { data: mocks.posts[filters.id as string] ?? null, error: null };
-            }
-            if (table === 'post_snapshots') {
-                return { data: [{ version: 1, release_notes: '', created_at: '2026-11-01', formulation_data: [{ id: 'ing1', name: 'Water', inci_name: 'Aqua', phase: 'A', percentage: 100 }] }], error: null };
-            }
-            return { data: [], error: null };
-        };
-        b.select = () => b;
-        b.eq = (col: string, val: unknown) => { filters[col] = val; return b; };
-        b.order = () => b;
-        b.limit = () => b;
-        b.insert = (rows: Record<string, unknown>[]) => { state.inserted = rows[0]; return b; };
-        b.update = () => b;
-        b.single = () => { state.single = true; return Promise.resolve(result()); };
-        b.maybeSingle = () => Promise.resolve(result());
-        b.then = (resolve: (v: unknown) => void) => resolve(result());
-        return b;
-    };
-    return { supabase: { from: builder, channel: vi.fn(), removeChannel: vi.fn(), auth: { signOut: vi.fn() } } };
-});
+vi.mock('../lib/communityApi', () => ({
+    fetchPost: (id: string) => (mocks.posts[id] ? Promise.resolve(mocks.posts[id]) : Promise.reject(new Error('That post no longer exists.'))),
+    fetchRemixes: () => Promise.resolve(mocks.remixes),
+    fetchVersions: () => Promise.resolve([{ version: 1, release_notes: '', created_at: '2026-11-01', formulation_data: [{ id: 'ing1', name: 'Water', inci_name: 'Aqua', phase: 'A', percentage: 100 }] }]),
+    fetchComments: () => Promise.resolve([]),
+    listMutes: () => Promise.resolve([]),
+    muteMember: vi.fn(),
+    unmuteMember: vi.fn(),
+    isModerator: () => Promise.resolve(false),
+    reportContent: vi.fn(),
+    createPost: (post: Record<string, unknown>) => { mocks.posted.push(post); return Promise.resolve({ id: 'new-post' }); },
+    editPost: vi.fn(),
+    addVersion: (postId: string, data: unknown, notes: string | null) => { mocks.versions.push({ postId, data, notes }); return Promise.resolve({}); },
+}));
 
 const settle = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
-const insertsInto = (table: string) => mocks.inserts.filter(i => i.table === table).map(i => i.row);
 
 beforeEach(() => {
-    mocks.inserts = [];
+    mocks.posted = [];
+    mocks.versions = [];
     mocks.created = [];
     mocks.linked = [];
-    mocks.unmigrated = false;
     mocks.remixes = [];
     mocks.posts = {
         p1: { id: 'p1', title: 'Lighter Day Cream', post_type: 'formulation', author_id: 'sam', author_name: 'Sam', remixed_from_post_id: 'p0', write_up: 'A remix', created_at: '2026-11-02' },
@@ -148,22 +125,21 @@ describe('sharing a formula', () => {
     it('records that a recipe started as someone else\'s', async () => {
         renderModal('p0');
         await submit();
-        expect(insertsInto('community_posts')[0]).toMatchObject({ title: 'My Cream', author_id: 'me', remixed_from_post_id: 'p0' });
+        expect(mocks.posted[0]).toMatchObject({ title: 'My Cream', remixed_from_post_id: 'p0' });
+        expect(mocks.posted[0]).not.toHaveProperty('author_id'); // the backend knows who is sharing
     });
 
     it('adds no remix field to an ordinary recipe', async () => {
         renderModal(null);
         await submit();
-        expect(insertsInto('community_posts')[0]).not.toHaveProperty('remixed_from_post_id');
+        expect(mocks.posted[0].remixed_from_post_id ?? null).toBeNull();
     });
 
-    it('still shares, without the link, if the database has not been migrated yet', async () => {
-        mocks.unmigrated = true;
+    it('records the first version of the recipe on the new post, and links the formula to it', async () => {
         renderModal('p0');
         await submit();
-        const [post] = insertsInto('community_posts');
-        expect(post).toMatchObject({ title: 'My Cream' });
-        expect(post).not.toHaveProperty('remixed_from_post_id');
-        expect(insertsInto('post_snapshots')).toHaveLength(1);
+        expect(mocks.versions).toHaveLength(1);
+        expect(mocks.versions[0].postId).toBe('new-post');
+        expect(mocks.linked).toEqual([{ formulaId: 'f1', postId: 'new-post' }]);
     });
 });

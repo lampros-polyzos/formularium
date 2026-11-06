@@ -7,7 +7,7 @@ import CommunityFeed from './CommunityFeed';
 const mocks = vi.hoisted(() => ({
     posts: [] as Record<string, unknown>[],
     ratings: [] as Record<string, unknown>[],
-    ratingsError: null as unknown,
+    ratingsError: null as Error | null,
     ratingRequests: [] as string[][],
     typeFilters: [] as string[][],
 }));
@@ -17,24 +17,16 @@ vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: null, sessio
 vi.mock('../contexts/SettingsContext', () => ({
     useSettings: () => ({ currency: '$', setCurrency: vi.fn(), dateFormat: 'en-US', setDateFormat: vi.fn(), warningDays: 30, setWarningDays: vi.fn(), formatDate: (d: string) => d }),
 }));
-vi.mock('../lib/supabase', () => {
-    const builder = (table: string) => {
-        let kinds: string[] | null = null;
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order']) b[m] = () => b;
-        b.in = (column: string, ids: string[]) => {
-            if (column === 'post_type') { kinds = ids; mocks.typeFilters.push(ids); } else mocks.ratingRequests.push(ids);
-            return b;
-        };
-        b.then = (resolve: (v: unknown) => void) => {
-            if (table === 'community_posts') return resolve({ data: kinds ? mocks.posts.filter(p => kinds!.includes(p.post_type as string)) : mocks.posts, error: null });
-            if (table === 'recipe_ratings') return resolve(mocks.ratingsError ? { data: null, error: mocks.ratingsError } : { data: mocks.ratings, error: null });
-            return resolve({ data: [], error: null });
-        };
-        return b;
-    };
-    return { supabase: { auth: { signOut: vi.fn() }, from: (t: string) => builder(t), channel: vi.fn(), removeChannel: vi.fn() } };
-});
+vi.mock('../lib/communityApi', () => ({
+    fetchPosts: (types?: string[]) => {
+        if (types) mocks.typeFilters.push(types);
+        return Promise.resolve(types ? mocks.posts.filter(p => types.includes(p.post_type as string)) : mocks.posts);
+    },
+    fetchRatingScores: (ids: string[]) => {
+        mocks.ratingRequests.push(ids);
+        return mocks.ratingsError ? Promise.reject(mocks.ratingsError) : Promise.resolve(mocks.ratings);
+    },
+}));
 
 const post = (id: string, title: string, type: string, day: number) => ({
     id, title, write_up: `About ${title}`, tags: [], post_type: type, development_status: null, author_id: 'a', created_at: `2026-10-${String(day).padStart(2, '0')}T10:00:00Z`,
@@ -94,13 +86,6 @@ describe('Community feed ratings', () => {
         expect(mocks.ratingRequests).toHaveLength(1);
         expect(mocks.ratingRequests[0].sort()).toEqual(['r-mid', 'r-new', 'r-top']);
     });
-
-    it('splits very long lists into several short requests', async () => {
-        mocks.posts = Array.from({ length: 230 }, (_, i) => post(`p${i}`, `Recipe ${i}`, 'formulation', 1 + (i % 28)));
-        mocks.ratings = [];
-        await openFeed();
-        expect(mocks.ratingRequests.map(r => r.length)).toEqual([100, 100, 30]);
-    });
 });
 
 describe('Community feed sorting', () => {
@@ -131,7 +116,7 @@ describe('Community feed sorting', () => {
 
 describe('Community feed without ratings', () => {
     it('still shows every post if the ratings cannot be loaded', async () => {
-        mocks.ratingsError = { message: 'permission denied' };
+        mocks.ratingsError = new Error('permission denied');
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         await openFeed();
         expect(titles()).toHaveLength(4);
@@ -172,7 +157,7 @@ describe('Community feed post types', () => {
         expect(screen.queryByText('Education')).not.toBeInTheDocument();
     });
 
-    it('the Advice tab finds new and old advice posts, and asks the database for both names', async () => {
+    it('the Advice tab finds new and old advice posts, and asks for both names', async () => {
         await openFeed();
         fireEvent.click(screen.getByRole('button', { name: 'Advice' }));
         await act(async () => { await Promise.resolve(); });

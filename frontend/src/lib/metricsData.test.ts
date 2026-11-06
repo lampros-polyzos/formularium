@@ -1,38 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { countSharedRecipes, loadFavorites, loadFormulaSummaries, loadMetricBatches, loadMetricLines, loadMetricsInput } from './metricsData';
 
-vi.mock('./supabase', () => ({ supabase: {} }));
 
 // Favourites, the stash and the ingredient rows come from the backend
 const api = vi.hoisted(() => ({ fetchFavorites: vi.fn(), fetchStash: vi.fn(), fetchIngredientsByIds: vi.fn(), fetchFormulasWithLines: vi.fn() }));
+const community = vi.hoisted(() => ({ fetchSharedCount: vi.fn() }));
+vi.mock('./communityApi', () => community);
 const batches = vi.hoisted(() => ({ listBatches: vi.fn(), listBatchLines: vi.fn() }));
 vi.mock('./batches', () => batches);
 vi.mock('./libraryApi', () => api);
 vi.mock('./formulasApi', () => api);
-
-/** A stand-in for the database. A table is either rows, a function giving rows for a requested range, or an error. */
-type Table = unknown[] | ((range: [number, number] | null) => unknown[]) | { error: string } | { count: number };
-function fakeClient(tables: Record<string, Table>) {
-    const calls: { table: string; range: [number, number] | null; filters: [string, unknown][] }[] = [];
-    const client = {
-        from(table: string) {
-            const call = { table, range: null as [number, number] | null, filters: [] as [string, unknown][] };
-            calls.push(call);
-            const b: Record<string, unknown> = {};
-            for (const m of ['select', 'order', 'limit']) b[m] = () => b;
-            for (const m of ['eq', 'in']) b[m] = (c: string, v: unknown) => { call.filters.push([`${m}:${c}`, v]); return b; };
-            b.range = (from: number, to: number) => { call.range = [from, to]; return b; };
-            b.then = (resolve: (v: unknown) => void) => {
-                const t = tables[table];
-                if (t && !Array.isArray(t) && typeof t !== 'function' && 'error' in t) return resolve({ data: null, error: { message: t.error }, count: null });
-                if (t && !Array.isArray(t) && typeof t !== 'function' && 'count' in t) return resolve({ data: null, error: null, count: t.count });
-                resolve({ data: typeof t === 'function' ? t(call.range) : t ?? [], error: null, count: null });
-            };
-            return b;
-        },
-    };
-    return { client: client as never, calls };
-}
 
 describe('loadMetricBatches', () => {
     it('turns what the backend sends into plain numbers and lists, and keeps the check-ins', async () => {
@@ -98,23 +75,23 @@ describe('the rest', () => {
     });
 
     it('counts the recipes you have shared', async () => {
-        const { client, calls } = fakeClient({ community_posts: { count: 4 } });
-        expect(await countSharedRecipes('u1', client)).toBe(4);
-        expect(calls[0].filters).toEqual(expect.arrayContaining([['eq:author_id', 'u1'], ['eq:post_type', 'formulation']]));
-        expect(await countSharedRecipes('u1', fakeClient({ community_posts: { count: 0 } }).client)).toBe(0);
+        community.fetchSharedCount.mockResolvedValue(4);
+        expect(await countSharedRecipes()).toBe(4);
+        community.fetchSharedCount.mockRejectedValue(new Error('nope'));
+        await expect(countSharedRecipes()).rejects.toThrow('Could not load your shared recipes');
     });
 });
 
 describe('loadMetricsInput', () => {
     it('brings it all together, naming what is in the stash', async () => {
-        const { client } = fakeClient({ community_posts: { count: 2 } });
+        community.fetchSharedCount.mockResolvedValue(2);
         batches.listBatches.mockResolvedValue([{ id: 'b1', name: 'Lotion', batch_size_g: 100, made_on: '2026-11-01', status: 'active', batch_checks: [] }]);
         batches.listBatchLines.mockResolvedValue([{ batch_id: 'b1', ingredient_id: 'i1', name: 'Shea', actual_g: 10, cost: null }]);
         api.fetchFormulasWithLines.mockResolvedValue([]);
         api.fetchFavorites.mockResolvedValue([]);
         api.fetchStash.mockResolvedValue([{ id: 'l1', ingredient_id: 'i1', amount_left_g: 50 }]);
         api.fetchIngredientsByIds.mockResolvedValue([{ id: 'i1', trade_name: 'Shea Butter', inci_name: 'Butyrospermum' }]);
-        const input = await loadMetricsInput('u1', client);
+        const input = await loadMetricsInput();
         expect(input.batches).toHaveLength(1);
         expect(input.lines).toHaveLength(1);
         expect(input.sharedCount).toBe(2);
@@ -123,12 +100,12 @@ describe('loadMetricsInput', () => {
     });
 
     it('fails as a whole if any part fails', async () => {
-        const { client } = fakeClient({ community_posts: { count: 0 } });
+        community.fetchSharedCount.mockResolvedValue(0);
         batches.listBatches.mockResolvedValue([]);
         batches.listBatchLines.mockResolvedValue([]);
         api.fetchFormulasWithLines.mockResolvedValue([]);
         api.fetchFavorites.mockRejectedValue(new Error('nope'));
         api.fetchStash.mockResolvedValue([]);
-        await expect(loadMetricsInput('u1', client)).rejects.toThrow('Could not load your favourite ingredients');
+        await expect(loadMetricsInput()).rejects.toThrow('Could not load your favourite ingredients');
     });
 });

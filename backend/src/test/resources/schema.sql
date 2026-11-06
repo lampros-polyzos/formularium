@@ -123,7 +123,18 @@ merge into formulation_profiles (id, name, category, requires_water, requires_oi
 create table if not exists community_posts (
   id uuid primary key,
   author_id uuid references app_users (id) on delete cascade,
-  title varchar(150) not null
+  title varchar(150) not null,
+  write_up text,
+  tags varchar(40) array,
+  created_at timestamp with time zone default current_timestamp,
+  post_type varchar(30) default 'formulation',
+  development_status varchar(20) check (development_status is null or development_status in ('concept', 'in-testing', 'stable')),
+  profile_name varchar(100),
+  author_name text,
+  remixed_from_post_id uuid references community_posts (id) on delete set null,
+  edited_at timestamp with time zone,
+  answered_at timestamp with time zone,
+  sources text
 );
 
 create table if not exists formulations (
@@ -233,4 +244,85 @@ create table if not exists batch_checks (
   observations varchar(60) array not null default array[],
   measured_ph numeric,
   notes text
+);
+
+-- ---- community
+create table if not exists post_snapshots (
+  id uuid primary key,
+  post_id uuid references community_posts (id) on delete cascade,
+  formulation_data varchar(1000000) not null default '[]',
+  version integer not null default 1,
+  release_notes text,
+  created_at timestamp with time zone default current_timestamp
+);
+
+create table if not exists post_comments (
+  id uuid primary key,
+  post_id uuid references community_posts (id) on delete cascade,
+  user_id uuid references app_users (id) on delete cascade,
+  body text not null,
+  created_at timestamp with time zone default current_timestamp,
+  author_name text,
+  author_id uuid references app_users (id) on delete cascade,
+  content text
+);
+
+create table if not exists recipe_ratings (
+  id uuid primary key,
+  post_id uuid not null references community_posts (id) on delete cascade,
+  user_id uuid not null references app_users (id) on delete cascade,
+  author_name text,
+  version integer not null default 1,
+  overall smallint not null check (overall between 1 and 5),
+  texture smallint check (texture between 1 and 5),
+  stability smallint check (stability between 1 and 5),
+  ease smallint check (ease between 1 and 5),
+  efficacy smallint check (efficacy between 1 and 5),
+  made_it boolean not null default false,
+  skin_type varchar(20),
+  review text,
+  created_at timestamp with time zone not null default current_timestamp,
+  updated_at timestamp with time zone not null default current_timestamp,
+  unique (post_id, user_id),
+  check (made_it or (texture is null and stability is null and ease is null and efficacy is null and skin_type is null))
+);
+
+create table if not exists notifications (
+  id uuid primary key,
+  recipient_id uuid references app_users (id) on delete cascade,
+  actor_name text,
+  post_id uuid references community_posts (id) on delete cascade,
+  type text not null,
+  is_read boolean default false,
+  created_at timestamp with time zone default current_timestamp
+);
+
+create table if not exists community_moderators (
+  user_id uuid primary key references app_users (id) on delete cascade,
+  added_at timestamp with time zone not null default current_timestamp
+);
+
+create table if not exists community_mutes (
+  user_id uuid not null references app_users (id) on delete cascade,
+  muted_user_id uuid not null references app_users (id) on delete cascade,
+  created_at timestamp with time zone not null default current_timestamp,
+  primary key (user_id, muted_user_id),
+  check (user_id <> muted_user_id)
+);
+
+create table if not exists content_reports (
+  id uuid primary key,
+  reporter_id uuid not null references app_users (id) on delete cascade,
+  target_type text not null check (target_type in ('post', 'comment')),
+  target_id uuid not null,
+  post_id uuid,
+  target_author_id uuid,
+  snapshot text,
+  reason text not null,
+  details text,
+  status text not null default 'open' check (status in ('open', 'resolved', 'dismissed')),
+  resolved_by uuid references app_users (id) on delete set null,
+  resolved_at timestamp with time zone,
+  created_at timestamp with time zone not null default current_timestamp,
+  unique (reporter_id, target_type, target_id)
 );

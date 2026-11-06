@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useDialog } from '../hooks/useDialog';
-import { supabase } from '../lib/supabase';
+import { updateUsername } from '../lib/authClient';
 import { REGIONS, regionFrom } from '../lib/regionalLimits';
 import AccountDataSection from './AccountDataSection';
 
@@ -30,21 +30,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         // Save profile name to database if it was changed
         if (user && displayName.trim() !== (username || '')) {
             setIsSaving(true);
-            const { error } = await supabase
-                .from('profiles')
-                .upsert({ id: user.id, username: displayName.trim() });
-
-            if (error) {
+            try {
+                // The backend checks the name is free and changes it on everything you have written
+                await updateUsername(displayName.trim());
+            } catch (error) {
                 console.error("Error saving profile:", error);
                 setIsSaving(false);
                 // Stay here, with what was typed, so it can be tried again
-                await alert("Failed to save display name.", { tone: "error", title: "Couldn't save your name" });
+                await alert(error instanceof Error ? error.message : "Failed to save display name.", { tone: "error", title: "Couldn't save your name" });
                 return;
             }
             setIsSaving(false);
-
-            // Force a page reload to refresh the AuthContext username across the app
-            window.location.reload();
+            onClose();
             return;
         }
 

@@ -15,15 +15,10 @@ vi.mock('../components/NewPostModal', () => ({ default: () => null }));
 vi.mock('../components/Header', () => ({ default: () => null }));
 vi.mock('../hooks/useCommunityMutes', () => ({ useCommunityMutes: () => ({ muted: mocks.muted, mute: vi.fn(), unmute: mocks.unmute }) }));
 vi.mock('../hooks/useIsModerator', () => ({ useIsModerator: () => mocks.moderator }));
-vi.mock('../lib/supabase', () => {
-    const builder = () => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'in']) b[m] = () => b;
-        b.then = (resolve: (v: unknown) => void) => resolve({ data: mocks.posts, error: null });
-        return b;
-    };
-    return { supabase: { auth: { signOut: vi.fn() }, from: builder, channel: vi.fn(), removeChannel: vi.fn() } };
-});
+vi.mock('../lib/communityApi', () => ({
+    fetchPosts: () => Promise.resolve(mocks.posts),
+    fetchRatingScores: () => Promise.resolve([]),
+}));
 
 const post = (id: string, title: string, author: string, over: Record<string, unknown> = {}) => ({
     id, title, write_up: `About ${title}`, tags: [], post_type: 'advice', development_status: null, author_id: author, author_name: `Name of ${author}`, created_at: '2026-10-10T10:00:00Z', ...over,

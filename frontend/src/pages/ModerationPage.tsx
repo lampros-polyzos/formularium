@@ -32,7 +32,7 @@ export default function ModerationPage() {
         if (!user) return;
         if (remove && !(await confirm(`Remove this ${report.target_type}? This cannot be undone.`, { title: `Remove this ${report.target_type}?`, confirmLabel: 'Remove', tone: 'danger' }))) return;
         try {
-            await resolveReport(report, remove ? 'resolved' : 'dismissed', user.id, remove);
+            await resolveReport(report, remove ? 'resolved' : 'dismissed', remove);
             setReports(prev => (prev ?? []).filter(r => r.id !== report.id));
         } catch (err) {
             void alert(communityErrorMessage(err), { tone: 'error', title: "Couldn't update the report" });

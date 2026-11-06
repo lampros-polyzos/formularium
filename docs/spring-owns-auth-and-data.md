@@ -49,8 +49,10 @@ delete them once you are sure you do not need them.
 4. ~~**Batches**~~ **done**: starting a batch (the stash is deducted and the cost worked out in one transaction), undoing and deleting it, editing it, the check-ins
    and the lists the metrics read (`backend/.../batches/`, `frontend/src/lib/batches.ts`). Needs `20261120000000_batches_in_spring.sql`, which removes the old
    `create_batch` and `void_batch` functions. Still on Supabase: community, notifications, the data export.
-5. **Community**: posts, comments, ratings, reports, mutes, snapshots, moderators, `public_recipe_previews`, `is_moderator`.
-6. **Notifications**: replace the Supabase realtime channel with server-sent events.
+5. ~~**Community**~~ **done**: posts, comments, recipe versions, ratings, reports, mutes, moderation, the public recipe previews and the roughly dozen triggers that
+   enforced the rules (`backend/.../community/`, `frontend/src/lib/communityApi.ts`). Needs `20261121000000_community_in_spring.sql`. Moderators are still added by
+   inserting their id into `community_moderators`. Display names are now 3 to 30 characters (letters, digits, `_`, `.`, `-`) and changing one updates everything you wrote.
+6. ~~**Notifications**~~ **done** with the community slice: the bell asks the backend every 30 seconds (the Supabase realtime channel is gone).
 7. **Data export and account deletion**: replace the `export_my_data` and `delete_my_account` functions.
 8. **Close the door**: revoke the browser roles' access to every table, remove `@supabase/supabase-js` from the frontend, delete the bridge code.
 
@@ -82,6 +84,6 @@ PostgreSQL client tools installed.)
 - **No password reset yet.** Same reason: it needs email. Plan it together with email confirmation.
 - Until the data slices are done, anything that reads Supabase tables directly (library, stash, formulas, community, notifications) and the data export see no signed-in user and will not work on this branch.
 - Account deletion removes the account and, through foreign keys, whatever cascades from it. The old `delete_my_account` function may do more: it is replaced in slice 7.
-- The `profiles` table is now unused by Spring (the username lives in `app_users`). The community slice decides whether to drop it or turn it into a view.
+- The `profiles` table is now unused by Spring (the username lives in `app_users`). It is dropped in the final step, together with the unused `users` and `reviews` tables.
 - The sign-in attempt limit and its counters live in memory: fine for one instance, needs a shared store (database or Redis) with several.
 - Existing Supabase accounts are not imported (start fresh was chosen).

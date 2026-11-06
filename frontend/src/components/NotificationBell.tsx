@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { fetchUnreadNotifications, markNotificationRead } from '../lib/communityApi';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function NotificationBell() {
@@ -12,34 +12,26 @@ export default function NotificationBell() {
     useEffect(() => {
         if (!user) return;
 
-        // Fetch initial unread notifications
+        let live = true;
         const fetchNotifications = async () => {
-            const { data } = await supabase
-                .from('notifications')
-                .select('*')
-                .eq('recipient_id', user.id)
-                .eq('is_read', false)
-                .order('created_at', { ascending: false });
-
-            if (data) setNotifications(data);
+            try {
+                const data = await fetchUnreadNotifications();
+                if (live) setNotifications(data);
+            } catch {
+                // a missed check is fine: the next one tries again
+            }
         };
 
         fetchNotifications();
+        // New notifications show up within half a minute
+        const timer = setInterval(fetchNotifications, 30_000);
 
-        // Optional: Subscribe to real-time new notifications
-        const channel = supabase.channel('realtime_notifications')
-            .on('postgres_changes', {
-                event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}`
-            }, (payload) => {
-                setNotifications(prev => [payload.new, ...prev]);
-            }).subscribe();
-
-        return () => { supabase.removeChannel(channel); };
+        return () => { live = false; clearInterval(timer); };
     }, [user]);
 
     const handleRead = async (id: string, postId: string) => {
-        // Mark as read in DB
-        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+        // Mark as read
+        await markNotificationRead(id).catch(() => { /* it is read here either way */ });
         // Remove from local state
         setNotifications(prev => prev.filter(n => n.id !== id));
         setIsOpen(false);

@@ -32,7 +32,7 @@ export function usePantry(userId: string | undefined) {
                 const stashIngredients = await loadIngredients(lots.map(l => l.ingredient_id));
                 const [own, community] = await Promise.all([
                     loadOwnRecipes(),
-                    loadCommunityRecipes(userId, stashIngredients),
+                    loadCommunityRecipes(stashIngredients),
                 ]);
                 if (!cancelled) setState({ status: 'ready', data: { lots, stashIngredients, recipes: [...own, ...community.recipes], limited: community.limited } });
             } catch (e) {

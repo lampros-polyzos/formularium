@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { addVersion, createPost, editPost, fetchVersions } from '../lib/communityApi';
 import { linkFormulaToPost } from '../lib/formulasApi';
 import { useAuth } from '../contexts/AuthContext';
-import { withLineage } from '../lib/lineage';
 
 interface ShareFormulaModalProps {
     isOpen: boolean;
@@ -22,7 +21,7 @@ type DevStatus = 'concept' | 'in-testing' | 'stable';
 export default function ShareFormulaModal({
     isOpen, onClose, currentProjectName, recipeData, activeProfileName, formulaId, communityPostId, remixedFromPostId = null, onShareSuccess
 }: ShareFormulaModalProps) {
-    const { user, username } = useAuth(); // Correctly extracted once
+    const { user } = useAuth(); // Correctly extracted once
 
     const [title, setTitle] = useState('');
     const [writeUp, setWriteUp] = useState('');
@@ -41,14 +40,11 @@ export default function ShareFormulaModal({
             setReleaseNotes('');
 
             if (communityPostId) {
-                supabase.from('post_snapshots')
-                    .select('version')
-                    .eq('post_id', communityPostId)
-                    .order('version', { ascending: false })
-                    .limit(1)
-                    .then(({ data }) => {
-                        if (data && data.length > 0) setCurrentVersion(data[0].version);
-                    });
+                fetchVersions(communityPostId)
+                    .then(versions => {
+                        if (versions.length > 0) setCurrentVersion(Math.max(...versions.map(v => v.version)));
+                    })
+                    .catch(() => { /* the next version number is worked out by the backend anyway */ });
             }
         }
     }, [isOpen, currentProjectName, communityPostId]);
@@ -66,38 +62,19 @@ export default function ShareFormulaModal({
 
         try {
             let activePostId = communityPostId;
-            const nextVersion = currentVersion + 1;
 
             if (activePostId) {
-                const { error: updateError } = await supabase
-                    .from('community_posts')
-                    .update({
-                        write_up: writeUp.trim(),
-                        development_status: devStatus
-                    })
-                    .eq('id', activePostId);
-                if (updateError) throw updateError;
+                await editPost(activePostId, { write_up: writeUp, development_status: devStatus });
             } else {
-                // A recipe that started as someone else's says so on its post
-                const { data: postData, error: postError } = await withLineage(
-                    extra => supabase
-                        .from('community_posts')
-                        .insert([{
-                            title: title.trim(),
-                            write_up: writeUp.trim(),
-                            post_type: 'formulation',
-                            development_status: devStatus,
-                            profile_name: activeProfileName,
-                            author_id: user.id,
-                            author_name: username || 'Anonymous Formulary', // Applied here
-                            ...extra,
-                        }])
-                        .select('id')
-                        .single(),
-                    { remixed_from_post_id: remixedFromPostId },
-                );
-
-                if (postError) throw postError;
+                // A recipe that started as someone else's says so on its post. The backend sets who wrote it and the name it carries.
+                const postData = await createPost({
+                    title: title.trim(),
+                    write_up: writeUp.trim(),
+                    post_type: 'formulation',
+                    development_status: devStatus,
+                    profile_name: activeProfileName,
+                    remixed_from_post_id: remixedFromPostId,
+                });
                 activePostId = postData.id;
 
                 await linkFormulaToPost(formulaId, activePostId as string).catch(error => console.warn('Could not link the formula to its post:', error));
@@ -114,16 +91,7 @@ export default function ShareFormulaModal({
                 function: ing.function
             }));
 
-            const { error: snapError } = await supabase
-                .from('post_snapshots')
-                .insert([{
-                    post_id: activePostId as string,
-                    formulation_data: snapshotData,
-                    version: nextVersion,
-                    release_notes: releaseNotes.trim() || null
-                }]);
-
-            if (snapError) throw snapError;
+            await addVersion(activePostId as string, snapshotData, releaseNotes.trim() || null);
 
             setSuccess(true);
             setTimeout(() => onClose(), 2000);

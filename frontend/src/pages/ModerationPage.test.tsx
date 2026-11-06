@@ -56,7 +56,7 @@ describe('the moderation page', () => {
     it('dismisses a report without removing anything', async () => {
         renderPage();
         fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
-        await waitFor(() => expect(mocks.resolveReport).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }), 'dismissed', 'mod1', false));
+        await waitFor(() => expect(mocks.resolveReport).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }), 'dismissed', false));
         expect(await screen.findByText('Nothing to review right now.')).toBeInTheDocument();
     });
 
@@ -66,7 +66,7 @@ describe('the moderation page', () => {
         const box = await screen.findByRole('dialog');
         expect(mocks.resolveReport).not.toHaveBeenCalled();
         fireEvent.click(within(box).getByRole('button', { name: 'Remove' }));
-        await waitFor(() => expect(mocks.resolveReport).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }), 'resolved', 'mod1', true));
+        await waitFor(() => expect(mocks.resolveReport).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }), 'resolved', true));
     });
 
     it('does nothing if you change your mind about removing', async () => {

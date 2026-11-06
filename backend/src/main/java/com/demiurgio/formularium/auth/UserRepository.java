@@ -46,6 +46,14 @@ class UserRepository {
         return new UserAccount(id, email, passwordHash, googleSub, username);
     }
 
+    boolean usernameTakenByAnother(UUID id, String username) {
+        return jdbc.sql("select count(*) from app_users where lower(username) = lower(:u) and id <> :id").param("u", username).param("id", id).query(Long.class).single() > 0;
+    }
+
+    void updateUsername(UUID id, String username) {
+        jdbc.sql("update app_users set username = :u where id = :id").param("u", username).param("id", id).update();
+    }
+
     void linkGoogle(UUID id, String sub) {
         jdbc.sql("update app_users set google_sub = :sub where id = :id").param("sub", sub).param("id", id).update();
     }

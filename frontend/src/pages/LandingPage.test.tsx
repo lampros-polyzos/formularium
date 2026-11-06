@@ -6,18 +6,11 @@ import LandingPage from './LandingPage';
 import { SettingsProvider } from '../contexts/SettingsContext';
 import { ARTICLES } from '../content/articles';
 
-const asked = vi.hoisted(() => ({ tables: [] as string[], rpcs: [] as { name: string; args: unknown }[] }));
+const asked = vi.hoisted(() => ({ limits: [] as number[] }));
 
-vi.mock('../lib/supabase', () => {
-    const builder = (): Record<string, unknown> => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'order', 'limit', 'in', 'ilike', 'or']) b[m] = () => b;
-        b.eq = () => b;
-        b.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
-        return b;
-    };
-    return { supabase: { auth: { signOut: vi.fn() }, from: (table: string) => { asked.tables.push(table); return builder(); }, rpc: (name: string, args: unknown) => { asked.rpcs.push({ name, args }); return Promise.resolve({ data: [], error: null }); }, channel: vi.fn(), removeChannel: vi.fn() } };
-});
+vi.mock('../lib/communityApi', () => ({
+    fetchRecipePreviews: (limit: number) => { asked.limits.push(limit); return Promise.resolve([]); },
+}));
 vi.mock('../contexts/AuthContext', () => {
     const value = { user: null, session: null, username: null, isLoading: false };
     return { useAuth: () => value };
@@ -53,11 +46,9 @@ describe('The landing page blog preview', () => {
         expect(section).toHaveTextContent('Plain-language guides for home formulators, free for everyone.');
     });
 
-    it('previews shared recipes through the narrow public preview, never by reading the community tables', async () => {
-        asked.tables.length = 0;
-        asked.rpcs.length = 0;
+    it('previews shared recipes through the narrow public preview, which needs no sign-in', async () => {
+        asked.limits.length = 0;
         await renderAt('/');
-        expect(asked.rpcs).toEqual([{ name: 'public_recipe_previews', args: { p_limit: 3 } }]);
-        expect(asked.tables).not.toContain('community_posts');
+        expect(asked.limits).toEqual([3]);
     });
 });

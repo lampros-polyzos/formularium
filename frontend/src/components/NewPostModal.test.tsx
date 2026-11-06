@@ -9,11 +9,11 @@ const mocks = vi.hoisted(() => ({
     error: null as { message: string } | null,
 }));
 
-vi.mock('../lib/supabase', () => ({
-    supabase: {
-        from: () => ({
-            insert: (rows: Record<string, unknown>[]) => { mocks.inserted.push(rows[0]); return Promise.resolve({ error: mocks.error }); },
-        }),
+vi.mock('../lib/communityApi', () => ({
+    createPost: (post: Record<string, unknown>) => {
+        if (mocks.error) return Promise.reject(new Error(mocks.error.message));
+        mocks.inserted.push(post);
+        return Promise.resolve(post);
     },
 }));
 const AUTH = vi.hoisted(() => ({ user: { id: 'u1' }, username: 'Sam' }));
@@ -70,7 +70,8 @@ describe('sending a post', () => {
         fill();
         submit();
         await waitFor(() => expect(mocks.inserted).toHaveLength(1));
-        expect(mocks.inserted[0]).toMatchObject({ post_type: kind, title: 'A title', write_up: 'Some text', author_id: 'u1', author_name: 'Sam' });
+        expect(mocks.inserted[0]).not.toHaveProperty('author_id'); // the backend knows who is posting
+        expect(mocks.inserted[0]).toMatchObject({ post_type: kind, title: 'A title', write_up: 'Some text' });
         expect(onSuccess).toHaveBeenCalled();
     });
 
@@ -153,7 +154,7 @@ describe('safety and limits', () => {
         expect(await screen.findByText(/posting too quickly/)).toBeInTheDocument();
     });
 
-    it('explains a too-long title in plain words if the database refuses it', async () => {
+    it('explains a too-long title in plain words if it is refused', async () => {
         mocks.error = { message: 'new row violates check constraint "community_posts_title_length"' };
         renderModal();
         fill();

@@ -124,6 +124,18 @@ public class AuthService {
         refreshTokens.findByHash(TokenService.hash(refreshToken)).ifPresent(t -> refreshTokens.revokeFamily(t.familyId()));
     }
 
+    /** Changes the display name. It must be free (ignoring upper and lower case, but a member may change the case of their own). */
+    public UserView updateUsername(UUID id, String username) {
+        String name = username.trim();
+        if (users.usernameTakenByAnother(id, name)) throw new ApiException(HttpStatus.CONFLICT, "username_taken", "That name is already in use.");
+        try {
+            accounts.rename(id, name);
+        } catch (DuplicateKeyException e) {
+            throw new ApiException(HttpStatus.CONFLICT, "username_taken", "That name is already in use.");
+        }
+        return me(id);
+    }
+
     public UserView me(UUID id) {
         return users.findById(id).map(UserAccount::view).orElseThrow(AuthService::noSession);
     }

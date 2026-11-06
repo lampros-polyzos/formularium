@@ -1,17 +1,12 @@
-import { supabase } from './supabase';
+import { fetchCommunityRecipes } from './communityApi';
 import { fetchFormulasWithLines } from './formulasApi';
 import { fetchIngredientsByIds, fetchStash } from './libraryApi';
 import type { StashLot } from './batchPlan';
 import type { Recipe } from './pantry';
 import type { CatalogIngredient, FormulaLine } from './substitutions';
 
-type Client = Pick<typeof supabase, 'from'>;
-
 /** How many of the newest community recipes are looked at. */
 export const COMMUNITY_LIMIT = 200;
-
-const chunk = <T,>(items: T[], size: number): T[][] =>
-    Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size));
 
 function fail(what: string, error: { message?: string } | null): never {
     throw new Error(`Could not load ${what}${error?.message ? `: ${error.message}` : '.'}`);
@@ -93,33 +88,18 @@ export interface CommunityRecipes {
  * do own, your own copy of the ingredient is used.
  */
 export async function loadCommunityRecipes(
-    userId: string,
     owned: CatalogIngredient[],
-    client: Client = supabase,
     limit: number = COMMUNITY_LIMIT,
 ): Promise<CommunityRecipes> {
-    const { data: posts, error } = await client
-        .from('community_posts')
-        .select('id, title, author_id, author_name, created_at')
-        .eq('post_type', 'formulation')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-    if (error) fail('community recipes', error);
-
-    const all = (posts ?? []) as { id: string; title: string; author_id: string | null; author_name: string | null }[];
-    const others = all.filter(p => p.author_id !== userId);
-
-    // The latest version of each recipe
-    const snapshotResults = await Promise.all(chunk(others.map(p => p.id), 50)
-        .map(ids => client.from('post_snapshots').select('post_id, version, formulation_data').in('post_id', ids)));
-    const latest = new Map<string, { version: number; data: SnapshotEntry[] }>();
-    for (const { data, error: snapshotError } of snapshotResults) {
-        if (snapshotError) fail('community recipes', snapshotError);
-        for (const snap of (data ?? []) as { post_id: string; version: number; formulation_data: unknown }[]) {
-            const known = latest.get(snap.post_id);
-            if (!known || snap.version > known.version) latest.set(snap.post_id, { version: snap.version, data: parseSnapshot(snap.formulation_data) });
-        }
+    let found;
+    try {
+        found = await fetchCommunityRecipes(limit);
+    } catch (e) {
+        return fail('community recipes', e as Error);
     }
+    const others = found.recipes.map(r => ({ id: r.id, title: r.title, author_name: r.author_name }));
+    const latest = new Map<string, { version: number; data: SnapshotEntry[] }>(
+        found.recipes.map(r => [r.id, { version: 1, data: parseSnapshot(r.formulation_data) }]));
 
     const ownedById = new Map(owned.map(i => [i.id, i]));
     const wanted = new Set<string>();
@@ -151,5 +131,5 @@ export async function loadCommunityRecipes(
         });
         if (lines.length > 0) recipes.push({ id: post.id, source: 'community', name: post.title, author: post.author_name, lines });
     }
-    return { recipes, limited: all.length >= limit };
+    return { recipes, limited: found.limited };
 }

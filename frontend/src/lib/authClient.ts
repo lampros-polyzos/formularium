@@ -144,6 +144,16 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
     return res;
 }
 
+/** Changes the display name shown on your posts, comments and ratings. The backend makes sure it is free and follows it everywhere. */
+export async function updateUsername(username: string): Promise<AuthUser> {
+    const res = await authFetch('/api/v1/auth/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+    if (!res.ok) throw await toError(res);
+    const user = await res.json() as AuthUser;
+    currentUser = user;
+    listeners.forEach(listener => listener(currentUser));
+    return user;
+}
+
 /** Permanently deletes the signed-in account (and what belongs to it), then forgets the sign-in on this device. */
 export async function deleteAccount(): Promise<void> {
     const res = await authFetch('/api/v1/auth/me', { method: 'DELETE' });

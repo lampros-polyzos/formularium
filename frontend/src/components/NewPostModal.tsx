@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { createPost } from '../lib/communityApi';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -19,7 +19,7 @@ const AVAILABLE_TAGS = [
 ];
 
 export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModalProps) {
-    const { user, username } = useAuth(); // Correctly extracts both exactly once
+    const { user } = useAuth(); // Correctly extracts both exactly once
     const navigate = useNavigate();
 
     const [postType, setPostType] = useState<PostType>('discussion');
@@ -47,19 +47,14 @@ export default function NewPostModal({ isOpen, onClose, onSuccess }: NewPostModa
         setError('');
 
         try {
-            const { error: insertError } = await supabase
-                .from('community_posts')
-                .insert([{
-                    title: title.trim(),
-                    write_up: writeUp.trim(),
-                    post_type: postType,
-                    tags: selectedTags,
-                    ...(postType === 'information' && sources.trim() ? { sources: sources.trim() } : {}),
-                    author_id: user.id,
-                    author_name: username || 'Anonymous Formulary' // Applies the global display name
-                }]);
-
-            if (insertError) throw insertError;
+            // The backend sets who wrote it and the name it carries
+            await createPost({
+                title: title.trim(),
+                write_up: writeUp.trim(),
+                post_type: postType,
+                tags: selectedTags,
+                ...(postType === 'information' && sources.trim() ? { sources: sources.trim() } : {}),
+            });
 
             setTitle('');
             setWriteUp('');

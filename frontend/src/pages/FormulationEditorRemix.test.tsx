@@ -34,26 +34,9 @@ vi.mock('../lib/formulasApi', () => {
 });
 
 // The recipe a formula started as is still read from the community
-vi.mock('../lib/supabase', () => {
-    const builder = (table: string) => {
-        const filters: Record<string, unknown> = {};
-        const b: Record<string, unknown> = {};
-        const result = (): { data: unknown; error: unknown } => {
-            if (table === 'community_posts') return { data: filters.id === 'p0' ? { id: 'p0', title: 'Original Day Cream', author_name: 'Kim' } : null, error: null };
-            return { data: [], error: null };
-        };
-        for (const m of ['select', 'or', 'order', 'limit', 'match', 'in', 'update']) b[m] = () => b;
-        b.eq = (col: string, val: unknown) => { filters[col] = val; return b; };
-        b.single = () => Promise.resolve(result());
-        b.maybeSingle = () => Promise.resolve(result());
-        b.then = (resolve: (v: unknown) => void) => {
-            const r = result();
-            resolve({ ...r, data: Array.isArray(r.data) || r.data === null ? r.data : [r.data] });
-        };
-        return b;
-    };
-    return { supabase: { from: builder, rpc: vi.fn().mockResolvedValue({ error: null }), channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
+vi.mock('../lib/communityApi', () => ({
+    fetchPost: (id: string) => (id === 'p0' ? Promise.resolve({ id: 'p0', title: 'Original Day Cream', author_name: 'Kim' }) : Promise.reject(new Error('That post no longer exists.'))),
+}));
 
 const settle = async (ms = 0) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
 

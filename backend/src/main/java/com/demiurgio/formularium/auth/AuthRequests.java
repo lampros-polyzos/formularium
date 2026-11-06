@@ -18,5 +18,9 @@ public final class AuthRequests {
 
     public record Login(@NotBlank @Size(max = 320) String email, @NotBlank @Size(max = 72) String password, String captchaToken) { }
 
+    /** A new display name. The same rules as at sign-up. */
+    public record Profile(
+            @NotBlank @Size(min = 3, max = 30) @Pattern(regexp = "[A-Za-z0-9_.-]+", message = "may only contain letters, digits, dot, dash and underscore") String username) { }
+
     public record Google(@NotBlank @Size(max = 4096) String idToken) { }
 }

@@ -1,7 +1,8 @@
-import { supabase } from './supabase';
+// The community (shared recipes, advice and information posts, comments, ratings, reports, muting and notifications), as served by the Spring backend.
+// The backend enforces who may do what, and the limits; the messages it sends back are written for people.
 
-/** What each function talks to. Tests pass their own; the app uses the real one. */
-type Client = Pick<typeof supabase, 'from' | 'rpc'>;
+import { API_BASE_URL } from './api';
+import { request } from './apiClient';
 
 export interface Report {
     id: string;
@@ -25,74 +26,186 @@ export interface RecipePreview {
     created_at: string;
 }
 
-const check = (error: { message: string } | null) => { if (error) throw error; };
+export type PostType = 'formulation' | 'discussion' | 'advice' | 'information';
 
-export async function reportContent(input: { targetType: 'post' | 'comment'; targetId: string; reason: string; details?: string }, client: Client = supabase) {
-    const { error } = await client.from('content_reports').insert([{ target_type: input.targetType, target_id: input.targetId, reason: input.reason, details: input.details?.trim() || null }]);
-    check(error);
+export interface CommunityPost {
+    id: string;
+    author_id: string | null;
+    title: string;
+    write_up: string | null;
+    tags: string[] | null;
+    created_at: string;
+    /** 'request' and 'education' are older names that may still be stored */
+    post_type: PostType | 'request' | 'education' | string | null;
+    development_status: string | null;
+    profile_name: string | null;
+    author_name: string | null;
+    remixed_from_post_id: string | null;
+    edited_at: string | null;
+    answered_at: string | null;
+    sources: string | null;
 }
 
-export async function editPost(id: string, changes: { title: string; write_up: string; sources?: string | null }, client: Client = supabase) {
-    const { error } = await client.from('community_posts').update({
-        title: changes.title.trim(),
-        write_up: changes.write_up.trim(),
-        ...(changes.sources !== undefined ? { sources: changes.sources?.trim() || null } : {}),
-    }).eq('id', id);
-    check(error);
+export interface CommunityComment {
+    id: string;
+    post_id: string;
+    author_id: string | null;
+    author_name: string | null;
+    body: string;
+    created_at: string;
+}
+
+export interface RecipeVersion {
+    version: number;
+    formulation_data: Record<string, unknown>[];
+    release_notes: string | null;
+    created_at: string;
+}
+
+export interface RecipeRating {
+    id: string;
+    post_id: string;
+    user_id: string;
+    author_name: string | null;
+    version: number;
+    overall: number;
+    texture: number | null;
+    stability: number | null;
+    ease: number | null;
+    efficacy: number | null;
+    made_it: boolean;
+    skin_type: string | null;
+    review: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface RatingInput {
+    version: number;
+    overall: number;
+    made_it: boolean;
+    texture: number | null;
+    stability: number | null;
+    ease: number | null;
+    efficacy: number | null;
+    skin_type: string | null;
+    review: string | null;
+}
+
+export interface NewPostInput {
+    title: string;
+    write_up?: string | null;
+    post_type: PostType;
+    tags?: string[];
+    development_status?: string | null;
+    profile_name?: string | null;
+    sources?: string | null;
+    remixed_from_post_id?: string | null;
+}
+
+export interface Notification {
+    id: string;
+    recipient_id: string;
+    actor_name: string | null;
+    post_id: string;
+    type: string;
+    is_read: boolean;
+    created_at: string;
+}
+
+// ---- posts
+
+export const fetchPosts = (types?: string[]) => request<CommunityPost[]>(`/api/v1/community/posts${types && types.length ? `?types=${types.map(encodeURIComponent).join(',')}` : ''}`);
+export const fetchPost = (id: string) => request<CommunityPost>(`/api/v1/community/posts/${id}`);
+export const createPost = (post: NewPostInput) => request<CommunityPost>('/api/v1/community/posts', { method: 'POST', body: post });
+export const deletePost = (id: string) => request<void>(`/api/v1/community/posts/${id}`, { method: 'DELETE' });
+
+/** Changes the text of your own post. Only what is given changes. */
+export function editPost(id: string, changes: { title?: string; write_up?: string; sources?: string | null; development_status?: string }) {
+    const body: Record<string, unknown> = {};
+    if (changes.title !== undefined) body.title = changes.title.trim();
+    if (changes.write_up !== undefined) body.write_up = changes.write_up.trim();
+    if (changes.sources !== undefined) body.sources = changes.sources?.trim() || '';
+    if (changes.development_status !== undefined) body.development_status = changes.development_status;
+    return request<CommunityPost>(`/api/v1/community/posts/${id}`, { method: 'PATCH', body });
 }
 
 /** Marks an advice post answered (or reopens it). Returns the new answered date, or null when reopened. */
-export async function setAnswered(id: string, answered: boolean, client: Client = supabase): Promise<string | null> {
-    const answeredAt = answered ? new Date().toISOString() : null;
-    const { error } = await client.from('community_posts').update({ answered_at: answeredAt }).eq('id', id);
-    check(error);
-    return answeredAt;
+export async function setAnswered(id: string, answered: boolean): Promise<string | null> {
+    return (await request<CommunityPost>(`/api/v1/community/posts/${id}/answered`, { method: 'PUT', body: { answered } })).answered_at;
 }
 
-export async function deleteComment(id: string, client: Client = supabase) {
-    const { error } = await client.from('post_comments').delete().eq('id', id);
-    check(error);
+export const fetchRemixes = (postId: string, limit = 10) => request<{ id: string; title: string; author_name: string | null; created_at: string }[]>(`/api/v1/community/posts/${postId}/remixes?limit=${limit}`);
+
+// ---- comments
+
+export const fetchComments = (postId: string) => request<CommunityComment[]>(`/api/v1/community/posts/${postId}/comments`);
+export const addComment = (postId: string, body: string) => request<CommunityComment>(`/api/v1/community/posts/${postId}/comments`, { method: 'POST', body: { body } });
+export const deleteComment = (id: string) => request<void>(`/api/v1/community/comments/${id}`, { method: 'DELETE' });
+
+// ---- recipe versions
+
+export const fetchVersions = (postId: string) => request<RecipeVersion[]>(`/api/v1/community/posts/${postId}/versions`);
+export const addVersion = (postId: string, formulationData: Record<string, unknown>[], releaseNotes: string | null) =>
+    request<RecipeVersion>(`/api/v1/community/posts/${postId}/versions`, { method: 'POST', body: { formulation_data: formulationData, release_notes: releaseNotes } });
+
+// ---- ratings
+
+export const fetchRatings = (postId: string) => request<RecipeRating[]>(`/api/v1/community/posts/${postId}/ratings`);
+export const rateRecipe = (postId: string, rating: RatingInput) => request<RecipeRating>(`/api/v1/community/posts/${postId}/rating`, { method: 'PUT', body: rating });
+export const removeRating = (postId: string) => request<void>(`/api/v1/community/posts/${postId}/rating`, { method: 'DELETE' });
+
+/** The scores of many recipes at once, in requests the backend accepts. */
+export async function fetchRatingScores(postIds: string[]): Promise<{ post_id: string; overall: number; made_it: boolean }[]> {
+    const groups: string[][] = [];
+    for (let i = 0; i < postIds.length; i += 200) groups.push(postIds.slice(i, i + 200));
+    const results = await Promise.all(groups.map(ids => request<{ post_id: string; overall: number; made_it: boolean }[]>('/api/v1/community/ratings', { method: 'POST', body: { post_ids: ids } })));
+    return results.flat();
 }
 
-export async function listMutes(client: Client = supabase): Promise<string[]> {
-    const { data, error } = await client.from('community_mutes').select('muted_user_id');
-    check(error);
-    return ((data ?? []) as { muted_user_id: string }[]).map(r => r.muted_user_id);
-}
-export async function muteMember(userId: string, client: Client = supabase) {
-    const { error } = await client.from('community_mutes').insert([{ muted_user_id: userId }]);
-    check(error);
-}
-export async function unmuteMember(userId: string, client: Client = supabase) {
-    const { error } = await client.from('community_mutes').delete().eq('muted_user_id', userId);
-    check(error);
+// ---- reading across posts
+
+export async function fetchSharedCount(): Promise<number> {
+    return (await request<{ count: number }>('/api/v1/community/stats/shared')).count;
 }
 
-export async function isModerator(client: Client = supabase): Promise<boolean> {
-    const { data, error } = await client.rpc('is_moderator');
-    if (error) return false;
-    return data === true;
+/** The newest recipes by other members, each as of its latest version. `limited`: there may be more than were looked at. */
+export const fetchCommunityRecipes = (limit: number) =>
+    request<{ recipes: { id: string; title: string; author_name: string | null; formulation_data: Record<string, unknown>[] }[]; limited: boolean }>(`/api/v1/community/recipes?limit=${limit}`);
+
+/** The newest shared recipes as anyone may see them before signing in: a title, a short excerpt and tags. No sign-in needed. */
+export async function fetchRecipePreviews(limit = 3): Promise<RecipePreview[]> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/public/recipe-previews?limit=${limit}`);
+    if (!res.ok) throw new Error('Could not load the recipes.');
+    return ((await res.json()) as (Omit<RecipePreview, 'tags'> & { tags: unknown })[]).map(r => ({ ...r, tags: Array.isArray(r.tags) ? (r.tags as string[]) : [] }));
 }
 
-export async function listOpenReports(client: Client = supabase): Promise<Report[]> {
-    const { data, error } = await client.from('content_reports').select('*').eq('status', 'open').order('created_at', { ascending: true });
-    check(error);
-    return (data ?? []) as Report[];
+// ---- reports, moderators and muting
+
+export async function reportContent(input: { targetType: 'post' | 'comment'; targetId: string; reason: string; details?: string }) {
+    await request<void>('/api/v1/community/reports', { method: 'POST', body: { target_type: input.targetType, target_id: input.targetId, reason: input.reason, details: input.details?.trim() || null } });
 }
+
+export const listMutes = () => request<string[]>('/api/v1/community/mutes');
+export const muteMember = (userId: string) => request<void>(`/api/v1/community/mutes/${userId}`, { method: 'PUT' });
+export const unmuteMember = (userId: string) => request<void>(`/api/v1/community/mutes/${userId}`, { method: 'DELETE' });
+
+export async function isModerator(): Promise<boolean> {
+    try {
+        return (await request<{ moderator: boolean }>('/api/v1/community/moderator')).moderator === true;
+    } catch {
+        return false;
+    }
+}
+
+export const listOpenReports = () => request<Report[]>('/api/v1/community/reports/open');
 
 /** Closes a report. `remove` also deletes what was reported (moderators may remove any post or comment). */
-export async function resolveReport(report: Report, outcome: 'resolved' | 'dismissed', moderatorId: string, remove: boolean, client: Client = supabase) {
-    if (remove) {
-        const { error } = await client.from(report.target_type === 'post' ? 'community_posts' : 'post_comments').delete().eq('id', report.target_id);
-        check(error);
-    }
-    const { error } = await client.from('content_reports').update({ status: outcome, resolved_by: moderatorId, resolved_at: new Date().toISOString() }).eq('id', report.id);
-    check(error);
+export async function resolveReport(report: Report, outcome: 'resolved' | 'dismissed', remove: boolean) {
+    await request<void>(`/api/v1/community/reports/${report.id}/resolve`, { method: 'POST', body: { outcome, remove } });
 }
 
-/** The newest shared recipes as anyone may see them before signing in: a title, a short excerpt and tags. */
-export async function fetchRecipePreviews(limit = 3, client: Client = supabase): Promise<RecipePreview[]> {
-    const { data, error } = await client.rpc('public_recipe_previews', { p_limit: limit });
-    check(error);
-    return ((data ?? []) as (Omit<RecipePreview, 'tags'> & { tags: unknown })[]).map(r => ({ ...r, tags: Array.isArray(r.tags) ? (r.tags as string[]) : [] }));
-}
+// ---- notifications
+
+export const fetchUnreadNotifications = () => request<Notification[]>('/api/v1/notifications');
+export const markNotificationRead = (id: string) => request<void>(`/api/v1/notifications/${id}/read`, { method: 'PUT' });

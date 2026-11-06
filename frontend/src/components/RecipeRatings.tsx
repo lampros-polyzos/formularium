@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
-import { supabase } from '../lib/supabase';
+import { fetchRatings, rateRecipe, removeRating } from '../lib/communityApi';
 import { useAuth } from '../contexts/AuthContext';
 import { useDialog } from '../hooks/useDialog';
 import { useSettings } from '../contexts/SettingsContext';
@@ -65,7 +65,7 @@ const OVERALL_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 const MAX_REVIEW_LENGTH = 1000;
 
 export default function RecipeRatings({ postId, authorId, versions, activeVersion }: RecipeRatingsProps) {
-    const { user, username } = useAuth();
+    const { user } = useAuth();
     const { confirm } = useDialog();
     const { formatDate } = useSettings();
 
@@ -76,18 +76,15 @@ export default function RecipeRatings({ postId, authorId, versions, activeVersio
     const [error, setError] = useState('');
 
     useEffect(() => {
-        const fetchRatings = async () => {
-            const { data, error } = await supabase
-                .from('recipe_ratings')
-                .select('*')
-                .eq('post_id', postId)
-                .order('updated_at', { ascending: false });
-
-            if (error) console.error("Error loading ratings:", error);
-            else setRatings(data ?? []);
+        const load = async () => {
+            try {
+                setRatings(await fetchRatings(postId) as RecipeRating[]);
+            } catch (error) {
+                console.error("Error loading ratings:", error);
+            }
             setIsLoading(false);
         };
-        fetchRatings();
+        load();
     }, [postId]);
 
     const myRating = user ? ratings.find(r => r.user_id === user.id) : undefined;
@@ -149,12 +146,8 @@ export default function RecipeRatings({ postId, authorId, versions, activeVersio
         setError('');
 
         try {
-            const { data, error } = await supabase
-                .from('recipe_ratings')
-                .upsert({
-                    post_id: postId,
-                    user_id: user.id,
-                    author_name: username || 'Anonymous Formulary',
+            // The backend sets who is rating and the name it carries, and counts the details only for people who made it
+            const data = await rateRecipe(postId, {
                     version: draft.version,
                     overall: draft.overall,
                     made_it: draft.made_it,
@@ -165,12 +158,9 @@ export default function RecipeRatings({ postId, authorId, versions, activeVersio
                     efficacy: draft.made_it ? draft.efficacy : null,
                     skin_type: draft.made_it && draft.skin_type ? draft.skin_type : null,
                     review: draft.review.trim() || null,
-                }, { onConflict: 'post_id,user_id' })
-                .select('*')
-                .single();
+                });
 
-            if (error) throw error;
-            setRatings(prev => [data, ...prev.filter(r => r.user_id !== user.id)]);
+            setRatings(prev => [data as RecipeRating, ...prev.filter(r => r.user_id !== user.id)]);
             setDraft(null);
         } catch (err) {
             setError((err as { message?: string }).message || 'Failed to save your rating.');
@@ -185,12 +175,12 @@ export default function RecipeRatings({ postId, authorId, versions, activeVersio
 
         setIsSaving(true);
         setError('');
-        const { error } = await supabase.from('recipe_ratings').delete().eq('id', myRating.id);
-        if (error) {
-            setError(error.message);
-        } else {
+        try {
+            await removeRating(postId);
             setRatings(prev => prev.filter(r => r.id !== myRating.id));
             setDraft(null);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not remove your rating.');
         }
         setIsSaving(false);
     };

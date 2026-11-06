@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
 import RecipeRatings from '../components/RecipeRatings';
 import { RemixedFrom, RemixList } from '../components/PostRemixes';
@@ -13,13 +12,13 @@ import ReportModal from '../components/ReportModal';
 import EditPostModal from '../components/EditPostModal';
 import { useCommunityMutes } from '../hooks/useCommunityMutes';
 import { useIsModerator } from '../hooks/useIsModerator';
-import { deleteComment, setAnswered } from '../lib/communityApi';
+import { addComment, deleteComment, deletePost, fetchComments, fetchPost, fetchVersions, setAnswered } from '../lib/communityApi';
 import { COMMENT_MAX, SAFETY_NOTICE, communityErrorMessage } from '../lib/communityLimits';
 
 interface Snapshot {
     version: number;
     formulation_data: any[];
-    release_notes: string;
+    release_notes: string | null;
     created_at: string;
 }
 
@@ -27,7 +26,7 @@ interface Comment {
     id: string;
     author_id?: string | null;
     body: string;
-    author_name: string;
+    author_name: string | null;
     created_at: string;
 }
 
@@ -59,22 +58,18 @@ export default function PostDetail() {
             if (!id) return;
             try {
                 // 1. Fetch Post Details
-                const { data: postData } = await supabase.from('community_posts').select('*').eq('id', id).single();
+                const postData = await fetchPost(id).catch(() => null);
                 setPost(postData);
 
                 // 2. Fetch all snapshot versions if it's a formulation
                 if (postData?.post_type === 'formulation') {
-                    const { data: snapData } = await supabase
-                        .from('post_snapshots')
-                        .select('version, formulation_data, release_notes, created_at')
-                        .eq('post_id', id)
-                        .order('version', { ascending: true }); // v1, v2, v3...
+                    const snapData = await fetchVersions(id).catch(() => []); // v1, v2, v3...
 
                     if (snapData && snapData.length > 0) {
                         const parsedSnaps = snapData.map(snap => {
                             let parsed = snap.formulation_data;
                             if (typeof parsed === 'string') {
-                                try { parsed = JSON.parse(parsed); } catch (e) { parsed = []; }
+                                try { parsed = JSON.parse(parsed); } catch { parsed = []; }
                             }
                             return { ...snap, formulation_data: Array.isArray(parsed) ? parsed : [] };
                         });
@@ -85,11 +80,7 @@ export default function PostDetail() {
                 }
 
                 // 3. Fetch Comments
-                const { data: commentData } = await supabase
-                    .from('post_comments')
-                    .select('*')
-                    .eq('post_id', id)
-                    .order('created_at', { ascending: true });
+                const commentData = await fetchComments(id).catch(() => null);
                 if (commentData) setComments(commentData);
             } catch (error) {
                 console.error("Error loading post:", error);
@@ -133,18 +124,8 @@ export default function PostDetail() {
 
         setIsSubmittingComment(true);
         try {
-            const { data, error } = await supabase
-                .from('post_comments')
-                .insert([{
-                    post_id: id as string,
-                    author_id: user.id,
-                    author_name: username || 'Anonymous Formulary', // the database sets the real name; this is only a placeholder
-                    body: newComment.trim()
-                }])
-                .select('*')
-                .single();
-
-            if (error) throw error;
+            // The backend sets who wrote it and the name it carries
+            const data = await addComment(id as string, newComment.trim());
             if (data) setComments(prev => [...prev, data]);
             setNewComment('');
 
@@ -183,12 +164,7 @@ export default function PostDetail() {
         setIsDeleting(true);
         try {
             // Delete the post (snapshots will auto-delete via CASCADE)
-            const { error } = await supabase
-                .from('community_posts')
-                .delete()
-                .eq('id', id);
-
-            if (error) throw error;
+            await deletePost(id as string);
 
             // Navigate back to the hub after successful deletion
             navigate('/community');
