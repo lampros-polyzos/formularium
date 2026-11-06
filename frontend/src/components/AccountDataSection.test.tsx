@@ -5,14 +5,14 @@ import AccountDataSection from './AccountDataSection';
 import { emailMatches } from '../lib/accountData';
 
 const mocks = vi.hoisted(() => ({
-    rpc: vi.fn(),
+    request: vi.fn(),
     deleteAccount: vi.fn(),
     leave: vi.fn(),
     download: vi.fn(),
     user: { id: 'u1', email: 'Alice@Example.com' } as { id: string; email: string } | null,
 }));
 
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }));
+vi.mock('../lib/apiClient', () => ({ request: mocks.request }));
 vi.mock('../lib/authClient', () => ({ deleteAccount: mocks.deleteAccount }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, session: null, username: null, isLoading: false }) }));
 vi.mock('../lib/accountData', async (importOriginal) => ({
@@ -24,7 +24,7 @@ vi.mock('../lib/accountData', async (importOriginal) => ({
 const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
 beforeEach(() => {
-    mocks.rpc.mockReset();
+    mocks.request.mockReset();
     mocks.deleteAccount.mockReset().mockResolvedValue(undefined);
     mocks.leave.mockReset();
     mocks.download.mockReset();
@@ -43,13 +43,13 @@ describe('emailMatches', () => {
 });
 
 describe('Download my data', () => {
-    it('asks the database for the export and saves it as a dated JSON file', async () => {
-        mocks.rpc.mockResolvedValue({ data: { account: { id: 'u1' }, data: { formulations: [] } }, error: null });
+    it('asks the backend for the export and saves it as a dated JSON file', async () => {
+        mocks.request.mockResolvedValue({ account: { id: 'u1' }, data: { formulations: [] } });
         render(<AccountDataSection />);
         fireEvent.click(screen.getByRole('button', { name: 'Download my data' }));
         await settle();
 
-        expect(mocks.rpc).toHaveBeenCalledWith('export_my_data');
+        expect(mocks.request).toHaveBeenCalledWith('/api/v1/account/export');
         expect(mocks.download).toHaveBeenCalledTimes(1);
         const [filename, text] = mocks.download.mock.calls[0];
         expect(filename).toMatch(/^formularium-data-\d{4}-\d{2}-\d{2}\.json$/);
@@ -57,7 +57,7 @@ describe('Download my data', () => {
     });
 
     it('says so, and downloads nothing, if the export fails', async () => {
-        mocks.rpc.mockResolvedValue({ data: null, error: { message: 'boom' } });
+        mocks.request.mockRejectedValue(new Error('boom'));
         render(<AccountDataSection />);
         fireEvent.click(screen.getByRole('button', { name: 'Download my data' }));
         await settle();
@@ -77,7 +77,7 @@ describe('Delete my account', () => {
         open();
         expect(screen.getByText('Alice@Example.com')).toBeInTheDocument();
         expect(confirmButton()).toBeDisabled();
-        expect(mocks.rpc).not.toHaveBeenCalled();
+        expect(mocks.request).not.toHaveBeenCalled();
     });
 
     it('stays disabled until the typed email matches', () => {

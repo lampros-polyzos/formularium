@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { computeMetrics, type MetricBatch, type MetricsInput } from './metrics';
 import { buildInsights } from './metricsInsights';
 
-vi.mock('./supabase', () => ({ supabase: {} }));
 
 const TODAY = new Date(2026, 10, 18);
 const batch = (id: string, made_on: string, over: Partial<MetricBatch> = {}): MetricBatch =>

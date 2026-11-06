@@ -56,42 +56,6 @@ vi.mock('../lib/formulasApi', () => ({
 }));
 
 // Mock Supabase DB calls
-vi.mock('../lib/supabase', () => {
-  const mockQueryBuilder = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    or: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(), // 1. Added order method
-    limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-    single: vi.fn().mockResolvedValue({
-      data: {
-        id: 'ow_lotion',
-        name: 'O/W Lotion or Cream',
-        requires_water: true,
-        max_oil_phase_percent: 30,
-        default_ph_min: 5.0,
-        default_ph_max: 6.0
-      },
-      error: null
-    }),
-    // 2. Add 'then' so the builder itself can be awaited directly
-    // This allows `const { data } = await supabase.from()...order();` to work!
-    then: function (resolve: any) {
-      resolve({ data: [], error: null });
-    }
-  };
-
-  return {
-    supabase: {
-      from: vi.fn(() => mockQueryBuilder),
-      channel: vi.fn(() => ({
-        on: vi.fn().mockReturnThis(),
-        subscribe: vi.fn(),
-      })),
-      removeChannel: vi.fn(),
-    }
-  };
-});
 
 // Mock the Companion component
 vi.mock('../components/FormulationCompanion', () => ({

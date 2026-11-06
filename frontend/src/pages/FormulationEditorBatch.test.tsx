@@ -48,27 +48,6 @@ vi.mock('../lib/formulasApi', () => {
     };
 });
 
-vi.mock('../lib/supabase', () => {
-    const formulation = { id: 'f1', name: 'Day Cream', profile_id: 'ow_lotion', target_weight_g: 200, target_ph: 5.5, community_post_id: null };
-    const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
-    const rows = (table: string) => {
-        if (table === 'formulations') return formulation;
-        if (table === 'formulation_phases') return mocks.phases;
-        if (table === 'formulation_profiles') return profile;
-        return [];
-    };
-    const builder = (table: string): Record<string, unknown> => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'or', 'order', 'limit', 'match', 'in']) b[m] = () => b;
-        b.single = () => Promise.resolve({ data: rows(table), error: null });
-        b.then = (resolve: (v: unknown) => void) => {
-            const data = rows(table);
-            resolve({ data: Array.isArray(data) ? data : [data], error: null });
-        };
-        return b;
-    };
-    return { supabase: { from: (t: string) => builder(t), channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
 
 const WATER = { id: 'water', inci_name: 'Aqua', trade_name: 'Distilled Water', function: 'Solvent', solubility: 'water', min_usage_pct: 1, max_usage_pct: 100 };
 const SHEA = { id: 'shea', inci_name: 'Butyrospermum Parkii Butter', trade_name: 'Shea Butter', function: 'Butter', solubility: 'oil', min_usage_pct: 1, max_usage_pct: 100 };

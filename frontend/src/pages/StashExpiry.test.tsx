@@ -19,15 +19,6 @@ vi.mock('../lib/libraryApi', () => ({
     deleteStashLot: () => Promise.resolve(),
 }));
 // The header's notification bell still reads and listens for notifications
-vi.mock('../lib/supabase', () => {
-    const builder = (): Record<string, unknown> => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'or', 'limit', 'in', 'is', 'update']) b[m] = () => b;
-        b.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
-        return b;
-    };
-    return { supabase: { from: builder, channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
 vi.mock('../lib/batches', async (importOriginal) => ({ ...(await importOriginal<typeof import('../lib/batches')>()), countDueChecks: () => Promise.resolve(0) }));
 // One object every time: a new one on each render would make the page load its stash over and over
 const AUTH = vi.hoisted(() => ({ user: { id: 'u1', email: 'sam@example.com' }, session: null, username: null, isLoading: false }));

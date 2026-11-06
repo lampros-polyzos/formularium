@@ -46,26 +46,6 @@ vi.mock('../lib/formulasApi', () => {
     };
 });
 
-vi.mock('../lib/supabase', () => {
-    const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
-    const rows = (table: string) => {
-        if (table === 'formulations') return mocks.formulation;
-        if (table === 'formulation_phases') return mocks.phases;
-        if (table === 'formulation_profiles') return profile;
-        return [];
-    };
-    const builder = (table: string): Record<string, unknown> => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'or', 'order', 'limit', 'match', 'in']) b[m] = () => b;
-        b.single = () => Promise.resolve({ data: rows(table), error: null });
-        b.then = (resolve: (v: unknown) => void) => {
-            const data = rows(table);
-            resolve({ data: Array.isArray(data) || data === null ? data : [data], error: null });
-        };
-        return b;
-    };
-    return { supabase: { from: (t: string) => builder(t), channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
 
 const WATER = { id: 'water', inci_name: 'Aqua', trade_name: 'Distilled Water', function: 'Solvent', solubility: 'water', min_usage_pct: 1, max_usage_pct: 100 };
 const savedPhases = (isQS = false) => [{ id: 'p1', phase_letter: 'A', formulation_ingredients: [{ percentage: 100, is_qs: isQS, ingredients: WATER }] }];

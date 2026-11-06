@@ -1,11 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { StashLot } from './batchPlan';
 import { lowStockLevel } from './lowStock';
 import { computeMetrics } from './metrics';
 import { buildShoppingList } from './shoppingList';
 import type { CatalogIngredient } from './substitutions';
 
-vi.mock('./supabase', () => ({ supabase: {} }));
 
 describe('the low-stock level of an ingredient', () => {
     it('is the setting for ingredients used at 10% or more', () => {

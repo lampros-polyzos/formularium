@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { request } from './apiClient';
 import { deleteAccount } from './authClient';
 
 /** Where to send people after their account is gone. The landing page shows a short confirmation for it. */
@@ -6,8 +6,7 @@ export const ACCOUNT_DELETED_URL = '/?account=deleted';
 
 /** The signed-in user's data as pretty-printed JSON, plus a file name for it. */
 export async function exportMyData(now: Date = new Date()): Promise<{ filename: string; json: string }> {
-    const { data, error } = await supabase.rpc('export_my_data');
-    if (error) throw new Error(error.message);
+    const data = await request<unknown>('/api/v1/account/export');
     return { filename: `formularium-data-${now.toISOString().slice(0, 10)}.json`, json: JSON.stringify(data, null, 2) };
 }
 

@@ -46,29 +46,6 @@ vi.mock('../lib/formulasApi', async () => {
     };
 });
 
-vi.mock('../lib/supabase', async () => {
-    const { PROFILES: profiles } = await import('../lib/starterLibraryFixture');
-    const builder = (table: string) => {
-        const filters: Record<string, unknown> = {};
-        const state = { orFilter: '' };
-        const b: Record<string, unknown> = {};
-        const result = (): { data: unknown; error: unknown } => {
-            if (table === 'formulation_profiles') return { data: profiles[String(filters.id)] ?? null, error: null };
-            return { data: [], error: null };
-        };
-        for (const m of ['select', 'order', 'limit', 'match', 'in', 'update', 'insert']) b[m] = () => b;
-        b.or = (f: string) => { state.orFilter = f; return b; };
-        b.eq = (col: string, val: unknown) => { filters[col] = val; return b; };
-        b.single = () => Promise.resolve(result());
-        b.maybeSingle = () => Promise.resolve(result());
-        b.then = (resolve: (v: unknown) => void) => {
-            const r = result();
-            resolve({ ...r, data: Array.isArray(r.data) || r.data === null ? r.data : [r.data] });
-        };
-        return b;
-    };
-    return { supabase: { from: builder, rpc: vi.fn().mockResolvedValue({ error: null }), channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
 
 const settle = async (ms = 0) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
 

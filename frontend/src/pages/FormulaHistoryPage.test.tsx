@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
     alert: vi.fn(),
 }));
 
-vi.mock('../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../hooks/useFormulaHistory', () => ({ useFormulaHistory: () => ({ state: mocks.state.value, reload: mocks.reload }) }));
 vi.mock('../lib/restoreVersion', () => ({ restoreVersion: (...a: unknown[]) => mocks.restore(...a) }));
 vi.mock('../lib/formulaVersions', async (orig) => ({ ...(await orig<typeof import('../lib/formulaVersions')>()), deleteVersion: (...a: unknown[]) => mocks.remove(...a) }));

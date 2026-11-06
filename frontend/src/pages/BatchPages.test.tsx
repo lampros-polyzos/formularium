@@ -27,7 +27,6 @@ vi.mock('../lib/batches', async (importOriginal) => ({
     addCheck: mocks.addCheck,
     countDueChecks: vi.fn().mockResolvedValue(0),
 }));
-vi.mock('../lib/supabase', () => ({ supabase: { auth: { signOut: vi.fn() }, from: vi.fn(), channel: vi.fn(), removeChannel: vi.fn() } }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: null, session: null, username: null, isLoading: false }) }));
 vi.mock('../contexts/SettingsContext', () => ({
     useSettings: () => ({ currency: '$', setCurrency: vi.fn(), dateFormat: 'en-US', setDateFormat: vi.fn(), warningDays: 30, setWarningDays: vi.fn(), formatDate: (d: string) => d }),

@@ -53,8 +53,12 @@ delete them once you are sure you do not need them.
    enforced the rules (`backend/.../community/`, `frontend/src/lib/communityApi.ts`). Needs `20261121000000_community_in_spring.sql`. Moderators are still added by
    inserting their id into `community_moderators`. Display names are now 3 to 30 characters (letters, digits, `_`, `.`, `-`) and changing one updates everything you wrote.
 6. ~~**Notifications**~~ **done** with the community slice: the bell asks the backend every 30 seconds (the Supabase realtime channel is gone).
-7. **Data export and account deletion**: replace the `export_my_data` and `delete_my_account` functions.
-8. **Close the door**: revoke the browser roles' access to every table, remove `@supabase/supabase-js` from the frontend, delete the bridge code.
+7. ~~**Data export and account deletion**~~ **done**: `GET /api/v1/account/export` (`backend/.../account/`, an explicit list of tables, with a test that fails when a new
+   table holding a person's rows is not listed) and `DELETE /api/v1/auth/me`.
+8. ~~**Close the door**~~ **done**: `20261122000000_close_the_door.sql` removes `export_my_data`, `delete_my_account` and `account_owned_tables` and revokes every browser-role
+   (`anon`, `authenticated`) privilege in `public`. `@supabase/supabase-js`, `lib/supabase.ts` and the `VITE_SUPABASE_*` variables are gone from the frontend.
+   The backend must connect with the database owner role (the `postgres` user or the pooler string from Supabase), not `anon`/`authenticated`.
+   The unused `profiles`, `users` and `reviews` tables are left in place: check them and drop them by hand (commands are at the end of the migration).
 
 Each slice: the Spring endpoints enforce who may see and change what in Java (this replaces the row-level policies), with a test for every rule, then the
 frontend screens switch to them.

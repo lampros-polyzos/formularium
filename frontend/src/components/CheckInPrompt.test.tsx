@@ -18,7 +18,6 @@ vi.mock('../lib/batches', async (importOriginal) => ({
     countDueChecks: mocks.countDueChecks,
     completeCheck: mocks.completeCheck,
 }));
-vi.mock('../lib/supabase', () => ({ supabase: {} }));
 // A stable object: a new one on every render would re-run the effects forever
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, session: null, username: null, isLoading: false }) }));
 

@@ -7,7 +7,6 @@ import BenchModePage from './BenchModePage';
 const mocks = vi.hoisted(() => ({ getBatch: vi.fn() }));
 
 vi.mock('../lib/batches', async (importOriginal) => ({ ...(await importOriginal<typeof import('../lib/batches')>()), getBatch: mocks.getBatch }));
-vi.mock('../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../lib/benchAlarm', () => ({ playAlarm: vi.fn(), prepareAlarm: vi.fn() }));
 
 const batch = (over: Record<string, unknown> = {}) => ({

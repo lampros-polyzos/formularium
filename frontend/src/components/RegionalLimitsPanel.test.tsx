@@ -5,7 +5,6 @@ import RegionalLimitsPanel from './RegionalLimitsPanel';
 import { SettingsProvider, useSettings } from '../contexts/SettingsContext';
 import { SettingsModal } from './SettingsModal';
 
-vi.mock('../lib/supabase', () => ({ supabase: { from: () => ({ upsert: () => Promise.resolve({ error: null }) }) } }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: null, username: null }) }));
 vi.mock('../hooks/useDialog', () => ({ useDialog: () => ({ alert: vi.fn(), confirm: vi.fn() }) }));
 vi.mock('./AccountDataSection', () => ({ default: () => null }));

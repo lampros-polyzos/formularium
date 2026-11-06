@@ -5,15 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import StudioLayout from './StudioLayout';
 import type { StudioSection } from './StudioSidebar';
 
-vi.mock('../lib/supabase', () => {
-    const builder = (): Record<string, unknown> => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'limit', 'is', 'in', 'update']) b[m] = () => b;
-        b.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
-        return b;
-    };
-    return { supabase: { auth: { signOut: vi.fn() }, from: () => builder(), channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
 vi.mock('../lib/batches', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../lib/batches')>()),
     countDueChecks: () => Promise.resolve(0),

@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.6.3",
-    "@supabase/supabase-js": "^2.118.0",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

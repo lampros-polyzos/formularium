@@ -1,9 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { StashLot } from './batchPlan';
 import { buildShoppingList, formulaNeeds, type ListFormula } from './shoppingList';
 import type { CatalogIngredient } from './substitutions';
 
-vi.mock('./supabase', () => ({ supabase: {} }));
 
 const ing = (id: string, inci_name: string, trade_name = id): CatalogIngredient =>
     ({ id, inci_name, trade_name, function: null, min_usage_pct: null, max_usage_pct: null });

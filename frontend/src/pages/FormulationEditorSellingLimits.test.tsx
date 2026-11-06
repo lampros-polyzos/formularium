@@ -38,34 +38,6 @@ vi.mock('../lib/formulasApi', () => {
     };
 });
 
-vi.mock('../lib/supabase', () => {
-    const profile = { id: 'ow_lotion', name: 'O/W Lotion', requires_water: false, default_ph_min: 5, default_ph_max: 6, max_oil_phase_percent: 30 };
-    const water = { id: 'water', inci_name: 'Aqua', trade_name: 'Distilled Water', function: 'Solvent', solubility: 'water', min_usage_pct: 1, max_usage_pct: 100 };
-    const salicylic = { id: 'sal', inci_name: 'Salicylic Acid', trade_name: 'Salicylic Acid', function: 'Active (Exfoliant)', solubility: 'oil', min_usage_pct: 0.5, max_usage_pct: 2 };
-    const builder = (table: string) => {
-        const b: Record<string, unknown> = {};
-        const result = (): { data: unknown; error: unknown } => {
-            if (table === 'formulations') return { data: { id: 'f1', name: 'Peel', profile_id: 'ow_lotion', target_weight_g: 100, target_ph: 3.5, community_post_id: null }, error: null };
-            if (table === 'formulation_phases') {
-                return { data: [{ id: 'pA', phase_letter: 'A', formulation_ingredients: [
-                    { percentage: 100 - mocks.salicylic, is_qs: true, ingredients: water },
-                    { percentage: mocks.salicylic, is_qs: false, ingredients: salicylic },
-                ] }], error: null };
-            }
-            if (table === 'formulation_profiles') return { data: profile, error: null };
-            return { data: [], error: null };
-        };
-        for (const m of ['select', 'or', 'order', 'limit', 'match', 'in', 'update', 'eq']) b[m] = () => b;
-        b.single = () => Promise.resolve(result());
-        b.maybeSingle = () => Promise.resolve(result());
-        b.then = (resolve: (v: unknown) => void) => {
-            const r = result();
-            resolve({ ...r, data: Array.isArray(r.data) || r.data === null ? r.data : [r.data] });
-        };
-        return b;
-    };
-    return { supabase: { from: builder, rpc: vi.fn().mockResolvedValue({ error: null }), channel: () => ({ on: () => ({ subscribe: () => ({}) }) }), removeChannel: vi.fn() } };
-});
 
 const settle = async (ms = 0) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
 

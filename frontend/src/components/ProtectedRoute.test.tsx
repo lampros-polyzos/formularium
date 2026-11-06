@@ -11,7 +11,7 @@ vi.mock('../contexts/AuthContext', () => ({
 
 describe('ProtectedRoute', () => {
   it('displays a loading state when auth is still initializing', () => {
-    vi.mocked(useAuth).mockReturnValue({ isLoading: true, user: null, session: null });
+    vi.mocked(useAuth).mockReturnValue({ isLoading: true, user: null, username: null, signOut: vi.fn() });
 
     const { container } = render(
       <MemoryRouter>
@@ -24,7 +24,7 @@ describe('ProtectedRoute', () => {
   });
 
   it('redirects unauthenticated users to the root landing page', () => {
-    vi.mocked(useAuth).mockReturnValue({ isLoading: false, user: null, session: null });
+    vi.mocked(useAuth).mockReturnValue({ isLoading: false, user: null, username: null, signOut: vi.fn() });
 
     render(
       <MemoryRouter initialEntries={['/studio']}>
@@ -46,7 +46,8 @@ describe('ProtectedRoute', () => {
     vi.mocked(useAuth).mockReturnValue({
       isLoading: false,
       user: { id: '123', email: 'user@example.com' } as any,
-      session: { access_token: 'token' } as any,
+      username: 'user',
+      signOut: vi.fn(),
     });
 
     render(

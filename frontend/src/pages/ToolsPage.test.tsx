@@ -6,7 +6,6 @@ import ToolsPage from './ToolsPage';
 import { SettingsProvider } from '../contexts/SettingsContext';
 import { fixToolLink, toolsUrl } from '../lib/toolLinks';
 
-vi.mock('../lib/supabase', () => ({ supabase: { auth: { signOut: vi.fn() }, from: vi.fn(), channel: vi.fn(), removeChannel: vi.fn() } }));
 vi.mock('../contexts/AuthContext', () => {
     const value = { user: null, session: null, username: null, isLoading: false };
     return { useAuth: () => value };

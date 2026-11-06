@@ -12,23 +12,6 @@ const mocks = vi.hoisted(() => ({
     user: { id: 'u1', email: 'sam@example.com' } as { id: string; email: string } | null,
 }));
 
-vi.mock('../lib/supabase', () => {
-    // The header's notification bell reads and listens for notifications when someone is signed in
-    const builder = (): Record<string, unknown> => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'limit', 'is', 'in', 'update']) b[m] = () => b;
-        b.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
-        return b;
-    };
-    return {
-        supabase: {
-            auth: { signOut: mocks.signOut },
-            from: () => builder(),
-            channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
-            removeChannel: vi.fn(),
-        },
-    };
-});
 vi.mock('../lib/batches', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../lib/batches')>()),
     countDueChecks: () => Promise.resolve(mocks.due),

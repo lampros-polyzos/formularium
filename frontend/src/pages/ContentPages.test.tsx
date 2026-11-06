@@ -17,28 +17,6 @@ const mocks = vi.hoisted(() => ({
     tablesRead: [] as string[],
 }));
 
-vi.mock('../lib/supabase', () => {
-    // Chainable query builder: .select().eq().eq().order() resolves to the table's rows
-    const query = (result: () => unknown): Record<string, unknown> => ({
-        eq: () => query(result),
-        order: () => Promise.resolve(result()),
-    });
-    return {
-        supabase: {
-            auth: { signOut: vi.fn() },
-            from: (table: string) => {
-                mocks.tablesRead.push(table);
-                return {
-                select: () => query(() => table === 'community_posts'
-                    ? (mocks.error ? { data: null, error: mocks.error } : { data: mocks.posts, error: null })
-                    : { data: [], error: null }),
-            };
-            },
-            channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
-            removeChannel: vi.fn(),
-        },
-    };
-});
 
 vi.mock('../contexts/AuthContext', () => ({
     useAuth: () => ({ user: mocks.user, session: null, username: null, isLoading: false }),

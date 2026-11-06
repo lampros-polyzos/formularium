@@ -12,22 +12,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../lib/formulasApi', () => ({ fetchFormulas: () => Promise.resolve(mocks.formulas), deleteFormula: () => Promise.resolve() }));
 
-vi.mock('../lib/supabase', () => {
-    const builder = (table: string): Record<string, unknown> => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq', 'order', 'limit', 'is', 'in', 'update', 'delete']) b[m] = () => b;
-        b.then = (resolve: (v: unknown) => void) => resolve({ data: table === 'formulations' ? mocks.formulas : [], error: null });
-        return b;
-    };
-    return {
-        supabase: {
-            auth: { signOut: vi.fn() },
-            from: builder,
-            channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
-            removeChannel: vi.fn(),
-        },
-    };
-});
 vi.mock('../lib/batches', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../lib/batches')>()),
     countDueChecks: () => Promise.resolve(0),

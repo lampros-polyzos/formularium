@@ -4,7 +4,6 @@ import { buildBatchRecord, downloadBatchRecord } from './batchRecord';
 
 const mocks = vi.hoisted(() => ({ downloadPdf: vi.fn() }));
 vi.mock('./exportPdf', async (importOriginal) => ({ ...(await importOriginal<typeof import('./exportPdf')>()), downloadPdf: mocks.downloadPdf }));
-vi.mock('./supabase', () => ({ supabase: {} }));
 
 const detail = (over: Partial<BatchDetail['batch']> = {}): BatchDetail => ({
     batch: {

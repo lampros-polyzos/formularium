@@ -15,7 +15,6 @@ vi.mock('../lib/batches', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../lib/batches')>()),
     completeCheck: mocks.completeCheck,
 }));
-vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
 const day = (offset: number) => {
     const d = new Date();
