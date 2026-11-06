@@ -58,7 +58,7 @@ delete them once you are sure you do not need them.
 8. ~~**Close the door**~~ **done**: `20261122000000_close_the_door.sql` removes `export_my_data`, `delete_my_account` and `account_owned_tables` and revokes every browser-role
    (`anon`, `authenticated`) privilege in `public`. `@supabase/supabase-js`, `lib/supabase.ts` and the `VITE_SUPABASE_*` variables are gone from the frontend.
    The backend must connect with the database owner role (the `postgres` user or the pooler string from Supabase), not `anon`/`authenticated`.
-   The unused `profiles`, `users` and `reviews` tables are left in place: check them and drop them by hand (commands are at the end of the migration).
+   The tables the app no longer uses (`profiles`, `users`, `reviews`, `ingredient_safety_updates`) are removed by `20261124000000_drop_unused_tables.sql`; look at `docs/review-unused-tables.sql` first.
 
 Each slice: the Spring endpoints enforce who may see and change what in Java (this replaces the row-level policies), with a test for every rule, then the
 frontend screens switch to them.

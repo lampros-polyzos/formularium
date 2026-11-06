@@ -28,7 +28,4 @@ begin
 end
 $$;
 
--- LEFT FOR YOU TO DECIDE (nothing above touches them): tables from the Supabase days that the app no longer reads or writes.
--- Check that they hold nothing you want, then run the drops by hand:
---   select count(*) from public.profiles;  select count(*) from public.users;  select count(*) from public.reviews;
---   drop table if exists public.profiles;  drop table if exists public.users;  drop table if exists public.reviews;
+-- Tables from the Supabase days that the app no longer uses are removed by 20261124000000_drop_unused_tables.sql (nothing above touches them).
