@@ -35,7 +35,7 @@ public final class FormulaRequests {
             @DecimalMin("0") @DecimalMax("14") @JsonProperty("target_ph") BigDecimal targetPh,
             @JsonProperty("cloned_from_formulation_id") UUID clonedFromFormulationId,
             @JsonProperty("remixed_from_post_id") UUID remixedFromPostId,
-            @NotNull @Size(max = 300) @Valid List<Line> ingredients) { }
+            @NotNull @Size(max = 300) List<@Valid Line> ingredients) { }
 
     /** Links a formula to the community post it was shared as. */
     public record LinkPost(@NotNull @JsonProperty("community_post_id") UUID communityPostId) { }
@@ -55,5 +55,5 @@ public final class FormulaRequests {
             @JsonProperty("profile_id") @Size(max = 100) String profileId,
             @DecimalMin("0") @DecimalMax("10000000") @JsonProperty("target_weight_g") BigDecimal targetWeightG,
             @DecimalMin("0") @DecimalMax("14") @JsonProperty("target_ph") BigDecimal targetPh,
-            @NotNull @Size(max = 300) @Valid List<VersionLine> lines) { }
+            @NotNull @Size(max = 300) List<@Valid VersionLine> lines) { }
 }

@@ -31,7 +31,7 @@ public final class IngredientRequests {
      * has its own endpoint.
      */
     public record Search(
-            @Size(max = 200) @Valid List<Filter> anyOf,
+            @Size(max = 200) List<@Valid Filter> anyOf,
             @Size(max = 300) List<UUID> ids,
             @Min(1) @Max(500) Integer limit,
             @Pattern(regexp = "trade_name") String orderBy) { }

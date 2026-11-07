@@ -33,7 +33,7 @@ public final class BatchRequests {
             @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal percentage,
             @NotNull @DecimalMin("0") @DecimalMax("1000000000") @JsonProperty("planned_g") BigDecimal plannedG,
             @DecimalMin("0") @DecimalMax("1000000000") @JsonProperty("actual_g") BigDecimal actualG,
-            @Size(max = 50) @Valid List<Allocation> allocations,
+            @Size(max = 50) List<@Valid Allocation> allocations,
             @DecimalMin("0") @DecimalMax("1000000") @JsonProperty("est_price_per_g") BigDecimal estPricePerG) { }
 
     /** What the batch is filled into. The name and size stay on the batch even if the container is deleted later. */
@@ -53,7 +53,7 @@ public final class BatchRequests {
             @DecimalMin("0") @DecimalMax("14") @JsonProperty("target_ph") BigDecimal targetPh,
             @Size(max = 4000) String notes,
             @JsonProperty("made_on") LocalDate madeOn,
-            @NotEmpty @Size(max = 200) @Valid List<Line> lines,
+            @NotEmpty @Size(max = 200) List<@Valid Line> lines,
             @Valid Container container) { }
 
     /** The parts of a batch that can be edited afterwards. Only what is present is changed. */
