@@ -166,11 +166,11 @@ class StarterFormulaTest {
         jdbc.update("delete from formulations");
         jdbc.update("delete from formulation_profiles where id = 'body_butter'");   // the first starter formula now points at a product type that does not exist
         try {
-            assertThatThrownBy(() -> register("rollback@example.com")).hasStackTraceContaining("FORMULATION_PROFILES");   // the database refused the first starter formula
+            assertThatThrownBy(() -> register("rollback@example.com")).hasStackTraceContaining("formulations_profile_id_fkey");   // the database refused the first starter formula
             assertThat(jdbc.queryForObject("select count(*) from app_users", Long.class)).isZero();
             assertThat(jdbc.queryForObject("select count(*) from formulations", Long.class)).isZero();
         } finally {
-            jdbc.update("merge into formulation_profiles (id, name, category) key (id) values ('body_butter', 'Body Butter', 'Anhydrous')");
+            jdbc.update("insert into formulation_profiles (id, name, category, requires_oil, max_oil_phase_percent) values ('body_butter', 'Body Butter', 'Anhydrous', true, 100) on conflict (id) do nothing");
         }
     }
 

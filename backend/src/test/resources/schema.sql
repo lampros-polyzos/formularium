@@ -1,4 +1,5 @@
--- The accounts schema for tests (H2 in PostgreSQL mode). Production uses supabase/migrations/20261116000000_spring_owns_auth.sql.
+-- The schema the API tests run against, on a real PostgreSQL (see PostgresForTests). It is run once, when the test database starts.
+-- Hand-kept copy of the production tables until a baseline migration exists: when a table or column changes in supabase/migrations, change it here too.
 create table if not exists app_users (
   id uuid primary key,
   email varchar(320) not null unique,
@@ -31,11 +32,11 @@ create table if not exists refresh_tokens (
   user_agent varchar(300)
 );
 
--- ---- the library tables (the same columns as production; the enum types are plain text here)
-create domain if not exists solubility_type as varchar(20);
-create domain if not exists ionic_status as varchar(20);
-create domain if not exists physical_form as varchar(20);
-create domain if not exists cost_level as varchar(20);
+-- ---- the library tables (the same columns as production; the enum types are plain varchar domains here)
+create domain solubility_type as varchar(20);
+create domain ionic_status as varchar(20);
+create domain physical_form as varchar(20);
+create domain cost_level as varchar(20);
 
 create table if not exists ingredients (
   id uuid primary key,
@@ -126,17 +127,18 @@ create table if not exists formulation_profiles (
   default_ph_min numeric,
   default_ph_max numeric
 );
-merge into formulation_profiles (id, name, category, requires_water, requires_oil, requires_emulsifier, requires_preservative, max_oil_phase_percent, default_ph_min, default_ph_max) key (id) values
+insert into formulation_profiles (id, name, category, requires_water, requires_oil, requires_emulsifier, requires_preservative, max_oil_phase_percent, default_ph_min, default_ph_max) values
   ('body_butter', 'Body Butter', 'Anhydrous', false, true, false, false, 100, null, null),
   ('ow_lotion', 'O/W Lotion or Cream', 'Emulsion', true, true, true, true, 30, 5.0, 6.0),
-  ('body_wash', 'Body Wash', 'Surfactant', true, false, false, true, 0, 5.0, 6.5);
+  ('body_wash', 'Body Wash', 'Surfactant', true, false, false, true, 0, 5.0, 6.5)
+on conflict (id) do nothing;
 
 create table if not exists community_posts (
   id uuid primary key,
   author_id uuid references app_users (id) on delete cascade,
   title varchar(150) not null,
   write_up text,
-  tags varchar(40) array,
+  tags varchar(40)[],
   created_at timestamp with time zone default current_timestamp,
   post_type varchar(30) default 'formulation',
   development_status varchar(20) check (development_status is null or development_status in ('concept', 'in-testing', 'stable')),
@@ -252,7 +254,7 @@ create table if not exists batch_checks (
   due_on date not null,
   checked_at timestamp with time zone,
   result varchar(10) check (result is null or result in ('good', 'minor', 'failed')),
-  observations varchar(60) array not null default array[],
+  observations varchar(60)[] not null default '{}',
   measured_ph numeric,
   notes text
 );
@@ -261,7 +263,7 @@ create table if not exists batch_checks (
 create table if not exists post_snapshots (
   id uuid primary key,
   post_id uuid references community_posts (id) on delete cascade,
-  formulation_data varchar(1000000) not null default '[]',
+  formulation_data jsonb not null default '[]',
   version integer not null default 1,
   release_notes text,
   created_at timestamp with time zone default current_timestamp

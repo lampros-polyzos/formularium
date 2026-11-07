@@ -38,4 +38,4 @@ There are no database policies doing this work. Each service method takes the ca
 
 ## Test schema
 
-Backend tests run on H2 in PostgreSQL mode using `backend/src/test/resources/schema.sql`, a hand-kept copy of the schema. Two places need care because H2 and Postgres differ: JSON columns (a small `Dialect` adds the `jsonb` cast only on Postgres) and array columns.
+Backend tests run on a real PostgreSQL 17 in a Docker container ([ADR 0009](decisions/0009-api-tests-on-real-postgresql.md)), created once from `backend/src/test/resources/schema.sql`. That file is a hand-kept copy of the production tables, so change it together with any migration that changes a table or column, until a baseline migration replaces it.

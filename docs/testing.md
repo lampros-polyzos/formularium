@@ -14,7 +14,7 @@ cd frontend && npm test         # Node 20+
 | Domain logic | Vitest, no DOM | Calculators, auto-balance, regional limits, batch planning, parsers behave on normal and edge inputs | `frontend/src/lib/*.test.ts` |
 | UI | Vitest + Testing Library (happy-dom) | Screens behave the way a person uses them: labels, roles, error messages, what is sent to the API. API modules are mocked | `frontend/src/pages`, `components` |
 | Frontend API clients | Vitest | The right path, method and body go out, and errors come back readable (token refresh, error codes, 202/204 answers) | `frontend/src/lib/*Api.test.ts`, `authClient.test.ts` |
-| Backend API | JUnit + MockMvc, full Spring context, H2 | Every endpoint with real security: signed in or not, owner or another member, validation, rate limits, plain-language errors | `backend/src/test/java/.../*ApiTest.java`, `AuthFlowTest`, `EmailVerificationAndResetTest` |
+| Backend API | JUnit + MockMvc, full Spring context, real PostgreSQL 17 (Testcontainers, needs Docker) | Every endpoint with real security: signed in or not, owner or another member, validation, rate limits, plain-language errors | `backend/src/test/java/.../*ApiTest.java`, `AuthFlowTest`, `EmailVerificationAndResetTest` |
 | Backend rules and PDFs | JUnit | The validation rules and that each PDF generator produces a document | `rules/`, `export/` |
 | SQL migrations | Vitest + PGlite (real Postgres engine in-process) | Each migration removes what it says, keeps every row, and is safe to run twice | `frontend/src/db/*.sql.test.ts` |
 

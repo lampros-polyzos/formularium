@@ -2,14 +2,14 @@
 
 The Spring Boot API behind [Formularium](../README.md): sign-in, every read and write of the app's data, validation rules, PDF export and email. It is the only thing that talks to the database.
 
-**Stack:** Java 27, Spring Boot 4, Spring Security (JWT resource server), `JdbcClient` (plain SQL), Bean Validation, OpenPDF, PostgreSQL (H2 in tests).
+**Stack:** Java 27, Spring Boot 4, Spring Security (JWT resource server), `JdbcClient` (plain SQL), Bean Validation, OpenPDF, PostgreSQL (Testcontainers in tests).
 
 ## Run it
 
 ```bash
 cp .env.example .env     # then fill it in; git-ignored. Required: the database and AUTH_JWT_SECRET
 ./mvnw spring-boot:run  # http://localhost:8080
-./mvnw test            # no database needed: tests use H2
+./mvnw test            # needs Docker running: the tests start a PostgreSQL container
 ```
 
 Spring reads `backend/.env` when started from this folder; on a host, set the same names as real environment variables. **Every setting is explained in [`.env.example`](.env.example)**, which is the only list. The app will not start without `AUTH_JWT_SECRET`. A `config/application.properties` file also still works, for the same settings in Spring property form.
@@ -46,7 +46,7 @@ src/main/java/com/demiurgio/formularium/
   export/     PDF generators
   starter/    starter formulas for new accounts
   config/     security and CORS
-src/test/     API tests (MockMvc, full context, H2) and rule and PDF tests
+src/test/     API tests (MockMvc, full context, real PostgreSQL) and rule and PDF tests
 ```
 
 Every service method receives the caller's id from the verified token and puts it in the SQL, which is how ownership is enforced. See [ADR 0005](../docs/decisions/0005-authorization-in-java.md) and the [architecture notes](../docs/architecture.md).

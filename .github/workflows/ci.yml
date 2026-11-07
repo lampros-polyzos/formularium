@@ -72,6 +72,6 @@ jobs:
       - name: Grant execute permission for mvnw
         run: chmod +x mvnw
 
-      # Compiles, then runs every test against H2: no database or secrets needed
+      # Compiles, then runs every test. The tests start their own PostgreSQL in Docker (ubuntu-latest has it): no database or secrets needed
       - name: Run Spring Boot Tests
         run: ./mvnw clean test

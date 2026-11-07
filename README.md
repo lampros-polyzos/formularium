@@ -53,7 +53,7 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 
 **Across the stack**
 - **One feature, end to end.** "Make a batch" runs from the React modal, through the typed client and an authenticated endpoint, to one database transaction that deducts the stash and records the cost. It is tested at each layer: component tests, API tests with a real security setup, and the SQL itself.
-- **Safe database changes.** Every migration is idempotent and is run on a real Postgres engine (PGlite) in tests. About 235 backend tests run on H2 in PostgreSQL mode, and a test fails when a new table holding personal data is missing from the data export.
+- **Safe database changes.** Every migration is idempotent and is run on a real Postgres engine (PGlite) in tests. About 235 backend tests run against a real PostgreSQL in a Testcontainers container (not H2), and a test fails when a new table holding personal data is missing from the data export.
 - **Privacy and secret hygiene.** Self-service data export and account deletion, plus a pre-commit hook that blocks leaked secrets.
 - **Decisions are written down.** Each significant choice has a short [decision record](docs/decisions/README.md) with its trade-offs, such as [moving auth and data from Supabase to Spring](docs/decisions/0008-move-to-spring-in-slices.md).
 

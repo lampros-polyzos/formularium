@@ -12,5 +12,6 @@ One short file per significant choice: what was decided, why, and what it costs.
 | [0006](0006-polling-for-notifications.md) | Notifications by polling, not push | Accepted |
 | [0007](0007-email-confirmation-required.md) | Email confirmation required, links stored as hashes | Accepted |
 | [0008](0008-move-to-spring-in-slices.md) | Move to Spring one slice at a time | Accepted |
+| [0009](0009-api-tests-on-real-postgresql.md) | API tests run on a real PostgreSQL, not H2 | Accepted |
 
 Format: Context, Decision, Consequences. Add a new file rather than rewriting an old one; mark the old one "Superseded by NNNN".

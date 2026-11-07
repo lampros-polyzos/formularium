@@ -71,8 +71,8 @@
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -105,7 +105,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<systemPropertyVariables>
-						<!-- Tests use only src/test/resources/application.properties (H2). Without this, a developer's local
+						<!-- Tests use only src/test/resources/application.properties (the Testcontainers database). Without this, a developer's local
 						     config/application.properties or .env would point the tests at the real database. -->
 						<spring.config.location>classpath:/application.properties</spring.config.location>
 					</systemPropertyVariables>

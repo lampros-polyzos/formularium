@@ -1,7 +1,6 @@
 package com.demiurgio.formularium.community;
 
 import com.demiurgio.formularium.auth.ApiException;
-import com.demiurgio.formularium.library.Dialect;
 import com.demiurgio.formularium.library.Rows;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -38,10 +37,8 @@ public class CommunityService {
     private final ObjectMapper json;
     private final Members members;
     private final NotificationService notifications;
-    private final Dialect dialect;
 
-    CommunityService(JdbcClient jdbc, ObjectMapper json, Members members, NotificationService notifications, Dialect dialect) {
-        this.dialect = dialect;
+    CommunityService(JdbcClient jdbc, ObjectMapper json, Members members, NotificationService notifications) {
         this.jdbc = jdbc;
         this.json = json;
         this.members = members;
@@ -167,7 +164,7 @@ public class CommunityService {
         } catch (JacksonException e) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "invalid_request", "The recipe could not be read.");
         }
-        jdbc.sql("insert into post_snapshots (id, post_id, formulation_data, version, release_notes) values (:id, :post, " + dialect.jsonb("data") + ", :version, :notes)")
+        jdbc.sql("insert into post_snapshots (id, post_id, formulation_data, version, release_notes) values (:id, :post, cast(:data as jsonb), :version, :notes)")
                 .param("id", UUID.randomUUID()).param("post", postId).param("data", data).param("version", next).param("notes", blankToNull(body.releaseNotes())).update();
         return versions(postId).stream().filter(v -> Integer.valueOf(next).equals(((Number) v.get("version")).intValue())).findFirst().orElseThrow();
     }

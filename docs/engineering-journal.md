@@ -44,9 +44,9 @@ Problems that took real thinking, each in short Situation / Task / Action / Resu
 - **Action.** Moved the logic into one transaction: each deduction is an update guarded by `amount_left_g >= grams`, and a failed guard rolls the whole batch back with a plain-language message. Costs are computed in the same transaction.
 - **Result.** The invariant lives in the database operation itself, with a test that tries to overdraw.
 
-## Same code, two databases
+## Tests that passed on a database I don't run
 
-- **Situation.** Tests run on H2 for speed while production is PostgreSQL, and JSON columns behave differently (a `jsonb` cast is required on Postgres and breaks H2).
-- **Task.** Keep fast tests without letting the two drift.
-- **Action.** Added a tiny `Dialect` component that adds the cast only on Postgres, and kept SQL migrations separately tested on a real Postgres engine (PGlite).
-- **Result.** Fast API tests and trustworthy migration tests, with one small, explicit point where the two differ.
+- **Situation.** The API tests ran on H2 in PostgreSQL mode while production is PostgreSQL. Every gap needed a workaround (a `Dialect` class existed only to add a `jsonb` cast on one of the two), and a green test only proved the SQL worked on H2.
+- **Task.** Make a passing test mean something about production, without making the suite painful to run.
+- **Action.** Switched the Spring tests to a PostgreSQL 17 container (Testcontainers), shared by the whole run and started once, and deleted H2 and `Dialect`. The first run passed 225 of 235 tests. The 10 failures were all H2-only SQL inside the tests (`random_uuid()`, `merge ... key`, an upper-case constraint name), and one of them left a product type deleted, which caused most of the rest.
+- **Result.** The suite needs Docker, but the tests now check the engine that runs in production ([ADR 0009](decisions/0009-api-tests-on-real-postgresql.md)). Migrations keep their own tests on a real Postgres engine (PGlite).

@@ -10,4 +10,4 @@ Use Spring's `JdbcClient` with hand-written SQL in repositories and services, `@
 
 ## Consequences
 - **Good:** every query is visible and reviewable, transactions are explicit, there is no lazy-loading surprise, and the SQL matches what the migrations create.
-- **Cost:** manual mapping and more verbose code; no automatic schema checks (migrations plus tests are the safety net); a few spots differ between H2 (tests) and PostgreSQL, handled by a small `Dialect` helper.
+- **Cost:** manual mapping and more verbose code; no automatic schema checks (migrations plus tests are the safety net); the API tests run on the same engine as production ([0009](0009-api-tests-on-real-postgresql.md)).

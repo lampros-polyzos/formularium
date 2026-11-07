@@ -175,7 +175,7 @@ class EmailVerificationAndResetTest {
     @Test
     void whenConfirmationIsNotRequiredTheOldBehaviourStays_googleStyleAccountsAreAlreadyConfirmed() throws Exception {
         // an account that is already confirmed signs in directly
-        jdbc.update("insert into app_users (id, email, password_hash, username, email_verified_at) values (random_uuid(), 'old@example.com', ?, 'old', current_timestamp)",
+        jdbc.update("insert into app_users (id, email, password_hash, username, email_verified_at) values (gen_random_uuid(), 'old@example.com', ?, 'old', current_timestamp)",
                 new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(PASSWORD));
         assertThat(login("old", PASSWORD)).isEqualTo(200);
     }
@@ -263,7 +263,7 @@ class EmailVerificationAndResetTest {
 
     @Test
     void anAccountThatOnlyUsedGoogleCanSetAPassword() throws Exception {
-        jdbc.update("insert into app_users (id, email, google_sub, username, email_verified_at) values (random_uuid(), 'gina@example.com', 'sub-1', 'gina', current_timestamp)");
+        jdbc.update("insert into app_users (id, email, google_sub, username, email_verified_at) values (gen_random_uuid(), 'gina@example.com', 'sub-1', 'gina', current_timestamp)");
         ask("forgot-password", "gina@example.com");
         assertThat(reset(lastToken("gina@example.com"), "a brand new password")).isEqualTo(204);
         assertThat(login("gina", "a brand new password")).isEqualTo(200);
