@@ -10,17 +10,17 @@
 - Own authentication: JWT access tokens, rotating refresh cookie, Google sign-in, bot check, email confirmation, password reset
 - Data export and account deletion
 - Supabase reduced to a plain PostgreSQL host; every rule moved to tested Java ([ADR 0008](decisions/0008-move-to-spring-in-slices.md))
+- A baseline migration, so a database can be built from nothing, and API tests that run on a database built from it
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 
 ## Next
 
 1. **Screenshots and a live demo** in the README (the biggest gap for a first impression)
-2. **Baseline schema file**, so a database can be built from nothing
-3. **Dockerfile and a deploy guide** for the backend, and a hosted demo
-4. **Shared sign-in throttling** (database or Redis) so more than one backend instance can run
-5. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
-6. **Small admin tool** to grant moderator rights without hand-written SQL
-7. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
+2. **Dockerfile and a deploy guide** for the backend, and a hosted demo
+3. **Shared sign-in throttling** (database or Redis) so more than one backend instance can run
+4. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
+5. **Small admin tool** to grant moderator rights without hand-written SQL
+6. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
 
 ## Known limitations
 

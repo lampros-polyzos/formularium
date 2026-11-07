@@ -127,7 +127,8 @@ class FormulasApiTest {
     void listsTheProductTypes_andOneByItsId() throws Exception {
         MvcResult all = run(alice, get("/api/v1/profiles"));
         List<String> ids = read(all, "$[*].id");
-        assertThat(ids).containsExactlyInAnyOrder("body_butter", "ow_lotion", "body_wash");
+        // the product types of the real reference data (supabase/migrations/20261100000001_reference_data.sql)
+        assertThat(ids).containsExactlyInAnyOrder("body_butter", "body_wash", "facial_oil", "ow_lotion", "shampoo", "toner_mist", "water_serum", "wo_cream");
 
         MvcResult one = run(alice, get("/api/v1/profiles/ow_lotion"));
         assertThat((Boolean) read(one, "$.requires_water")).isTrue();

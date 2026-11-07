@@ -16,6 +16,13 @@ Problems that took real thinking, each in short Situation / Task / Action / Resu
 - **Action.** Worked in slices (accounts, library, formulas, batches, community, export), each with Spring endpoints, Java tests for every ported rule, a migration removing the old database objects (tested on a real Postgres engine), and a switched frontend module. The plan is in [ADR 0008](decisions/0008-move-to-spring-in-slices.md).
 - **Result.** The browser no longer has any database access, the rules are testable Java, and the final migration revokes the browser roles' privileges.
 
+## Nobody could build the database
+
+- **Situation.** The migrations were small changes on top of a schema first made by clicking in the Supabase dashboard, so there was no way to create the database from nothing. The backend tests ran on a hand-kept copy of the tables that had quietly drifted from production.
+- **Task.** Capture the real schema as a baseline, and make the tests use it instead of a copy.
+- **Action.** Dumped the production schema with `pg_dump` (read-only) and cleaned it: left out 15 old policies that called Supabase's `auth.uid()`, six `user_id` defaults that pointed at it, and Supabase's own helper function, so the file runs on plain PostgreSQL. Generated the shared ingredients and product types as a second file. Then proved it three ways: built a fresh PostgreSQL from only those files and diffed its schema against production (only the intended differences remained), compared an md5 of every reference row between the two, and applied a small follow-up migration to a copy of production's schema to confirm it ends up identical to the baseline. The tests now start from those same files.
+- **Result.** A new machine can build the database in one command, and the test database cannot drift because it is the production schema. Building it for real found things the hand-kept copy hid: a case-insensitive unique index on emails, 8 product types instead of 3, and the old policies still sitting in production.
+
 ## Logged out by a hiccup
 
 - **Situation.** After auth moved into the backend, the app kept failing to autosave and load recipes, and signed people out "after a while".

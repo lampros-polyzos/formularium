@@ -29,13 +29,24 @@ There are no database policies doing this work. Each service method takes the ca
 
 ## Migrations
 
-- SQL files in [`supabase/migrations`](../supabase/migrations), named `YYYYMMDDHHMMSS_what_it_does.sql`, applied in order by hand (Supabase SQL editor or `psql`).
-- Each one is **idempotent** (`if not exists`, `drop ... if exists`, guarded `do` blocks), so running it twice is harmless.
-- Each one has a test (`frontend/src/db/*.sql.test.ts`) that applies it to a real Postgres engine (PGlite) with stand-in tables and checks the result: data kept, objects removed, a second run changes nothing.
-- Destructive steps say so in their header and are written to stop with an error rather than guess (for example the table cleanup drops without `CASCADE`).
+Files in [`supabase/migrations`](../supabase/migrations), named `YYYYMMDDHHMMSS_what_it_does.sql`, applied in order:
 
-**Known gap:** the migrations are incremental changes to a schema that was first created in the Supabase dashboard. There is no single baseline file for building a database from nothing yet. It is on the [roadmap](roadmap.md).
+| File | What it is |
+|---|---|
+| `20261100000000_baseline.sql` | The whole `public` schema (25 tables, 4 enum types, indexes, constraints, row-level security switched on, no policies), dumped from production with `pg_dump` |
+| `20261100000001_reference_data.sql` | The shared ingredient library and the product types. Never anyone's own rows |
+| `20261125000000_align_production_with_baseline.sql` | Brings the existing production database in line with the baseline (drops the old policies and Supabase-specific column defaults). A no-op on a database built from the baseline |
+| `20261126000000_remove_duplicate_ingredients.sql` | Deletes two duplicate ingredients (BTMS-50 and Euxyl PE 9010 each existed twice) if nothing uses them, and adds a unique index so a shared ingredient's trade name cannot repeat |
 
-## Test schema
+**Building a database from nothing:** run the first two files, or `supabase db reset`. **Production** already has the baseline, so it only needs the files after the first two (20261125 and 20261126); with the Supabase CLI, first mark the first two as applied (`supabase migration repair --status applied 20261100000000 20261100000001`), because the history was kept by hand.
 
-Backend tests run on a real PostgreSQL 17 in a Docker container ([ADR 0009](decisions/0009-api-tests-on-real-postgresql.md)), created once from `backend/src/test/resources/schema.sql`. That file is a hand-kept copy of the production tables, so change it together with any migration that changes a table or column, until a baseline migration replaces it.
+The migrations that built the schema step by step (20261110 to 20261124) are in `supabase/migrations-archive/` for the history. They must not be applied on top of the baseline.
+
+Rules for new migrations:
+- Write each one to be **idempotent** (`if not exists`, `drop ... if exists`, guarded `do` blocks), so running it twice is harmless.
+- Give it a test (`frontend/src/db/*.sql.test.ts`) that applies it to a real Postgres engine (PGlite) with stand-in tables and checks the result: data kept, objects removed, a second run changes nothing. The archived migrations' tests keep their own copies in `frontend/src/db/fixtures/`.
+- Say so in the header of anything destructive, and make it stop with an error rather than guess (for example, dropping without `CASCADE`).
+
+## Test database
+
+The backend tests build their PostgreSQL from all the migrations above, in a Docker container ([ADR 0009](decisions/0009-api-tests-on-real-postgresql.md)). There is no separate test schema, so tests cannot drift from production: every file in `supabase/migrations` is applied in name order, so a new migration is picked up by the tests as soon as it is added.

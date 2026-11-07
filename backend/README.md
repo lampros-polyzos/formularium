@@ -53,4 +53,4 @@ Every service method receives the caller's id from the verified token and puts i
 
 ## Database
 
-SQL migrations live in [`../supabase/migrations`](../supabase/migrations) and are applied by hand, in order. See the [data model](../docs/data-model.md).
+SQL migrations live in [`../supabase/migrations`](../supabase/migrations): a baseline of the whole schema, the reference data, then later changes. A database is built from nothing by running them in order, and the tests do exactly that in a container. See the [data model](../docs/data-model.md).

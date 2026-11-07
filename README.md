@@ -85,8 +85,10 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 **Requirements:** JDK 27, Node 20+, and a PostgreSQL database (a free Supabase project works).
 
 ```bash
-# 1. Database: the migrations in supabase/migrations are incremental changes on top of the original schema
-#    (a one-file baseline for a brand-new database is on the to-do list). Apply them in order to the existing database.
+# 1. Database: any PostgreSQL 15+. Build it from nothing with the project's own migrations, in order:
+#      psql "<connection string>" -f supabase/migrations/20261100000000_baseline.sql
+#      psql "<connection string>" -f supabase/migrations/20261100000001_reference_data.sql   # 400+ ingredients, product types
+#    or, with the Supabase CLI and Docker, a local copy:  supabase db reset
 
 # 2. Backend (http://localhost:8080)
 cd backend
@@ -106,6 +108,6 @@ Without an SMTP server the backend only logs emails, links included, so sign-up 
 
 ## Status and limits
 
-A working solo project, still evolving. Honest gaps (the full list is in the [roadmap](docs/roadmap.md)): there is no single baseline schema file yet for creating a database from scratch, sign-in throttling is in memory (fine for one instance, needs a shared store for several), notifications poll every 30 seconds instead of streaming, and regional limits cover the EU only. It supports a formulator's own safety checks and is **not** a substitute for a professional safety assessment.
+A working solo project, still evolving. Honest gaps (the full list is in the [roadmap](docs/roadmap.md)): sign-in throttling is in memory (fine for one instance, needs a shared store for several), notifications poll every 30 seconds instead of streaming, and regional limits cover the EU only. It supports a formulator's own safety checks and is **not** a substitute for a professional safety assessment.
 
 Built by [Lampros Polyzos](https://github.com/lampros-polyzos). Released under the [MIT License](LICENSE).
