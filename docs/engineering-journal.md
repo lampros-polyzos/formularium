@@ -6,8 +6,8 @@ Problems that took real thinking, each in short Situation / Task / Action / Resu
 
 - **Situation.** While adding SMTP settings, real credentials ended up in a tracked "example" settings file, and one of those commits was pushed.
 - **Task.** Find out what had actually leaked, stop it happening again, and not pretend that deleting the lines fixed it.
-- **Action.** Searched all of git history for each secret (four were pushed, the SMTP password was not), rewrote the tracked files to placeholders, moved the real values to a git-ignored file, and wrote a pre-commit hook that blocks any staged line containing a value from the ignored files or matching a known key shape (it reports file and line but never prints the secret). Checked the hook against real and fake secrets, and began rotating the exposed credentials at their providers.
-- **Result.** The files are clean, and a commit that repeats the mistake is stopped locally. The old values stay exposed in git history, but every one was immediately rotated, because removing a secret from git does not make it safe, only rotating it does.
+- **Action.** Rotated every exposed credential at its provider the moment I found the commit, before anything else, because removing a secret from git does not make it safe, only replacing it does. Then searched all of git history for each secret (four were pushed, the SMTP password was not), rewrote the tracked files to placeholders, moved the real values to a git-ignored file, and wrote a pre-commit hook that blocks any staged line containing a value from the ignored files or matching a known key shape (it reports file and line but never prints the secret). Checked the hook against real and fake secrets.
+- **Result.** The old values are still readable in git history, but they no longer work, since all of them had already been replaced. The files are clean, and a commit that repeats the mistake is stopped locally.
 
 ## Moving auth and data off Supabase without breaking the app
 
