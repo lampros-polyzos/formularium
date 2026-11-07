@@ -13,4 +13,5 @@ With Supabase handling sign-in, the Spring backend had no notion of who was call
 ## Consequences
 - **Good:** scripts on the page cannot read the long-lived credential, a stolen refresh token is detected, and the API stays stateless between refreshes.
 - **Cost:** more security-sensitive code to own and test. The attempt limit is in memory, so it needs a shared store before running several instances. A short access token cannot be revoked early, which is why it is short.
+- **Staying signed in:** the client renews the access token a minute before it expires, and again when the tab comes back or the network returns. It signs you out only when the server says the sign-in is over (401); a server that is down, busy or restarting (network error, 5xx, 429) never does: the session is kept and renewal is retried. See the [journal](../engineering-journal.md).
 - Passwords are hashed with bcrypt; because bcrypt reads only 72 bytes, longer passwords are refused rather than silently cut.

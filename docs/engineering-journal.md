@@ -16,6 +16,13 @@ Problems that took real thinking, each in short Situation / Task / Action / Resu
 - **Action.** Worked in slices (accounts, library, formulas, batches, community, export), each with Spring endpoints, Java tests for every ported rule, a migration removing the old database objects (tested on a real Postgres engine), and a switched frontend module. The plan is in [ADR 0008](decisions/0008-move-to-spring-in-slices.md).
 - **Result.** The browser no longer has any database access, the rules are testable Java, and the final migration revokes the browser roles' privileges.
 
+## Logged out by a hiccup
+
+- **Situation.** After auth moved into the backend, the app kept failing to autosave and load recipes, and signed people out "after a while".
+- **Task.** Find out whether it was the sign-in design or something under it.
+- **Action.** Reading the code showed two causes. The client treated *any* failed token renewal other than a lost connection as "signed out", so one 500 or 429 ended the session. And the database URL used the Supabase transaction pooler (port 6543), where the driver's prepared statements fail at random, which was producing those 500s in the first place. I switched to the session pooler (port 5432), set a small pool that recycles connections before the pooler drops them, made the client sign out only on a real 401 and retry otherwise, and made it renew the token a minute before expiry and again when the tab wakes up or the network returns.
+- **Result.** A flaky server no longer ends a session, and the first save after being away does not meet an expired token. Each behaviour has a test, including "a 503 must not sign you out". The lesson: a random failure that looks like an auth bug can sit one layer lower.
+
 ## Everyone could read everyone's custom ingredients
 
 - **Situation.** While porting the ingredient queries I found that the old database policy "Allow read access for all users" matched every row, so any visitor, signed in or not, could read other people's private custom ingredients.

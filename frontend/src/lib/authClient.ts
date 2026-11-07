@@ -3,6 +3,11 @@
 //
 // The access token (short-lived) is kept only in this module's memory: it is gone when the page is closed and no script can read it
 // from storage. Staying signed in across page loads is the job of the refresh cookie, which the browser keeps and scripts cannot read.
+//
+// Staying signed in:
+//  - the access token is renewed shortly BEFORE it expires, and again when the tab comes back or the network returns;
+//  - you are signed out only when the server says the sign-in is really over (401/403). A server that is down, busy or restarting
+//    (network error, 5xx, 429) never signs you out: the session is kept and renewal is tried again.
 
 import { apiUrl } from './api';
 
@@ -25,12 +30,47 @@ export class AuthError extends Error {
 let accessToken: string | null = null;
 let currentUser: AuthUser | null = null;
 let refreshing: Promise<AuthUser | null> | null = null;
+let expiresAt = 0;                 // when the access token stops working (ms since 1970)
+let renewTimer: ReturnType<typeof setTimeout> | undefined;
+let resumeFailed = false;          // the refresh cookie could not be tried because the server was unreachable or failing
 const listeners = new Set<(user: AuthUser | null) => void>();
+
+/** Renew this long before the token expires, so a request never meets an expired one. */
+const RENEW_EARLY_MS = 60_000;
+/** After a failed renewal, try again after this long (the old token may still be valid for a while). */
+const RENEW_RETRY_MS = 15_000;
 
 function setSession(response: AuthResponse | null) {
     accessToken = response?.accessToken ?? null;
     currentUser = response?.user ?? null;
+    expiresAt = response ? Date.now() + response.expiresInSeconds * 1000 : 0;
+    resumeFailed = false;
+    scheduleRenewal(response ? Math.max(5_000, response.expiresInSeconds * 1000 - RENEW_EARLY_MS) : null);
     listeners.forEach(listener => listener(currentUser));
+}
+
+/** Renews the token in the background after `delayMs`; null cancels. A failure here is quiet: the next request or try renews it. */
+function scheduleRenewal(delayMs: number | null) {
+    clearTimeout(renewTimer);
+    renewTimer = undefined;
+    if (delayMs === null) return;
+    renewTimer = setTimeout(() => { refreshSession().catch(() => scheduleRenewal(RENEW_RETRY_MS)); }, delayMs);
+}
+
+/** When the tab becomes visible or the network returns: renew a token that is about to expire, or resume a sign-in the server could not be asked about. */
+function wakeUp() {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const expiring = currentUser !== null && Date.now() > expiresAt - RENEW_EARLY_MS;
+    if (expiring || (currentUser === null && resumeFailed)) refreshSession().catch(() => { /* the next wake-up or request tries again */ });
+}
+
+let watching = false;
+function watchForWakeUp() {
+    if (watching || typeof window === 'undefined') return;
+    watching = true;
+    document.addEventListener('visibilitychange', wakeUp);
+    window.addEventListener('online', wakeUp);
+    window.addEventListener('focus', wakeUp);
 }
 
 /** Calls back whenever the signed-in user changes (sign-in, sign-out, a lost session). Returns a function that stops listening. */
@@ -103,27 +143,40 @@ export async function loginWithGoogle(idToken: string): Promise<AuthUser> {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+/** The server could not answer properly (down, restarting, overloaded, or another tab is mid-renewal): the sign-in itself may be fine. */
+const isTransient = (e: AuthError) => e.status === 0 || e.status >= 500 || e.status === 408 || e.status === 429 || e.code === 'refresh_in_progress';
+
+const RETRY_DELAYS_MS = [400, 1200, 3000];
+
 /**
  * Asks for a new access token using the refresh cookie. Calls made while one is already under way share its answer: a refresh token
- * can be used once, so two requests at the same time would otherwise fight. Returns null when there is no valid sign-in.
+ * can be used once, so two requests at the same time would otherwise fight.
+ *
+ * Returns the user, or null when the server says there is no valid sign-in (and only then are you signed out).
+ * Throws an AuthError, leaving the session as it was, when the server could not be asked or failed: try again later.
  */
 export function refreshSession(): Promise<AuthUser | null> {
+    watchForWakeUp();
     refreshing ??= (async () => {
         try {
-            // Another tab may have just renewed the same sign-in (the server answers 409): by the next try the cookie is the new one
-            for (let attempt = 0; attempt < 3; attempt++) {
+            for (let attempt = 0; ; attempt++) {
                 try {
                     const response = await post<AuthResponse>('/api/v1/auth/refresh');
                     setSession(response);
                     return response.user;
                 } catch (e) {
-                    if (e instanceof AuthError && e.code === 'refresh_in_progress' && attempt < 2) { await wait(300); continue; }
-                    if (e instanceof AuthError && e.code === 'network') throw e;
-                    setSession(null);
-                    return null;
+                    if (!(e instanceof AuthError)) throw e;
+                    if (!isTransient(e)) { setSession(null); return null; }   // 401 and the like: the sign-in is really over
+                    if (attempt >= RETRY_DELAYS_MS.length) {
+                        if (currentUser === null) resumeFailed = true;
+                        scheduleRenewal(RENEW_RETRY_MS);   // keep trying quietly; the session is not given up
+                        throw e.code === 'refresh_in_progress' || e.status === 0
+                            ? e
+                            : new AuthError('unavailable', 'The server is not answering right now. You are still signed in; try again in a moment.', e.status);
+                    }
+                    await wait(RETRY_DELAYS_MS[attempt]);
                 }
             }
-            return null;
         } finally {
             refreshing = null;
         }

@@ -99,10 +99,15 @@ describe('staying signed in', () => {
     });
 
     it('does not sign you out just because the server cannot be reached', async () => {
-        fetchMock.mockResolvedValueOnce(reply(200, session())).mockRejectedValueOnce(new TypeError('offline'));
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(reply(200, session())).mockRejectedValue(new TypeError('offline'));
         await client.login({ email: 'a@b.co', password: 'x' });
-        await expect(client.refreshSession()).rejects.toMatchObject({ code: 'network' });
+        const pending = client.refreshSession();
+        const outcome = expect(pending).rejects.toMatchObject({ code: 'network' });
+        await vi.advanceTimersByTimeAsync(5000);
+        await outcome;
         expect(client.getAccessToken()).toBe('token-1');
+        expect(client.getCurrentUser()).toEqual(USER);
     });
 
     it('can refresh again after a refresh has finished', async () => {
@@ -110,6 +115,109 @@ describe('staying signed in', () => {
         await client.refreshSession();
         await client.refreshSession();
         expect(client.getAccessToken()).toBe('two');
+    });
+});
+
+describe('surviving a server that is down, busy or restarting', () => {
+    it.each([500, 502, 503, 429])('keeps you signed in when renewing answers %i, and tries again by itself', async status => {
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(reply(200, session('old'))).mockImplementation(async () => error(status, 'busy'));
+        await client.login({ email: 'a@b.co', password: 'x' });
+
+        const pending = client.refreshSession();
+        const outcome = expect(pending).rejects.toMatchObject({ status });
+        await vi.advanceTimersByTimeAsync(5000);
+        await outcome;
+        expect(client.getCurrentUser()).toEqual(USER);
+        expect(client.getAccessToken()).toBe('old');
+        expect(callsTo('/api/v1/auth/refresh')).toHaveLength(4);   // the first try and three more
+
+        // the server is back: the quiet retry swaps in a new token
+        fetchMock.mockReset();
+        fetchMock.mockImplementation(async () => reply(200, session('renewed')));
+        await vi.advanceTimersByTimeAsync(15_000);
+        expect(client.getAccessToken()).toBe('renewed');
+    });
+
+    it('gets through a short outage by retrying', async () => {
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(error(503, 'down')).mockResolvedValueOnce(error(503, 'down')).mockResolvedValueOnce(reply(200, session('back')));
+        const pending = client.refreshSession();
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(await pending).toEqual(USER);
+        expect(client.getAccessToken()).toBe('back');
+    });
+
+    it('signs you out only when the server says the sign-in is over', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, session())).mockResolvedValueOnce(error(401, 'no_session'));
+        await client.login({ email: 'a@b.co', password: 'x' });
+        expect(await client.refreshSession()).toBeNull();
+        expect(client.getCurrentUser()).toBeNull();
+        expect(callsTo('/api/v1/auth/refresh')).toHaveLength(1);   // and without pointless retries
+    });
+
+    it('resumes a sign-in that could not be tried at page load, once the server answers', async () => {
+        vi.useFakeTimers();
+        fetchMock.mockImplementation(async () => error(503, 'down'));
+        const first = client.refreshSession();
+        const outcome = expect(first).rejects.toMatchObject({ status: 503 });
+        await vi.advanceTimersByTimeAsync(5000);
+        await outcome;
+        expect(client.getCurrentUser()).toBeNull();
+
+        const seen: unknown[] = [];
+        client.onAuthChange(u => seen.push(u?.username ?? null));
+        fetchMock.mockReset();
+        fetchMock.mockImplementation(async () => reply(200, session('late')));
+        await vi.advanceTimersByTimeAsync(15_000);
+        expect(seen).toEqual(['sam']);
+        expect(client.getAccessToken()).toBe('late');
+    });
+});
+
+describe('renewing before the token expires', () => {
+    it('renews in the background a minute before the token runs out', async () => {
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(reply(200, session('first'))).mockResolvedValueOnce(reply(200, session('second')));
+        await client.login({ email: 'a@b.co', password: 'x' });
+
+        await vi.advanceTimersByTimeAsync(839_000);          // a 15 minute token is renewed at 14 minutes: not yet
+        expect(client.getAccessToken()).toBe('first');
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(client.getAccessToken()).toBe('second');
+    });
+
+    it('does not renew after signing out', async () => {
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(reply(200, session('first'))).mockResolvedValueOnce(reply(204));
+        await client.login({ email: 'a@b.co', password: 'x' });
+        await client.logout();
+        await vi.advanceTimersByTimeAsync(20 * 60_000);
+        expect(callsTo('/api/v1/auth/refresh')).toHaveLength(0);
+    });
+
+    it('renews when the tab comes back after being away past the expiry', async () => {
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(reply(200, session('first'))).mockResolvedValueOnce(reply(200, session('same')));
+        await client.login({ email: 'a@b.co', password: 'x' });
+        await client.refreshSession();                          // how the page resumes; it also starts watching the tab
+        fetchMock.mockReset();
+        fetchMock.mockImplementation(async () => reply(200, session('after')));
+
+        vi.setSystemTime(Date.now() + 20 * 60_000);             // the laptop slept, so the timers did not fire
+        document.dispatchEvent(new Event('visibilitychange'));
+        await vi.waitFor(() => expect(client.getAccessToken()).toBe('after'));
+    });
+
+    it('leaves a still-fresh token alone when the tab comes back', async () => {
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(reply(200, session('first'))).mockResolvedValueOnce(reply(200, session('second')));
+        await client.login({ email: 'a@b.co', password: 'x' });
+        await client.refreshSession();
+        fetchMock.mockReset();
+        window.dispatchEvent(new Event('online'));
+        await vi.advanceTimersByTimeAsync(10);
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 });
 
