@@ -1,7 +1,13 @@
 {
-  "name": "frontend",
+  "name": "formularium-frontend",
+  "version": "0.1.0",
+  "description": "The React app of Formularium, a workbench for home skincare formulators",
+  "author": "Lampros Polyzos",
+  "license": "MIT",
+  "homepage": "https://github.com/lampros-polyzos/formularium#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/lampros-polyzos/formularium.git", "directory": "frontend" },
+  "bugs": "https://github.com/lampros-polyzos/formularium/issues",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

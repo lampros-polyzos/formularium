@@ -10,21 +10,26 @@
 	</parent>
 	<groupId>com.demiurgio</groupId>
 	<artifactId>formularium</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.1.0-SNAPSHOT</version>
 	<name>formularium</name>
-	<description/>
-	<url/>
+	<description>The Spring Boot API of Formularium, a workbench for home skincare formulators</description>
+	<url>https://github.com/lampros-polyzos/formularium</url>
 	<licenses>
-		<license/>
+		<license>
+			<name>MIT License</name>
+			<url>https://opensource.org/licenses/MIT</url>
+		</license>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer>
+			<name>Lampros Polyzos</name>
+			<url>https://github.com/lampros-polyzos</url>
+		</developer>
 	</developers>
 	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
+		<connection>scm:git:https://github.com/lampros-polyzos/formularium.git</connection>
+		<developerConnection>scm:git:git@github.com:lampros-polyzos/formularium.git</developerConnection>
+		<url>https://github.com/lampros-polyzos/formularium</url>
 	</scm>
 	<properties>
 		<java.version>27</java.version>
