@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     let live = true;
-    const stop = onAuthChange(next => { if (live) setUser(next); });
+    const stop = onAuthChange(next => { if (live) { setUser(next); if (next) setIsLoading(false); } });   // someone signed in: no need to wait for the resume check
     // Resume the sign-in from an earlier visit, if the browser still has its refresh cookie
     refreshSession()
       .then(resumed => { if (live) setUser(resumed); })

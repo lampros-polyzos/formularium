@@ -33,6 +33,7 @@ let refreshing: Promise<AuthUser | null> | null = null;
 let expiresAt = 0;                 // when the access token stops working (ms since 1970)
 let renewTimer: ReturnType<typeof setTimeout> | undefined;
 let resumeFailed = false;          // the refresh cookie could not be tried because the server was unreachable or failing
+let generation = 0;                // counts every change of the session, so a slow answer about an OLDER state can be told apart and ignored
 const listeners = new Set<(user: AuthUser | null) => void>();
 
 /** Renew this long before the token expires, so a request never meets an expired one. */
@@ -41,6 +42,7 @@ const RENEW_EARLY_MS = 60_000;
 const RENEW_RETRY_MS = 15_000;
 
 function setSession(response: AuthResponse | null) {
+    generation++;
     accessToken = response?.accessToken ?? null;
     currentUser = response?.user ?? null;
     expiresAt = response ? Date.now() + response.expiresInSeconds * 1000 : 0;
@@ -158,15 +160,22 @@ const RETRY_DELAYS_MS = [400, 1200, 3000];
 export function refreshSession(): Promise<AuthUser | null> {
     watchForWakeUp();
     refreshing ??= (async () => {
+        const started = generation;
         try {
             for (let attempt = 0; ; attempt++) {
                 try {
                     const response = await post<AuthResponse>('/api/v1/auth/refresh');
+                    // Someone signed in (or out) while this was on its way: that is newer than what the cookie said when we asked
+                    if (generation !== started) return currentUser;
                     setSession(response);
                     return response.user;
                 } catch (e) {
                     if (!(e instanceof AuthError)) throw e;
-                    if (!isTransient(e)) { setSession(null); return null; }   // 401 and the like: the sign-in is really over
+                    if (!isTransient(e)) {   // 401 and the like: the sign-in is really over, unless a newer sign-in has happened since
+                        if (generation !== started) return currentUser;
+                        setSession(null);
+                        return null;
+                    }
                     if (attempt >= RETRY_DELAYS_MS.length) {
                         if (currentUser === null) resumeFailed = true;
                         scheduleRenewal(RENEW_RETRY_MS);   // keep trying quietly; the session is not given up
