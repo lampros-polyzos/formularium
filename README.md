@@ -5,17 +5,36 @@
 [![CI](https://github.com/lampros-polyzos/formularium/actions/workflows/ci.yml/badge.svg)](https://github.com/lampros-polyzos/formularium/actions/workflows/ci.yml)
 ![Java 27](https://img.shields.io/badge/Java-27-orange) ![Spring Boot 4](https://img.shields.io/badge/Spring_Boot-4-6DB33F) ![React 19](https://img.shields.io/badge/React-19-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1)
 
+![Building a formula in the editor: adding an ingredient and watching the live health check react](docs/images/demo.gif)
+
 ## Why it exists
 
 Hobbyists mix creams and serums from forum posts and spreadsheets, with no check that the percentages add up, that an ingredient is within its usage limit, or that two actives work together. Formularium puts that knowledge into a tool: the rules run as you type, and the whole workflow lives in one place, from the first idea to the logged batch.
 
 ## What you can do
 
-- **Formulate:** phases and percentages, auto-balancing to 100%, a library of 100+ cosmetic ingredients, one-click fixes for problems it finds, import of a recipe from text, version history.
+- **Formulate:** phases and percentages, auto-balancing to 100%, a library of 400+ cosmetic ingredients, one-click fixes for problems it finds, import of a recipe from text, version history.
 - **Validate:** traffic-light checks for total percentage, usage limits, pH, product-type constraints, ingredient interactions, preservation and stability, plus EU limits (Regulation 1223/2009, Annexes III and V).
 - **Make it:** turn a formula into a batch at any size. The stash is deducted and the cost worked out in one transaction. Follow it step by step in bench mode, with timers and check-ins.
 - **Plan and print:** "what can I make with what I own", a shopping list, a sourcing guide, and PDF product information files and batch records.
 - **Learn and share:** calculators (HLB, dilutions and more), beginner guides, and a community for sharing, remixing, rating and discussing recipes, with reports, muting and moderation.
+
+## A look around
+
+<a href="docs/images/editor.png"><img src="docs/images/editor.png" alt="The formula editor: phases and percentages with the live health check, ingredient insights and cost calculator beside them"></a>
+
+<table>
+  <tr>
+    <td width="33%"><a href="docs/images/studio.png"><img src="docs/images/studio.png" alt="The studio: your formulations as cards, with the starter formulas every new account gets"></a><br><sub><b>Studio</b>: your formulas</sub></td>
+    <td width="33%"><a href="docs/images/batch.png"><img src="docs/images/batch.png" alt="A batch with its stability check-ins and what went in, weighed from the stash"></a><br><sub><b>Batches</b>: check-ins, stash and costs</sub></td>
+    <td width="33%"><a href="docs/images/library.png"><img src="docs/images/library.png" alt="The ingredient library with search and filters by function, properties and solubility"></a><br><sub><b>Ingredient library</b>: 400+ materials</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/community.png"><img src="docs/images/community.png" alt="The community hub: recipes, discussions and advice with tag filters"></a><br><sub><b>Community</b>: share and remix</sub></td>
+    <td><a href="docs/images/learn.png"><img src="docs/images/learn.png" alt="The Learn page: a step-by-step path, glossary, cheat sheets and troubleshooting"></a><br><sub><b>Learn</b>: guides and glossary</sub></td>
+    <td><a href="docs/images/blog.png"><img src="docs/images/blog.png" alt="The formulator's blog: practical articles grouped by topic"></a><br><sub><b>Blog</b>: practical articles</sub></td>
+  </tr>
+</table>
 
 ## How it is built
 
