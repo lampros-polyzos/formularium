@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Date: 2026-11-06
+
 ## Context
 Notifications ("someone commented on your post") used a Supabase realtime channel. Without Supabase's client, the choices were server-sent events, WebSockets, or asking the API periodically.
 

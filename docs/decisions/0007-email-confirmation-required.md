@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Date: 2026-11-06
+
 ## Context
 Sign-up without confirming the address lets anyone register with someone else's email, and password reset needs a trustworthy address to send to.
 

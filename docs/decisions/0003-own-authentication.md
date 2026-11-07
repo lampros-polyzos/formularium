@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Date: 2026-11-06
+
 ## Context
 With Supabase handling sign-in, the Spring backend had no notion of who was calling. Moving sign-in into the backend means choosing how sessions work, and getting the security details right.
 

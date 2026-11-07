@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Date: 2026-11-06
+
 ## Context
 Carrying out [0001](0001-postgres-on-supabase-database-only.md) could not be a small step. The browser read about 22 tables straight from Supabase, and the database's policies and functions identified the user through Supabase's login. Data access therefore had to move together with sign-in, and a half-moved app does not work.
 

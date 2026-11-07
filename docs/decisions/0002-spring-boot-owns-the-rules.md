@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Date: 2026-10-28
+
 ## Context
 Formula validation existed in two places: a Supabase edge function and the Spring backend. Two implementations of the same rules drift apart, and "which one is right?" has no good answer.
 

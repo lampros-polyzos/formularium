@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Date: 2026-11-06
+
 ## Context
 Supabase relied on row-level security policies, evaluated against the signed-in user, to decide who could see and change what. With the backend connecting as the database owner, those policies no longer apply.
 

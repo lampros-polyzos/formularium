@@ -2,6 +2,8 @@
 
 Status: Accepted (replaces the earlier choice of H2 in PostgreSQL mode, which needed a `Dialect` class to cover the differences)
 
+Date: 2026-11-07
+
 ## Context
 The API tests started on H2 in PostgreSQL mode because it is quick and needs nothing installed. It is not PostgreSQL, though, and every gap needed a workaround: a `Dialect` class existed only to add the `jsonb` cast on one database and not the other. More important is what such a test cannot say. An H2 test passing means the SQL works on H2, not on production. The differences that matter for this app:
 - **Types:** `jsonb`, arrays and timestamps with time zone behave differently or do not exist.

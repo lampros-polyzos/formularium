@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Date: 2026-11-06
+
 ## Context
 The schema is owned by SQL migrations, and the interesting operations are specific: deduct stash with a guard, rewrite a formula's phases in one go, upsert a rating, return nested JSON-shaped formulas. An ORM would sit between those statements and the database.
 

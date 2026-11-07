@@ -2,6 +2,8 @@
 
 Status: Accepted (replaces the first design, where Supabase also provided sign-in, access policies, functions and triggers)
 
+Date: 2026-11-05
+
 ## Context
 The app began on Supabase's full platform: its sign-in, row-level security policies, about a dozen triggers and several database functions did much of the work, with the browser talking to the database directly. That was fast to start but meant the rules lived in places that are hard to test, review and move, and the Spring backend was only one part of the picture.
 
