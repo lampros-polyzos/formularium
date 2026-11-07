@@ -23,6 +23,8 @@ Work on a branch, in vertical slices, and merge only when the whole app works ag
 | Email confirmation and password reset | `20261123_email_verification_and_reset` |
 | Drop unused tables (`profiles`, `users`, `reviews`, `ingredient_safety_updates`) | `20261124_drop_unused_tables` |
 
+These migrations are now in [`supabase/migrations-archive/`](../../supabase/migrations-archive), kept for the history and no longer applied: the baseline in [`supabase/migrations`](../../supabase/migrations) replaced them (see the [data model](../data-model.md#migrations)).
+
 ## Consequences
 - **Good:** each step was small enough to test and review, and no rule was lost: every trigger or policy became a named Java rule with a test.
 - **Cost:** the branch was not usable between slices, and the migrations must be applied in order, at the same time as the matching backend is deployed.
