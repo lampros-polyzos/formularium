@@ -1,6 +1,6 @@
 -- Baseline schema: the whole `public` schema as it was in production after migration 20261124, so a database can be built from nothing.
 --
---   supabase db reset            (local, needs Docker)      or      psql -f supabase/migrations/20261100000000_baseline.sql
+--   supabase db reset            (local, needs Docker)      or      psql -f supabase/migrations/20261101000000_baseline.sql
 --
 -- Generated with pg_dump --schema-only --schema=public --no-owner --no-privileges against PostgreSQL 17, then cleaned by hand:
 --   * left out: row-level-security POLICIES (they used Supabase's auth.uid(); the design has none, see docs/decisions/0005),

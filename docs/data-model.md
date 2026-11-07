@@ -33,12 +33,12 @@ Files in [`supabase/migrations`](../supabase/migrations), named `YYYYMMDDHHMMSS_
 
 | File | What it is |
 |---|---|
-| `20261100000000_baseline.sql` | The whole `public` schema (25 tables, 4 enum types, indexes, constraints, row-level security switched on, no policies), dumped from production with `pg_dump` |
-| `20261100000001_reference_data.sql` | The shared ingredient library and the product types. Never anyone's own rows |
-| `20261125000000_align_production_with_baseline.sql` | Brings the existing production database in line with the baseline (drops the old policies and Supabase-specific column defaults). A no-op on a database built from the baseline |
-| `20261126000000_remove_duplicate_ingredients.sql` | Deletes two duplicate ingredients (BTMS-50 and Euxyl PE 9010 each existed twice) if nothing uses them, and adds a unique index so a shared ingredient's trade name cannot repeat |
+| `20261101000000_baseline.sql` | The whole `public` schema (25 tables, 4 enum types, indexes, constraints, row-level security switched on, no policies), dumped from production with `pg_dump` |
+| `20261101000001_reference_data.sql` | The shared ingredient library and the product types. Never anyone's own rows |
+| `20261108000000_align_production_with_baseline.sql` | Brings the existing production database in line with the baseline (drops the old policies and Supabase-specific column defaults). A no-op on a database built from the baseline |
+| `20261108000001_remove_duplicate_ingredients.sql` | Deletes two duplicate ingredients (BTMS-50 and Euxyl PE 9010 each existed twice) if nothing uses them, and adds a unique index so a shared ingredient's trade name cannot repeat |
 
-**Building a database from nothing:** run the first two files, or `supabase db reset`. **Production** already has the baseline, so it only needs the files after the first two (20261125 and 20261126); with the Supabase CLI, first mark the first two as applied (`supabase migration repair --status applied 20261100000000 20261100000001`), because the history was kept by hand.
+**Building a database from nothing:** run the first two files, or `supabase db reset`. **Production** already has the baseline, so it only needs the files after the first two (20261108000000 and 20261108000001); with the Supabase CLI, first mark the first two as applied (`supabase migration repair --status applied 20261101000000 20261101000001`), because the history was kept by hand.
 
 The migrations that built the schema step by step (20261110 to 20261124) are in `supabase/migrations-archive/` for the history. They must not be applied on top of the baseline.
 

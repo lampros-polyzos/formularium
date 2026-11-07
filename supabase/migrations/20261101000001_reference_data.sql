@@ -1,7 +1,7 @@
 -- Reference data: the shared ingredient library and the product types, as they were in production after migration 20261124.
 -- Only rows that belong to nobody (ingredients.user_id is null) are included, never anyone's own data. Safe to run twice: existing ids are kept.
 -- Each row is one line of JSON, read back with jsonb_populate_recordset, so the column types are the table's own.
--- 406 ingredients: production had 408, two duplicates (BTMS-50 and Euxyl PE 9010 spelled twice) were removed, see 20261126000000.
+-- 406 ingredients: production had 408, two duplicates (BTMS-50 and Euxyl PE 9010 spelled twice) were removed, see 20261108000001.
 
 insert into public.formulation_profiles
 select * from jsonb_populate_recordset(null::public.formulation_profiles, $seed$[

@@ -86,8 +86,8 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 
 ```bash
 # 1. Database: any PostgreSQL 15+. Build it from nothing with the project's own migrations, in order:
-#      psql "<connection string>" -f supabase/migrations/20261100000000_baseline.sql
-#      psql "<connection string>" -f supabase/migrations/20261100000001_reference_data.sql   # 400+ ingredients, product types
+#      psql "<connection string>" -f supabase/migrations/20261101000000_baseline.sql
+#      psql "<connection string>" -f supabase/migrations/20261101000001_reference_data.sql   # 400+ ingredients, product types
 #    or, with the Supabase CLI and Docker, a local copy:  supabase db reset
 
 # 2. Backend (http://localhost:8080)

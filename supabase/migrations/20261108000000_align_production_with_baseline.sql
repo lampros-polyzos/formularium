@@ -1,4 +1,4 @@
--- Brings the PRODUCTION database in line with the baseline (20261100000000), which describes the design: row-level security ON, no policies,
+-- Brings the PRODUCTION database in line with the baseline (20261101000000), which describes the design: row-level security ON, no policies,
 -- no dependence on Supabase's auth functions. A database built from the baseline already matches, so on it this changes nothing.
 -- Safe to run twice.
 --
