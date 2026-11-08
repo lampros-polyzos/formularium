@@ -110,4 +110,6 @@ Without an SMTP server the backend only logs emails, links included, so sign-up 
 
 A working solo project, still evolving. Honest gaps (the full list is in the [roadmap](docs/roadmap.md)): passkeys are not supported yet, notifications poll every 30 seconds instead of streaming, and regional limits cover the EU only. It supports a formulator's own safety checks and is **not** a substitute for a professional safety assessment.
 
+**How it was built.** I chose the stack and built the first version by hand (the commits up to 1 November are small, step-by-step ones). From 2 November I also used Claude Code, an AI coding assistant, for changes that touch many files, such as moving auth and data to the Spring backend. I make the design decisions and verify the results; the [decision records](docs/decisions/README.md) and the [engineering journal](docs/engineering-journal.md) show the reasoning.
+
 Built by [Lampros Polyzos](https://github.com/lampros-polyzos). Released under the [MIT License](LICENSE).
