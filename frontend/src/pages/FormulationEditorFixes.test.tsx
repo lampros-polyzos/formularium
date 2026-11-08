@@ -66,7 +66,8 @@ const FIXES = {
 };
 
 const settle = async (ms = 0) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
-const phaseBlock = (letter: string) => screen.getByText(new RegExp(`PHASE ${letter}`)).parentElement!.parentElement!;
+// A phase is a banner row and its ingredients, grouped in one <tbody> of the editor's single table
+const phaseBlock = (letter: string) => screen.getByText(new RegExp(`PHASE ${letter}`)).closest('tbody')!;
 
 async function openEditor() {
     render(

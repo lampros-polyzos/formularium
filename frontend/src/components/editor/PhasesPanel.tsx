@@ -46,193 +46,199 @@ export default function PhasesPanel({
     return (
         <div className="bg-white border border-[#c1d1b9] rounded-lg shadow-sm overflow-hidden text-sm" data-tour="phases">
 
-            {(['A', 'B', 'C'] as const).map((phaseLetter) => {
-                const phaseNames = {
-                    A: 'PHASE A (Water Phase)',
-                    B: 'PHASE B (Oil Phase)',
-                    C: 'PHASE C (Cool Down Phase)'
-                };
-                const phaseHeaderBg = {
-                    A: 'bg-[#cbd8d0]',
-                    B: 'bg-[#e6e1cd]',
-                    C: 'bg-[#bdcdbd]'
-                };
+            {/* One table for all phases: the column headers appear once at the top, and each phase is a banner row followed by its ingredients */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
+                    <thead>
+                        <tr className="text-xs text-gray-500">
+                            <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
+                            <th className="px-4 py-2 font-medium w-[23%]">Function</th>
+                            <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
+                            <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
+                            <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
+                            <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
+                        </tr>
+                    </thead>
+                    {(['A', 'B', 'C'] as const).map((phaseLetter) => {
+                        const phaseNames = {
+                            A: 'PHASE A (Water Phase)',
+                            B: 'PHASE B (Oil Phase)',
+                            C: 'PHASE C (Cool Down Phase)'
+                        };
+                        const phaseHeaderBg = {
+                            A: 'bg-[#cbd8d0]',
+                            B: 'bg-[#e6e1cd]',
+                            C: 'bg-[#bdcdbd]'
+                        };
 
-                const phaseItems = getPhaseIngredients(phaseLetter);
+                        const phaseItems = getPhaseIngredients(phaseLetter);
 
-                return (
-                    <div key={phaseLetter}>
-                        <div className={`${phaseHeaderBg[phaseLetter]} px-4 py-2 font-semibold flex justify-between border-t first:border-t-0 border-[#c1d1b9]`}>
-                            <span>{phaseNames[phaseLetter]}</span>
-                            <span className="text-xs font-normal text-gray-700">
-                                {phaseItems.reduce((sum, item) => sum + item.percentage, 0).toFixed(2)}%
-                            </span>
-                        </div>
-
-                        {phaseItems.length === 0 ? (
-                            <div className="p-4 text-gray-500 text-center text-xs italic bg-gray-50 border-b border-gray-100">
-                                No ingredients added to Phase {phaseLetter} yet.
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
-                                    <thead>
-                                        <tr className="border-b border-gray-200 text-xs text-gray-500">
-                                            <th className="px-4 py-2 font-medium w-[36%]">Ingredient</th>
-                                            <th className="px-4 py-2 font-medium w-[23%]">Function</th>
-                                            <th className="px-4 py-2 font-medium w-[12%]">Target %</th>
-                                            <th className="px-4 py-2 font-medium w-[10%]">Weight (g)</th>
-                                            <th className="px-4 py-2 font-medium w-[13%] text-center">Phase</th>
-                                            <th className="px-4 py-2 font-medium w-[6%] text-center">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {phaseItems.map((item) => {
-                                            const stock = showStashHints ? sourcing[item.originalIndex!] : undefined;
-                                            const needsAttention = stock && (stock.status === 'missing' || stock.status === 'low');
-                                            return (
-                                            <Fragment key={item.originalIndex}>
-                                            <tr className={`hover:bg-gray-50 ${needsAttention ? 'bg-amber-50/40' : 'border-b border-gray-100'}`}>
-                                                {/* 1. Ingredient Column */}
-                                                <td className="px-4 py-2 font-medium text-[#1f382a] truncate">
-                                                    <button
-                                                        onClick={() => onOpenDetails(item)}
-                                                        className="hover:underline hover:text-[#2c4c3b] text-left transition-colors flex flex-col"
-                                                        title="View ingredient details"
-                                                    >
-                                                        <span>{item.trade_name}</span>
-                                                        <span className="text-[10px] text-gray-500 font-normal">{item.inci_name}</span>
+                        return (
+                            <tbody key={phaseLetter}>
+                                <tr className={`${phaseHeaderBg[phaseLetter]} border-t border-[#c1d1b9]`}>
+                                    <th scope="rowgroup" colSpan={6} className="p-0 text-left">
+                                        <div className="px-4 py-2 font-semibold flex justify-between">
+                                            <span>{phaseNames[phaseLetter]}</span>
+                                            <span className="text-xs font-normal text-gray-700">
+                                                {phaseItems.reduce((sum, item) => sum + item.percentage, 0).toFixed(2)}%
+                                            </span>
+                                        </div>
+                                    </th>
+                                </tr>
+                                {phaseItems.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="p-4 text-gray-500 text-center text-xs italic bg-gray-50 border-b border-gray-100">
+                                            No ingredients added to Phase {phaseLetter} yet.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    <>
+                                {phaseItems.map((item) => {
+                                    const stock = showStashHints ? sourcing[item.originalIndex!] : undefined;
+                                    const needsAttention = stock && (stock.status === 'missing' || stock.status === 'low');
+                                    return (
+                                    <Fragment key={item.originalIndex}>
+                                    <tr className={`hover:bg-gray-50 ${needsAttention ? 'bg-amber-50/40' : 'border-b border-gray-100'}`}>
+                                        {/* 1. Ingredient Column */}
+                                        <td className="px-4 py-2 font-medium text-[#1f382a] truncate">
+                                            <button
+                                                onClick={() => onOpenDetails(item)}
+                                                className="hover:underline hover:text-[#2c4c3b] text-left transition-colors flex flex-col"
+                                                title="View ingredient details"
+                                            >
+                                                <span>{item.trade_name}</span>
+                                                <span className="text-[10px] text-gray-500 font-normal">{item.inci_name}</span>
+                                            </button>
+                                            {item.substitutedFor && (
+                                                <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate">
+                                                    ⇄ replaces {displayName(item.substitutedFor as unknown as CatalogIngredient)} ·{' '}
+                                                    <button onClick={() => onUndoSwap(item.originalIndex!)} className="text-[#2c4c3b] font-medium hover:underline">
+                                                        Undo
                                                     </button>
-                                                    {item.substitutedFor && (
-                                                        <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate">
-                                                            ⇄ replaces {displayName(item.substitutedFor as unknown as CatalogIngredient)} ·{' '}
-                                                            <button onClick={() => onUndoSwap(item.originalIndex!)} className="text-[#2c4c3b] font-medium hover:underline">
-                                                                Undo
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </td>
-
-                                                {/* 2. Function Column */}
-                                                <td className="px-4 py-2 text-gray-600 truncate">{item.function}</td>
-
-                                                {/* 3. Target % Column (with tightened spacing) */}
-                                                <td className="px-4 py-2">
-                                                    <div className="flex flex-col justify-center items-start">
-                                                        <div className="flex items-center gap-1">
-                                                        <div className="relative w-16">
-                                                            <input
-                                                                type="number"
-                                                                step="0.5"
-                                                                min="0"
-                                                                max="100"
-                                                                value={item.percentage === 0 ? '' : item.percentage}
-                                                                disabled={item.isQS}
-                                                                onChange={(e) => onPercentageChange(item.originalIndex!, e.target.value)}
-                                                                className={`w-full border rounded py-0.5 pl-1.5 pr-4 text-sm outline-none focus:ring-1 
-                                                        [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
-                                                        ${item.isQS
-                                                                        ? 'bg-blue-50 text-blue-700 font-bold border-blue-200 cursor-not-allowed'
-                                                                        : 'bg-white text-gray-800 border-gray-200 focus:ring-[#2c4c3b]'
-                                                                    }
-                                                        ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
-                                                                        ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
-                                                                        : ''
-                                                                    }`}
-                                                                placeholder="0"
-                                                            />
-                                                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
-                                                        </div>
-                                                        {!item.isQS && (
-                                                            <button
-                                                                onClick={() => onToggleLock(item.originalIndex!)}
-                                                                aria-label={item.locked ? 'Unlock percentage' : 'Lock percentage'}
-                                                                aria-pressed={!!item.locked}
-                                                                title={item.locked ? 'Locked: balancing keeps this value. Click to unlock.' : 'Lock this value so balancing never changes it'}
-                                                                className={`p-0.5 rounded transition-colors ${item.locked ? 'text-[#2c4c3b]' : 'text-gray-300 hover:text-gray-500'}`}
-                                                            >
-                                                                {item.locked ? <Lock size={12} /> : <LockOpen size={12} />}
-                                                            </button>
-                                                        )}
-                                                        </div>
-
-                                                        <div className="mt-0.5 leading-none">
-                                                            {item.isQS ? (
-                                                                <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Q.S. Base</span>
-                                                            ) : (
-                                                                (item.min_usage_pct !== null || item.max_usage_pct !== null) && (
-                                                                    <span
-                                                                        className={`text-[9px] font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
-                                                                            (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
-                                                                            ? 'text-amber-600 font-semibold'
-                                                                            : 'text-gray-400'
-                                                                            }`}
-                                                                        title={`Recommended range: ${item.min_usage_pct ?? 0}% - ${item.max_usage_pct ?? 100}%`}
-                                                                    >
-                                                                        {item.min_usage_pct !== null && item.max_usage_pct !== null
-                                                                            ? `${item.min_usage_pct}–${item.max_usage_pct}%`
-                                                                            : item.max_usage_pct !== null
-                                                                                ? `≤${item.max_usage_pct}%`
-                                                                                : `≥${item.min_usage_pct}%`}
-                                                                    </span>
-                                                                )
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-
-                                                {/* 4. Weight Column */}
-                                                <td className="px-4 py-2 text-gray-600">
-                                                    {item.percentage
-                                                        ? `${((item.percentage / 100) * targetWeight).toFixed(2)}g`
-                                                        : '0.00g'}
-                                                </td>
-
-                                                {/* 5. Phase Column (Moved here) */}
-                                                <td className="px-4 py-2">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <button
-                                                            onClick={() => onPhaseChange(item.originalIndex!, cyclePhase(item.phase, -1))}
-                                                            className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
-                                                        >
-                                                            ◀
-                                                        </button>
-                                                        <span className="font-bold text-gray-700 w-4 text-center">{item.phase}</span>
-                                                        <button
-                                                            onClick={() => onPhaseChange(item.originalIndex!, cyclePhase(item.phase, 1))}
-                                                            className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
-                                                        >
-                                                            ▶
-                                                        </button>
-                                                    </div>
-                                                </td>
-
-                                                {/* 6. Action Column */}
-                                                <td
-                                                    className="px-4 py-2 text-gray-400 cursor-pointer hover:text-red-500 text-center"
-                                                    onClick={() => onRemove(item.originalIndex!)}
-                                                    title="Remove ingredient"
-                                                >
-                                                    🗑
-                                                </td>
-                                            </tr>
-                                            {needsAttention && (
-                                                <SubstitutionHint
-                                                    item={stock}
-                                                    isSearching={isSearchingSubstitutes}
-                                                    onSwap={(option) => onSwap(item.originalIndex!, option)}
-                                                />
+                                                </div>
                                             )}
-                                            </Fragment>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
+                                        </td>
+
+                                        {/* 2. Function Column */}
+                                        <td className="px-4 py-2 text-gray-600 truncate">{item.function}</td>
+
+                                        {/* 3. Target % Column (with tightened spacing) */}
+                                        <td className="px-4 py-2">
+                                            <div className="flex flex-col justify-center items-start">
+                                                <div className="flex items-center gap-1">
+                                                <div className="relative w-16">
+                                                    <input
+                                                        type="number"
+                                                        step="0.5"
+                                                        min="0"
+                                                        max="100"
+                                                        value={item.percentage === 0 ? '' : item.percentage}
+                                                        disabled={item.isQS}
+                                                        onChange={(e) => onPercentageChange(item.originalIndex!, e.target.value)}
+                                                        className={`w-full border rounded py-0.5 pl-1.5 pr-4 text-sm outline-none focus:ring-1 
+                                                [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:_textfield]
+                                                ${item.isQS
+                                                                ? 'bg-blue-50 text-blue-700 font-bold border-blue-200 cursor-not-allowed'
+                                                                : 'bg-white text-gray-800 border-gray-200 focus:ring-[#2c4c3b]'
+                                                            }
+                                                ${!item.isQS && ((item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) || (item.max_usage_pct !== null && item.percentage > item.max_usage_pct))
+                                                                ? 'border-amber-500 text-amber-700 focus:ring-amber-500'
+                                                                : ''
+                                                            }`}
+                                                        placeholder="0"
+                                                    />
+                                                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">%</span>
+                                                </div>
+                                                {!item.isQS && (
+                                                    <button
+                                                        onClick={() => onToggleLock(item.originalIndex!)}
+                                                        aria-label={item.locked ? 'Unlock percentage' : 'Lock percentage'}
+                                                        aria-pressed={!!item.locked}
+                                                        title={item.locked ? 'Locked: balancing keeps this value. Click to unlock.' : 'Lock this value so balancing never changes it'}
+                                                        className={`p-0.5 rounded transition-colors ${item.locked ? 'text-[#2c4c3b]' : 'text-gray-300 hover:text-gray-500'}`}
+                                                    >
+                                                        {item.locked ? <Lock size={12} /> : <LockOpen size={12} />}
+                                                    </button>
+                                                )}
+                                                </div>
+
+                                                <div className="mt-0.5 leading-none">
+                                                    {item.isQS ? (
+                                                        <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Q.S. Base</span>
+                                                    ) : (
+                                                        (item.min_usage_pct !== null || item.max_usage_pct !== null) && (
+                                                            <span
+                                                                className={`text-[9px] font-mono tracking-tighter ${(item.min_usage_pct !== null && item.percentage < item.min_usage_pct && item.percentage > 0) ||
+                                                                    (item.max_usage_pct !== null && item.percentage > item.max_usage_pct)
+                                                                    ? 'text-amber-600 font-semibold'
+                                                                    : 'text-gray-400'
+                                                                    }`}
+                                                                title={`Recommended range: ${item.min_usage_pct ?? 0}% - ${item.max_usage_pct ?? 100}%`}
+                                                            >
+                                                                {item.min_usage_pct !== null && item.max_usage_pct !== null
+                                                                    ? `${item.min_usage_pct}–${item.max_usage_pct}%`
+                                                                    : item.max_usage_pct !== null
+                                                                        ? `≤${item.max_usage_pct}%`
+                                                                        : `≥${item.min_usage_pct}%`}
+                                                            </span>
+                                                        )
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* 4. Weight Column */}
+                                        <td className="px-4 py-2 text-gray-600">
+                                            {item.percentage
+                                                ? `${((item.percentage / 100) * targetWeight).toFixed(2)}g`
+                                                : '0.00g'}
+                                        </td>
+
+                                        {/* 5. Phase Column (Moved here) */}
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <button
+                                                    onClick={() => onPhaseChange(item.originalIndex!, cyclePhase(item.phase, -1))}
+                                                    className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
+                                                >
+                                                    ◀
+                                                </button>
+                                                <span className="font-bold text-gray-700 w-4 text-center">{item.phase}</span>
+                                                <button
+                                                    onClick={() => onPhaseChange(item.originalIndex!, cyclePhase(item.phase, 1))}
+                                                    className="text-gray-400 hover:text-[#2c4c3b] font-bold px-1"
+                                                >
+                                                    ▶
+                                                </button>
+                                            </div>
+                                        </td>
+
+                                        {/* 6. Action Column */}
+                                        <td
+                                            className="px-4 py-2 text-gray-400 cursor-pointer hover:text-red-500 text-center"
+                                            onClick={() => onRemove(item.originalIndex!)}
+                                            title="Remove ingredient"
+                                        >
+                                            🗑
+                                        </td>
+                                    </tr>
+                                    {needsAttention && (
+                                        <SubstitutionHint
+                                            item={stock}
+                                            isSearching={isSearchingSubstitutes}
+                                            onSwap={(option) => onSwap(item.originalIndex!, option)}
+                                        />
+                                    )}
+                                    </Fragment>
+                                    );
+                                })}
+                                    </>
+                                )}
+                            </tbody>
+                        );
+                    })}
+                </table>
+            </div>
 
             {/* Total Footer */}
             <div className="bg-[#f0f4ef] px-4 py-3 text-right font-medium flex flex-wrap justify-between gap-3 items-center border-t border-[#c1d1b9]" data-tour="total">

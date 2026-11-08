@@ -69,7 +69,8 @@ async function openAt(path: string) {
     await settle(600);
 }
 
-const phaseBlock = (letter: string) => screen.getByText(new RegExp(`PHASE ${letter}`)).parentElement!.parentElement!;
+// A phase is a banner row and its ingredients, grouped in one <tbody> of the editor's single table
+const phaseBlock = (letter: string) => screen.getByText(new RegExp(`PHASE ${letter}`)).closest('tbody')!;
 const stashOf = (...trades: string[]) => trades.map(t => ({ ingredient_id: LIBRARY.find(r => r.trade_name === t)!.id, amount_left_g: 500 }));
 
 beforeEach(() => {
