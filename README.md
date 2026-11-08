@@ -62,7 +62,7 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 - **Work that is never lost.** Autosave with a local draft store and visible save state, version history with restore, and a bench mode that keeps the screen awake (Wake Lock) while you mix a batch.
 - **Domain logic as small pure modules.** Auto-balancing, HLB and dilution calculators, regional-limit checks and batch planning are plain TypeScript functions with unit tests, separate from the React components.
 - **Public pages built for search.** Landing, guides and legal pages are prerendered at build time with per-page meta tags and structured data, while the app itself stays a client-side SPA.
-- **Accessible, tested UI.** Roles and labels throughout, and Testing Library tests that drive the UI the way a person does (1,600+ frontend tests).
+- **Accessible, tested UI.** Roles and labels throughout, and Testing Library tests that drive the UI the way a person does (1,700+ frontend tests).
 
 **Backend**
 - **Auth written from scratch.** Short-lived access token kept in memory only. Rotating refresh token in an HttpOnly cookie, stored hashed, with reuse detection. Google ID-token verification, Cloudflare Turnstile, three-layer sign-in throttling shared through the database, leaked-password rejection (Pwned Passwords, k-anonymity), optional two-step verification (authenticator app and recovery codes, secrets encrypted at rest), an audit trail, and email confirmation and password reset with single-use hashed links that don't reveal which emails have accounts. The design, what it covers and what it doesn't are in [docs/security.md](docs/security.md).
@@ -72,7 +72,7 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 
 **Across the stack**
 - **One feature, end to end.** "Make a batch" runs from the React modal, through the typed client and an authenticated endpoint, to one database transaction that deducts the stash and records the cost. It is tested at each layer: component tests, API tests with a real security setup, and the SQL itself.
-- **Safe database changes.** Every migration is idempotent and is run on a real Postgres engine (PGlite) in tests. About 235 backend tests run against a real PostgreSQL in a Testcontainers container (not H2), and a test fails when a new table holding personal data is missing from the data export.
+- **Safe database changes.** Every migration is idempotent and is run on a real Postgres engine (PGlite) in tests. 270+ backend tests run against a real PostgreSQL in a Testcontainers container (not H2), and a test fails when a new table holding personal data is missing from the data export.
 - **Privacy and secret hygiene.** Self-service data export and account deletion, plus a pre-commit hook that blocks leaked secrets.
 - **Decisions are written down.** Each significant choice has a short [decision record](docs/decisions/README.md) with its trade-offs, such as [moving auth and data from Supabase to Spring](docs/decisions/0008-move-to-spring-in-slices.md).
 

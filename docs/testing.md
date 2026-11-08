@@ -1,6 +1,6 @@
 # Testing
 
-About 280 backend tests and 1,700+ frontend tests. CI (`.github/workflows/ci.yml`) runs on every push and pull request to `main`: the frontend is linted, type-checked, built and tested, and the backend is tested.
+270+ backend tests and 1,700+ frontend tests (rounded down from a full run; recount with the commands below). CI (`.github/workflows/ci.yml`) runs on every push and pull request to `main`: the frontend is linted, type-checked, built and tested, and the backend is tested.
 
 ```bash
 cd backend  && ./mvnw test      # JDK 27

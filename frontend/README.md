@@ -51,7 +51,7 @@ A few conventions worth knowing:
 
 ## Tests
 
-`npm test` runs everything (1,600+ tests). A few patterns:
+`npm test` runs everything (1,700+ tests). A few patterns:
 
 - **Component and page tests** use Testing Library and mock the API modules (`vi.mock('../lib/communityApi')`), so they drive the UI the way a person does and need no server.
 - **`lib/` tests** are plain unit tests with no DOM.
