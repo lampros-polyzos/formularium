@@ -14,11 +14,12 @@
 - Two-step verification with an authenticator app, recovery codes and an enrollment screen ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
 - A baseline migration, so a database can be built from nothing, and API tests that run on a database built from it
 - Secret-leak protection: a pre-commit check that blocks staged secrets
+- Screenshots and a demo GIF in the README
 
 ## Next
 
-1. **Screenshots and a live demo** in the README (the biggest gap for a first impression)
-2. **Dockerfile and a deploy guide** for the backend, and a hosted demo
+1. **A live demo**: a hosted instance linked from the README (needs the deploy guide below)
+2. **Dockerfile and a deploy guide** for the backend
 3. **Passkeys (WebAuthn)**: phishing-resistant sign-in, the next step after the authenticator app ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
 4. **Change password while signed in**, **alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
 5. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
