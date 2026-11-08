@@ -20,11 +20,13 @@ import java.time.Duration;
  * @param cookieSameSite Lax when the site and API share a registrable domain, None when they do not (needs cookieSecure)
  * @param breachedPasswordCheck refuse passwords found in known data breaches (default true; only a 5-character hash prefix is sent out)
  * @param breachedPasswordUrl   the range service used for that check; the default is the free haveibeenpwned.com one
+ * @param mfaEncryptionKey      base64 of 32 random bytes, which encrypts authenticator secrets in the database. Empty switches two-step verification off.
+ *                              Independent of jwtSecret on purpose: rotating the token secret must not break everyone's authenticator.
  */
 @ConfigurationProperties("auth")
 public record AuthProperties(String jwtSecret, Duration accessTtl, Duration refreshTtl, String issuer, String googleClientId,
                              String turnstileSecret, boolean cookieSecure, String cookieSameSite, boolean requireVerifiedEmail, String appUrl, String mailFrom,
-                             Boolean breachedPasswordCheck, String breachedPasswordUrl) {
+                             Boolean breachedPasswordCheck, String breachedPasswordUrl, String mfaEncryptionKey) {
 
     public AuthProperties {
         if (jwtSecret == null || jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
@@ -37,6 +39,13 @@ public record AuthProperties(String jwtSecret, Duration accessTtl, Duration refr
         if (appUrl.endsWith("/")) appUrl = appUrl.substring(0, appUrl.length() - 1);
         if (mailFrom == null || mailFrom.isBlank()) mailFrom = "Formularium <no-reply@localhost>";
         if (cookieSameSite == null || cookieSameSite.isBlank()) cookieSameSite = "Lax";
+        if (mfaEncryptionKey != null && !mfaEncryptionKey.isBlank()) {
+            try {
+                if (java.util.Base64.getDecoder().decode(mfaEncryptionKey.trim()).length != 32) throw new IllegalArgumentException();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalStateException("auth.mfa-encryption-key (AUTH_MFA_ENCRYPTION_KEY) must be base64 of exactly 32 bytes. Make one with: openssl rand -base64 32");
+            }
+        }
         if (breachedPasswordCheck == null) breachedPasswordCheck = true;
         if (breachedPasswordUrl == null || breachedPasswordUrl.isBlank()) breachedPasswordUrl = "https://api.pwnedpasswords.com/range/";
     }

@@ -15,6 +15,16 @@ export interface AuthUser { id: string; email: string; username: string }
 
 interface AuthResponse { accessToken: string; expiresInSeconds: number; user: AuthUser }
 
+/**
+ * The password (or Google sign-in) was right, but the account has two-step verification, so nobody is signed in yet: the person must now give a code
+ * from their authenticator app (or a recovery code) with `completeMfaLogin`. The token is single-use and lasts five minutes.
+ */
+export interface MfaChallenge { mfaRequired: true; mfaToken: string }
+
+export const isMfaChallenge = (result: AuthUser | MfaChallenge): result is MfaChallenge => 'mfaRequired' in result;
+
+type LoginReply = AuthResponse | { mfa_required: true; mfa_token: string };
+
 /** An error from the sign-in endpoints. `code` is stable and safe to branch on; `message` is safe to show. */
 export class AuthError extends Error {
     readonly code: string;
@@ -130,15 +140,25 @@ export const forgotPassword = (input: { email: string; captchaToken?: string | n
 /** Sets a new password with the token from the reset email. Everything signed in with the old password is signed out. */
 export const resetPassword = (input: { token: string; password: string }) => post<void>('/api/v1/auth/reset-password', input);
 
-export async function login(input: { email: string; password: string; captchaToken?: string | null }): Promise<AuthUser> {
-    const response = await post<AuthResponse>('/api/v1/auth/login', input);
+/** Signs in with email and password. Returns the user, or a challenge when the account needs a code too (see {@link MfaChallenge}). */
+export async function login(input: { email: string; password: string; captchaToken?: string | null }): Promise<AuthUser | MfaChallenge> {
+    const response = await post<LoginReply>('/api/v1/auth/login', input);
+    if ('mfa_required' in response) return { mfaRequired: true, mfaToken: response.mfa_token };
+    setSession(response);
+    return response.user;
+}
+
+/** The second step of signing in: the one-time token from {@link login}, and a code from the app or a recovery code. */
+export async function completeMfaLogin(mfaToken: string, code: string): Promise<AuthUser> {
+    const response = await post<AuthResponse>('/api/v1/auth/login/mfa', { mfaToken, code });
     setSession(response);
     return response.user;
 }
 
 /** `idToken` is what Google's sign-in button hands the page. The server checks it with Google. */
-export async function loginWithGoogle(idToken: string): Promise<AuthUser> {
-    const response = await post<AuthResponse>('/api/v1/auth/google', { idToken });
+export async function loginWithGoogle(idToken: string): Promise<AuthUser | MfaChallenge> {
+    const response = await post<LoginReply>('/api/v1/auth/google', { idToken });
+    if ('mfa_required' in response) return { mfaRequired: true, mfaToken: response.mfa_token };
     setSession(response);
     return response.user;
 }

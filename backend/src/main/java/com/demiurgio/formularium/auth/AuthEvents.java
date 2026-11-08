@@ -24,6 +24,13 @@ class AuthEvents {
     static final String PASSWORD_RESET_DONE = "password_reset_done";
     /** An already-used refresh token came back after the grace period: the sign-in was ended as possibly stolen. */
     static final String REFRESH_REUSE = "refresh_reuse";
+    static final String MFA_ENABLED = "mfa_enabled";
+    static final String MFA_DISABLED = "mfa_disabled";
+    /** A wrong authenticator or recovery code (or, when setting up, a wrong password). Counted per account and per address. */
+    static final String MFA_FAILED = "mfa_failed";
+    static final String MFA_LOGIN_SUCCESS = "mfa_login_success";
+    static final String RECOVERY_CODE_USED = "recovery_code_used";
+    static final String RECOVERY_CODES_RENEWED = "recovery_codes_renewed";
 
     private final JdbcClient jdbc;
 
@@ -53,6 +60,11 @@ class AuthEvents {
         return jdbc.sql("select count(*) from auth_events where type = :type and " + column + " = :value and at >= :from and at <= :now")
                 .param("type", type).param("value", column.equals("ip") ? truncate(value, 64) : value)
                 .param("from", Timestamp.from(from)).param("now", Timestamp.from(now)).query(Long.class).single();
+    }
+
+    long countForUser(String type, UUID userId, Instant from, Instant now) {
+        return jdbc.sql("select count(*) from auth_events where type = :type and user_id = :user and at >= :from and at <= :now")
+                .param("type", type).param("user", userId).param("from", Timestamp.from(from)).param("now", Timestamp.from(now)).query(Long.class).single();
     }
 
     void deleteOlderThan(Instant cutoff) {

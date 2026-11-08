@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Slows down password guessing and inbox flooding. The counters are the rows of the audit trail ({@link AuthEvents}) in the database, so they are
@@ -24,6 +25,8 @@ class LoginAttemptLimiter {
     static final int MAX_FAILURES_PER_EMAIL = 20;
     static final int MAX_FAILURES_PER_IP = 30;
     static final Duration WINDOW = Duration.ofMinutes(15);
+    static final int MAX_MFA_FAILURES_PER_USER = 10;
+    static final int MAX_MFA_FAILURES_PER_IP = 30;
     static final int MAX_EMAILS_PER_IP = 10;
     static final Duration EMAIL_WINDOW = Duration.ofHours(1);
 
@@ -43,6 +46,16 @@ class LoginAttemptLimiter {
                 || events.count(AuthEvents.LOGIN_FAILED, "email_hash", emailHash, from, now) >= MAX_FAILURES_PER_EMAIL
                 || events.count(AuthEvents.LOGIN_FAILED, "ip", ip, from, now) >= MAX_FAILURES_PER_IP) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many failed attempts. Try again in a few minutes.");
+        }
+    }
+
+    /** For second-step codes: 10 wrong ones per account in the window (from anywhere), and 30 per address. A six-digit code is guessable without this. */
+    void checkMfa(UUID userId, String ip) {
+        Instant now = clock.instant();
+        Instant from = now.minus(WINDOW);
+        if (events.countForUser(AuthEvents.MFA_FAILED, userId, from, now) >= MAX_MFA_FAILURES_PER_USER
+                || events.count(AuthEvents.MFA_FAILED, "ip", ip, from, now) >= MAX_MFA_FAILURES_PER_IP) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many wrong codes. Try again in a few minutes.");
         }
     }
 

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthModal from './AuthModal';
 import { AuthError } from '../lib/authClient';
 
-const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn() }));
+const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn(), completeMfaLogin: vi.fn() }));
 
 vi.mock('../lib/authClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/authClient')>()),
@@ -14,6 +14,7 @@ vi.mock('../lib/authClient', async (importOriginal) => ({
   loginWithGoogle: mocks.loginWithGoogle,
   resendVerification: mocks.resendVerification,
   forgotPassword: mocks.forgotPassword,
+  completeMfaLogin: mocks.completeMfaLogin,
 }));
 
 vi.mock('@marsidev/react-turnstile', () => ({
@@ -36,6 +37,7 @@ beforeEach(() => {
   mocks.loginWithGoogle.mockReset();
   mocks.resendVerification.mockReset().mockResolvedValue(undefined);
   mocks.forgotPassword.mockReset().mockResolvedValue(undefined);
+  mocks.completeMfaLogin.mockReset().mockResolvedValue({ id: 'u1', email: 'test@example.com', username: 'tester' });
 });
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
@@ -152,5 +154,94 @@ describe('AuthModal', () => {
   it('offers no password reset on the sign-up form', () => {
     render(<AuthModal isOpen={true} onClose={vi.fn()} initialMode="signup" />);
     expect(screen.queryByRole('button', { name: 'Forgot your password?' })).not.toBeInTheDocument();
+  });
+});
+
+describe('AuthModal: the second step', () => {
+  const CHALLENGE = { mfaRequired: true, mfaToken: 'one-time-token' };
+
+  /** Fills in and submits the password form of an account that has two-step verification. */
+  const submitPassword = async () => {
+    type(/Email address/i, 'test@example.com');
+    type(/Password/i, 'password123');
+    const button = screen.getByRole('button', { name: /Sign In/i });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+  };
+
+  it('asks for the code after a right password, instead of closing', async () => {
+    mocks.login.mockResolvedValue(CHALLENGE);
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    await submitPassword();
+
+    expect(await screen.findByText(/Two-step verification/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Code$/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Password/i)).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();   // nobody is signed in yet
+  });
+
+  it('signs in with the code and the one-time token, then closes', async () => {
+    mocks.login.mockResolvedValue(CHALLENGE);
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    await submitPassword();
+
+    await screen.findByLabelText(/^Code$/i);
+    const verify = screen.getByRole('button', { name: /Verify/i });
+    expect(verify).toBeDisabled();   // not before there is a code
+    type(/^Code$/i, ' 123456 ');
+    fireEvent.click(verify);
+
+    await waitFor(() => expect(mocks.completeMfaLogin).toHaveBeenCalledWith('one-time-token', '123456'));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('takes a recovery code in the same box', async () => {
+    mocks.login.mockResolvedValue(CHALLENGE);
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await submitPassword();
+    await screen.findByLabelText(/^Code$/i);
+    type(/^Code$/i, 'ABCDE-FGHIJ');
+    fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
+    await waitFor(() => expect(mocks.completeMfaLogin).toHaveBeenCalledWith('one-time-token', 'ABCDE-FGHIJ'));
+  });
+
+  it('shows why a wrong code failed, keeps the window open and empties the box', async () => {
+    mocks.login.mockResolvedValue(CHALLENGE);
+    mocks.completeMfaLogin.mockRejectedValue(new AuthError('invalid_code', 'That code is not right. Check the app, or use a recovery code.', 401));
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    await submitPassword();
+    await screen.findByLabelText(/^Code$/i);
+    type(/^Code$/i, '000000');
+    fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That code is not right');
+    expect(screen.getByLabelText(/^Code$/i)).toHaveValue('');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('goes back to the sign-in form, with the reason, when the sign-in took too long or had too many wrong codes', async () => {
+    mocks.login.mockResolvedValue(CHALLENGE);
+    mocks.completeMfaLogin.mockRejectedValue(new AuthError('mfa_expired', 'Too many wrong codes. Please sign in again.', 401));
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await submitPassword();
+    await screen.findByLabelText(/^Code$/i);
+    type(/^Code$/i, '000000');
+    fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
+
+    expect(await screen.findByText(/Too many wrong codes/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Code$/i)).not.toBeInTheDocument();
+  });
+
+  it('lets you go back to the form from the code screen', async () => {
+    mocks.login.mockResolvedValue(CHALLENGE);
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await submitPassword();
+    await screen.findByLabelText(/^Code$/i);
+    fireEvent.click(screen.getByRole('button', { name: /Back to sign in/i }));
+    expect(await screen.findByRole('button', { name: /Sign In/i })).toBeInTheDocument();
   });
 });

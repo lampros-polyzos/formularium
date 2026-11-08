@@ -53,6 +53,9 @@ public class AccountExportService {
             "app_users",            // exported separately, without the password hash
             "refresh_tokens",       // sign-in secrets
             "email_tokens",         // one-time links sent by email, also secrets
+            "user_mfa",             // the encrypted authenticator secret
+            "mfa_recovery_codes",   // hashes of the recovery codes
+            "mfa_challenges",       // one-time sign-in tokens
             "community_moderators"  // a role given by the operators, not the member's own data
     );
 

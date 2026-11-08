@@ -33,4 +33,13 @@ public final class AuthRequests {
             @NotBlank @Size(min = 10, max = 72, message = "must be between 10 and 72 characters") String password) { }
 
     public record Google(@NotBlank @Size(max = 4096) String idToken) { }
+
+    /** The second step of signing in: the one-time token from the first step, and a code from the app (or a recovery code). */
+    public record MfaLogin(@NotBlank @Size(max = 200) String mfaToken, @NotBlank @Size(max = 64) String code) { }
+
+    /** Starting to set up two-step verification. The password is required for accounts that have one. */
+    public record MfaSetup(@Size(max = 200) String password) { }
+
+    /** A code from the app, or a recovery code. */
+    public record MfaCode(@NotBlank @Size(max = 64) String code) { }
 }

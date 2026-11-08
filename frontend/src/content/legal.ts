@@ -211,6 +211,7 @@ export const PRIVACY_POLICY: LegalDocument = {
                 "When you delete your account in Settings (or ask us to), your data is removed from our database straight away. Copies in backups are overwritten on a rolling basis, within **30 days**.",
                 "Community posts and comments are deleted with your account. Where deleting a comment would break a discussion, we may instead remove your name and keep the text anonymously.",
                 "Our sign-in security log (when you sign in, reset your password or confirm your email, with the time, your IP address and browser, never your password): **90 days**, to spot and stop attacks. It is included in the copy of your data you can download.",
+                "If you turn on two-step verification: your authenticator secret (stored encrypted) and your recovery codes (stored only as one-way hashes), until you turn it off or delete your account.",
                 "Security logs kept by our providers: for the short period they need them.",
             ],
         },

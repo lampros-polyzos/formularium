@@ -31,5 +31,5 @@ The API stays a standard OAuth2 resource server, so moving to an external provid
 
 ## Consequences
 - **Good:** no running cost, no third party holding the accounts, and the main attacks on a password-based system (guessing, stuffing, leaked passwords, inbox flooding, token theft) each have a control and a test.
-- **Cost:** the project carries the responsibility. These are still missing, and are listed in [docs/security.md](../security.md) and the [roadmap](../roadmap.md): multi-factor sign-in, a way to change a password while signed in, and alerts about sign-ins from new devices. Without MFA, a password that is strong and unbreached is the only barrier, which is the biggest remaining gap.
-- **Revisit** this decision if the app gets many users, needs MFA or single sign-on, or handles anything more sensitive than recipes.
+- **Cost:** the project carries the responsibility. At the time of this decision three things were missing: multi-factor sign-in, a way to change a password while signed in, and alerts about sign-ins from new devices. Without MFA, a strong, unbreached password was the only barrier, the biggest gap. Multi-factor sign-in was added the same day ([0011](0011-two-step-verification-with-an-authenticator-app.md)); the other two are on the [roadmap](../roadmap.md) and in [docs/security.md](../security.md).
+- **Revisit** this decision if the app gets many users, needs single sign-on, or handles anything more sensitive than recipes.

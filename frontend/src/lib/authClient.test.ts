@@ -221,6 +221,58 @@ describe('renewing before the token expires', () => {
     });
 });
 
+describe('signing in to an account with two-step verification', () => {
+    const challenge = { mfa_required: true, mfa_token: 'one-time-token' };
+
+    it('does not sign anyone in after the password alone, and hands back the one-time token', async () => {
+        fetchMock.mockResolvedValue(reply(200, challenge));
+        const seen: unknown[] = [];
+        client.onAuthChange(u => seen.push(u));
+
+        const result = await client.login({ email: 'sam@example.com', password: 'secret' });
+        expect(client.isMfaChallenge(result)).toBe(true);
+        expect(result).toEqual({ mfaRequired: true, mfaToken: 'one-time-token' });
+        expect(client.getAccessToken()).toBeNull();
+        expect(client.getCurrentUser()).toBeNull();
+        expect(seen).toEqual([]);   // nobody was told a user signed in
+    });
+
+    it('signs in once the code is given, with the one-time token', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, challenge)).mockResolvedValueOnce(reply(200, session('after-code')));
+        const first = await client.login({ email: 'sam@example.com', password: 'secret' });
+        if (!client.isMfaChallenge(first)) throw new Error('expected a challenge');
+
+        const user = await client.completeMfaLogin(first.mfaToken, '123456');
+        expect(user).toEqual(USER);
+        expect(client.getAccessToken()).toBe('after-code');
+        const [url, init] = fetchMock.mock.calls[1];
+        expect(String(url)).toBe('/api/v1/auth/login/mfa');
+        expect(init.credentials).toBe('include');   // the refresh cookie comes with this answer
+        expect(JSON.parse(init.body)).toEqual({ mfaToken: 'one-time-token', code: '123456' });
+    });
+
+    it('stays signed out, with the backend\'s reason, when the code is wrong or the sign-in expired', async () => {
+        fetchMock.mockResolvedValueOnce(error(401, 'invalid_code', 'That code is not right.')).mockResolvedValueOnce(error(401, 'mfa_expired', 'Please sign in again.'));
+        await expect(client.completeMfaLogin('t', '000000')).rejects.toMatchObject({ code: 'invalid_code', status: 401 });
+        await expect(client.completeMfaLogin('t', '000000')).rejects.toMatchObject({ code: 'mfa_expired' });
+        expect(client.getAccessToken()).toBeNull();
+    });
+
+    it('treats Google sign-in the same way', async () => {
+        fetchMock.mockResolvedValue(reply(200, challenge));
+        const result = await client.loginWithGoogle('google-id-token');
+        expect(result).toEqual({ mfaRequired: true, mfaToken: 'one-time-token' });
+        expect(client.getAccessToken()).toBeNull();
+    });
+
+    it('still returns the user straight away when there is no second step', async () => {
+        fetchMock.mockResolvedValue(reply(200, session()));
+        const result = await client.login({ email: 'sam@example.com', password: 'secret' });
+        expect(client.isMfaChallenge(result)).toBe(false);
+        expect(result).toEqual(USER);
+    });
+});
+
 describe('calling the signed-in API', () => {
     it('adds the access token', async () => {
         fetchMock.mockResolvedValueOnce(reply(200, session())).mockResolvedValueOnce(reply(200, { ok: true }));

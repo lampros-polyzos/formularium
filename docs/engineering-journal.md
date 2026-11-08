@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-08: A second factor without a vendor
+
+- **Situation.** The hardening left one large gap: a leaked or guessed password was still enough to take over an account, and the app was going to real users with no money for a provider.
+- **Task.** Add two-step verification that costs nothing, needs no phone number and fits the existing sign-in, including Google sign-in.
+- **Action.** Chose authenticator-app codes (TOTP) and wrote the algorithm on the standard library, verified against the RFC 6238 test vectors. Made the design decisions that matter more than the maths: the secret is encrypted at rest with its own key (not derived from the token secret, so routine rotation cannot break everyone); a code is single-use through a conditional `UPDATE`, so two racing requests cannot both win; a right password returns a one-time challenge stored hashed (not a JWT, so it can never pass as an access token) and no cookie, and the session only exists after the code; Google sign-in goes through the same step; setting up needs the password, so a stolen access token cannot bind the account to an attacker's phone; a password reset does not switch it off. Added recovery codes (hashed, shown once), an enrollment screen with a QR code rendered in the browser (the secret never goes to a third party), and throttling of code guesses.
+- **Result.** 28 backend and 27 frontend tests cover it, including replay, expiry, brute force, the swapped-ciphertext case and the "no key configured" case. The trade-offs are written down: there is no self-service recovery when the phone and the codes are both lost (an operator procedure instead), the key cannot be rotated yet, and phishing needs passkeys ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md)).
+
 ## 2026-11-08: Sign-in that is safe enough for real users, for free
 
 - **Situation.** The app was heading for real users, with no money for an identity provider, so "don't roll your own auth" had to be answered with evidence, not a shrug.

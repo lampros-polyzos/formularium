@@ -11,6 +11,7 @@
 - Data export and account deletion
 - Supabase reduced to a plain PostgreSQL host; every rule moved to tested Java ([ADR 0008](decisions/0008-move-to-spring-in-slices.md))
 - Sign-in hardening for real users: three-layer throttling in the database, leaked-password rejection, an audit trail, Dependabot and CodeQL ([ADR 0010](decisions/0010-keep-own-authentication-and-harden-it.md))
+- Two-step verification with an authenticator app, recovery codes and an enrollment screen ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
 - A baseline migration, so a database can be built from nothing, and API tests that run on a database built from it
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 
@@ -18,8 +19,8 @@
 
 1. **Screenshots and a live demo** in the README (the biggest gap for a first impression)
 2. **Dockerfile and a deploy guide** for the backend, and a hosted demo
-3. **Multi-factor sign-in** (an authenticator app code), the biggest remaining gap in [security.md](security.md)
-4. **Change password while signed in**, and **alerts for a sign-in from a new device**
+3. **Passkeys (WebAuthn)**: phishing-resistant sign-in, the next step after the authenticator app ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
+4. **Change password while signed in**, **alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
 5. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
 6. **Small admin tool** to grant moderator rights without hand-written SQL
 7. **CodeQL for the Java backend** (it scans the frontend only for now)

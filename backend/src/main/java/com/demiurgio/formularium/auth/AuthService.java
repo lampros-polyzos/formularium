@@ -15,8 +15,14 @@ import java.util.UUID;
 /** Sign-up, sign-in (password or Google), refresh-token rotation, sign-out and account deletion. */
 @Service
 public class AuthService {
+    /** What a correct password (or Google sign-in) leads to: a session, or, for an account with two-step verification, a challenge to answer first. */
+    public sealed interface LoginResult permits Session, MfaChallenge { }
+
     /** The response body for the client and the refresh token for the cookie. */
-    public record Session(AuthResponse response, String refreshToken) { }
+    public record Session(AuthResponse response, String refreshToken) implements LoginResult { }
+
+    /** The password was right, but a code from the authenticator app is still needed. No session exists yet. */
+    public record MfaChallenge(String token) implements LoginResult { }
 
     /** A refresh token that was used a moment ago is most likely a second tab racing the first, not theft. */
     private static final Duration REUSE_GRACE = Duration.ofSeconds(10);
@@ -28,6 +34,7 @@ public class AuthService {
     private final PasswordEncoder passwords;
     private final LoginAttemptLimiter limiter;
     private final AuthEvents events;
+    private final MfaService mfa;
     private final PasswordBreachChecker breach;
     private final CaptchaVerifier captcha;
     private final GoogleTokenVerifier google;
@@ -39,7 +46,7 @@ public class AuthService {
     private final String decoyHash;
 
     AuthService(UserRepository users, AccountCreator accounts, RefreshTokenRepository refreshTokens, TokenService tokens, PasswordEncoder passwords, LoginAttemptLimiter limiter,
-                AuthEvents events, PasswordBreachChecker breach, CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
+                AuthEvents events, MfaService mfa, PasswordBreachChecker breach, CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
         this.users = users;
         this.accounts = accounts;
         this.refreshTokens = refreshTokens;
@@ -47,6 +54,7 @@ public class AuthService {
         this.passwords = passwords;
         this.limiter = limiter;
         this.events = events;
+        this.mfa = mfa;
         this.breach = breach;
         this.captcha = captcha;
         this.google = google;
@@ -103,7 +111,7 @@ public class AuthService {
         }
     }
 
-    public Session login(AuthRequests.Login request, String ip, String userAgent) {
+    public LoginResult login(AuthRequests.Login request, String ip, String userAgent) {
         String email = normalizeEmail(request.email());
         String emailHash = TokenService.hash(email);
         limiter.check(emailHash, ip);
@@ -121,11 +129,12 @@ public class AuthService {
             // Said only after the password was right, so this does not tell strangers which emails have accounts
             throw new ApiException(HttpStatus.FORBIDDEN, "email_not_verified", "Please confirm your email address first. We sent you a link.");
         }
+        if (mfa.isEnabled(user.id())) return new MfaChallenge(mfa.startChallenge(user.id()));   // the session waits for the code
         users.touchLogin(user.id(), clock.instant());
         return startSession(user, userAgent);
     }
 
-    public Session loginWithGoogle(String idToken, String ip, String userAgent) {
+    public LoginResult loginWithGoogle(String idToken, String ip, String userAgent) {
         GoogleTokenVerifier.Identity who = google.verify(idToken);
         if (who.email() == null || !who.emailVerified()) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "email_not_verified", "Your Google account has no verified email address.");
@@ -143,8 +152,17 @@ public class AuthService {
                 user = createGoogleUser(email, who);
             }
         }
-        users.touchLogin(user.id(), clock.instant());
         record(AuthEvents.GOOGLE_LOGIN, null, ip, user.id(), userAgent);
+        if (mfa.isEnabled(user.id())) return new MfaChallenge(mfa.startChallenge(user.id()));   // two-step verification covers every way of signing in
+        users.touchLogin(user.id(), clock.instant());
+        return startSession(user, userAgent);
+    }
+
+    /** The second step: a right code (or recovery code) exchanges the one-time token for the session. */
+    public Session completeMfaLogin(AuthRequests.MfaLogin request, String ip, String userAgent) {
+        UUID userId = mfa.completeChallenge(request.mfaToken(), request.code(), ip, userAgent);
+        UserAccount user = users.findById(userId).orElseThrow(AuthService::noSession);
+        users.touchLogin(user.id(), clock.instant());
         return startSession(user, userAgent);
     }
 
@@ -246,6 +264,7 @@ public class AuthService {
         refreshTokens.deleteExpired(clock.instant());
         emailTokens.deleteExpired(clock.instant());
         events.deleteOlderThan(clock.instant().minus(EVENT_RETENTION));
+        mfa.purgeExpired();
     }
 
     /** Sign-in events hold addresses and browser strings, so they are not kept for long. */

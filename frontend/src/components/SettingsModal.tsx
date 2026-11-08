@@ -5,6 +5,7 @@ import { useDialog } from '../hooks/useDialog';
 import { updateUsername } from '../lib/authClient';
 import { REGIONS, regionFrom } from '../lib/regionalLimits';
 import AccountDataSection from './AccountDataSection';
+import TwoStepVerification from './TwoStepVerification';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -164,6 +165,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                             <option value="eu">{REGIONS.eu.label}</option>
                         </select>
                     </div>
+
+                    <TwoStepVerification />
 
                     <AccountDataSection />
                 </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AuthError, forgotPassword, login, loginWithGoogle, register, resendVerification } from '../lib/authClient';
+import { AuthError, completeMfaLogin, forgotPassword, isMfaChallenge, login, loginWithGoogle, register, resendVerification } from '../lib/authClient';
 import GoogleSignInButton from './GoogleSignInButton';
 import { Beaker, X } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -19,12 +19,15 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   // 'form' is sign in / sign up. 'confirm' asks you to click the link we emailed. 'forgot' asks for the email to send a reset link to.
-  const [view, setView] = useState<'form' | 'confirm' | 'forgot'>('form');
+  // 'mfa' is the second step for an account with two-step verification: a code from the authenticator app.
+  const [view, setView] = useState<'form' | 'confirm' | 'forgot' | 'mfa'>('form');
+  const [mfaToken, setMfaToken] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
   const [notice, setNotice] = useState('');
   // Each bot check can be used once, so a screen that needs another one starts with a fresh widget
   const [widgetKey, setWidgetKey] = useState(0);
 
-  const goTo = (next: 'form' | 'confirm' | 'forgot', note = '') => {
+  const goTo = (next: 'form' | 'confirm' | 'forgot' | 'mfa', note = '') => {
     setView(next);
     setNotice(note);
     setMessage('');
@@ -40,6 +43,30 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
 
   if (!isOpen) return null;
 
+  // The password was right, but the account wants a code before it signs anyone in
+  const startMfa = (token: string) => {
+    setMfaToken(token);
+    setMfaCode('');
+    goTo('mfa');
+  };
+
+  const handleMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setMessage('');
+    try {
+      await completeMfaLogin(mfaToken, mfaCode.trim());
+      onClose();
+    } catch (error) {
+      const message = error instanceof AuthError || error instanceof Error ? error.message : 'An error occurred.';
+      if (error instanceof AuthError && error.code === 'mfa_expired') { goTo('form'); setMessage(message); return; }   // too slow, or too many wrong codes: start again
+      setMessage(message);
+      setMfaCode('');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -52,7 +79,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
         const user = await register({ email, password, username: username.trim(), captchaToken });
         if (!user) { goTo('confirm', `We sent a confirmation link to ${email.trim()}.`); return; }   // not signed in until the link is clicked
       } else {
-        await login({ email, password, captchaToken });
+        const result = await login({ email, password, captchaToken });
+        if (isMfaChallenge(result)) { startMfa(result.mfaToken); return; }
       }
       onClose();   // signed in: the page behind the form notices and moves on
     } catch (error) {
@@ -87,7 +115,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
   const handleGoogleCredential = async (idToken: string) => {
     setMessage('');
     try {
-      await loginWithGoogle(idToken);
+      const result = await loginWithGoogle(idToken);
+      if (isMfaChallenge(result)) { startMfa(result.mfaToken); return; }
       onClose();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Google sign-in failed.');
@@ -118,7 +147,40 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
             {isSignUp ? 'Join the community of formulators.' : 'Sign in to access your studio.'}
           </p>
 
-          {view !== 'form' && (
+          {view === 'mfa' && (
+            <form className="space-y-5" onSubmit={handleMfa}>
+              <h3 className="text-center text-lg font-bold text-[#1f382a]">Two-step verification</h3>
+              <p className="text-center text-sm text-[#3a5a4a]">Enter the 6-digit code from your authenticator app. If you lost your phone, enter one of your recovery codes instead.</p>
+              <div>
+                <label htmlFor="mfa-code" className="block text-sm font-medium text-gray-700 mb-1">Code</label>
+                <input
+                  id="mfa-code"
+                  type="text"
+                  inputMode="text"
+                  required
+                  autoFocus
+                  autoComplete="one-time-code"
+                  maxLength={32}
+                  className="w-full px-4 py-3 bg-[#f7f8f6] border border-transparent rounded-xl tracking-widest text-center text-lg focus:outline-none focus:ring-2 focus:ring-[#2c4c3b] focus:bg-white transition-colors"
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value)}
+                />
+              </div>
+              {message && <div role="alert" className="text-sm font-medium p-3 rounded-xl bg-red-50 text-red-700">{message}</div>}
+              <button
+                type="submit"
+                disabled={isLoading || mfaCode.trim().length < 6}
+                className="w-full py-3.5 px-4 rounded-full shadow-sm text-sm font-bold text-white bg-[#2c4c3b] hover:bg-[#1f382a] focus:outline-none disabled:opacity-50 transition-colors"
+              >
+                {isLoading ? 'Checking...' : 'Verify'}
+              </button>
+              <button type="button" onClick={() => goTo('form')} className="block w-full text-center text-sm font-medium text-[#3a5a4a] hover:text-[#1f382a]">
+                Back to sign in
+              </button>
+            </form>
+          )}
+
+          {(view === 'confirm' || view === 'forgot') && (
             <form className="space-y-5" onSubmit={handleSendLink}>
               <h3 className="text-center text-lg font-bold text-[#1f382a]">{view === 'forgot' ? 'Reset your password' : 'Check your email'}</h3>
               <p role="status" className="text-center text-sm text-[#3a5a4a]">

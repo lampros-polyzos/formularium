@@ -6,7 +6,8 @@
 -- address and browser string are personal data, so they are exported with the account and purged after 90 days.
 --
 -- Types written by the backend: login_success, login_failed, google_login, register, email_verified, email_requested,
--- password_reset_requested, password_reset_done, refresh_reuse (an old refresh token came back: possible theft).
+-- password_reset_requested, password_reset_done, refresh_reuse (an old refresh token came back: possible theft), and for two-step
+-- verification: mfa_enabled, mfa_disabled, mfa_failed, mfa_login_success, recovery_code_used, recovery_codes_renewed.
 
 create table if not exists public.auth_events (
   id uuid primary key default gen_random_uuid(),

@@ -70,13 +70,19 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    ResponseEntity<AuthResponse> login(@Valid @RequestBody AuthRequests.Login body, HttpServletRequest request) {
-        return respond(HttpStatus.OK, auth.login(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+    ResponseEntity<?> login(@Valid @RequestBody AuthRequests.Login body, HttpServletRequest request) {
+        return respondLogin(auth.login(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+    }
+
+    /** The second step of signing in, for accounts with two-step verification. */
+    @PostMapping("/login/mfa")
+    ResponseEntity<AuthResponse> loginMfa(@Valid @RequestBody AuthRequests.MfaLogin body, HttpServletRequest request) {
+        return respond(HttpStatus.OK, auth.completeMfaLogin(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     @PostMapping("/google")
-    ResponseEntity<AuthResponse> google(@Valid @RequestBody AuthRequests.Google body, HttpServletRequest request) {
-        return respond(HttpStatus.OK, auth.loginWithGoogle(body.idToken(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+    ResponseEntity<?> google(@Valid @RequestBody AuthRequests.Google body, HttpServletRequest request) {
+        return respondLogin(auth.loginWithGoogle(body.idToken(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     @PostMapping("/refresh")
@@ -104,6 +110,14 @@ public class AuthController {
     ResponseEntity<Void> deleteAccount(@AuthenticationPrincipal Jwt jwt) {
         auth.deleteAccount(UUID.fromString(jwt.getSubject()));
         return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO).toString()).build();
+    }
+
+    /** A session (with its cookie), or, when a code is still needed, the one-time token for the second step and no cookie at all. */
+    private ResponseEntity<?> respondLogin(AuthService.LoginResult result) {
+        if (result instanceof AuthService.MfaChallenge challenge) {
+            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(Map.of("mfa_required", true, "mfa_token", challenge.token()));
+        }
+        return respond(HttpStatus.OK, (AuthService.Session) result);
     }
 
     private ResponseEntity<AuthResponse> respond(HttpStatus status, AuthService.Session session) {
