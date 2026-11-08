@@ -10,6 +10,7 @@ The Spring Boot API behind [Formularium](../README.md): sign-in, every read and 
 cp .env.example .env     # then fill it in; git-ignored. Required: the database and AUTH_JWT_SECRET
 ./mvnw spring-boot:run  # http://localhost:8080
 ./mvnw test            # needs Docker running: the tests start a PostgreSQL container
+docker build -t formularium-api .   # the container image used in production (see docs/deploy.md)
 ```
 
 Spring reads `backend/.env` when started from this folder; on a host, set the same names as real environment variables. **Every setting is explained in [`.env.example`](.env.example)**, which is the only list. The app will not start without `AUTH_JWT_SECRET`. A `config/application.properties` file also still works, for the same settings in Spring property form.

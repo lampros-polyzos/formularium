@@ -75,3 +75,15 @@ jobs:
       # Compiles, then runs every test. The tests start their own PostgreSQL in Docker (ubuntu-latest has it): no database or secrets needed
       - name: Run Spring Boot Tests
         run: ./mvnw clean test
+
+  docker:
+    name: Backend image (builds)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      # The image Render runs. Built here so a broken Dockerfile shows up on the pull request, not during a deploy.
+      # The tests do not run inside it: the backend job above runs them.
+      - name: Build the production image
+        run: docker build backend

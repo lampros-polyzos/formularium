@@ -5,7 +5,7 @@
 Please **do not open a public issue** for a security problem. Report it privately instead, in either way:
 
 - GitHub: the **Security** tab of this repository, then **Report a vulnerability**.
-- Email: l.polyzos.dev@gmail.com, with what you found and how to reproduce it.
+- Email: contact@formularium.dev, with what you found and how to reproduce it.
 
 You will get an answer within a few days. Please give a reasonable time to fix the problem before telling anyone else.
 
