@@ -2,9 +2,9 @@ package com.demiurgio.formularium.export;
 
 import com.demiurgio.formularium.dto.FormulaIngredient;
 import com.demiurgio.formularium.dto.ValidationRequest;
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.pdf.PdfWriter;
+import org.openpdf.text.Document;
+import org.openpdf.text.DocumentException;
+import org.openpdf.text.pdf.PdfWriter;
 
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;

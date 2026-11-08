@@ -1,23 +1,23 @@
 package com.demiurgio.formularium.export;
 
 import com.demiurgio.formularium.dto.FormulaIngredient;
-import com.lowagie.text.Chunk;
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
-import com.lowagie.text.pdf.BaseFont;
-import com.lowagie.text.pdf.ColumnText;
-import com.lowagie.text.pdf.PdfContentByte;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPCellEvent;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfPageEventHelper;
-import com.lowagie.text.pdf.PdfTemplate;
-import com.lowagie.text.pdf.PdfWriter;
+import org.openpdf.text.Chunk;
+import org.openpdf.text.Document;
+import org.openpdf.text.DocumentException;
+import org.openpdf.text.Element;
+import org.openpdf.text.Font;
+import org.openpdf.text.Paragraph;
+import org.openpdf.text.Phrase;
+import org.openpdf.text.Rectangle;
+import org.openpdf.text.pdf.BaseFont;
+import org.openpdf.text.pdf.ColumnText;
+import org.openpdf.text.pdf.PdfContentByte;
+import org.openpdf.text.pdf.PdfPCell;
+import org.openpdf.text.pdf.PdfPCellEvent;
+import org.openpdf.text.pdf.PdfPTable;
+import org.openpdf.text.pdf.PdfPageEventHelper;
+import org.openpdf.text.pdf.PdfTemplate;
+import org.openpdf.text.pdf.PdfWriter;
 
 import java.awt.Color;
 import java.time.LocalDate;
@@ -73,7 +73,7 @@ public final class PdfKit {
     // ---------- Document scaffolding ----------
 
     public static Document newDocument() {
-        return new Document(com.lowagie.text.PageSize.A4, 40, 40, 36, 54);
+        return new Document(org.openpdf.text.PageSize.A4, 40, 40, 36, 54);
     }
 
     // The writer of the document being built on this thread, so sections can check the space left on the page.

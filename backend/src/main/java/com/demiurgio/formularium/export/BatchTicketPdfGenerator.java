@@ -2,12 +2,12 @@ package com.demiurgio.formularium.export;
 
 import com.demiurgio.formularium.dto.FormulaIngredient;
 import com.demiurgio.formularium.dto.ValidationRequest;
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPTable;
+import org.openpdf.text.Document;
+import org.openpdf.text.DocumentException;
+import org.openpdf.text.Element;
+import org.openpdf.text.Paragraph;
+import org.openpdf.text.pdf.PdfPCell;
+import org.openpdf.text.pdf.PdfPTable;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -323,7 +323,7 @@ public class BatchTicketPdfGenerator extends AbstractPdfGenerator {
     }
 
     private static PdfPCell borderless(PdfPCell cell) {
-        cell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
+        cell.setBorder(org.openpdf.text.Rectangle.NO_BORDER);
         cell.setPaddingTop(3f);
         cell.setPaddingBottom(3f);
         return cell;
