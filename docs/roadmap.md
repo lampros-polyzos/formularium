@@ -15,17 +15,17 @@
 - A baseline migration, so a database can be built from nothing, and API tests that run on a database built from it
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 - Screenshots and a demo GIF in the README
+- Docker image for the backend, Render and Vercel configuration, and a step-by-step [deploy guide](deploy.md)
 
 ## Next
 
-1. **A live demo**: a hosted instance linked from the README (needs the deploy guide below)
-2. **Dockerfile and a deploy guide** for the backend
-3. **Passkeys (WebAuthn)**: phishing-resistant sign-in, the next step after the authenticator app ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
-4. **Change password while signed in**, **alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
-5. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
-6. **Small admin tool** to grant moderator rights without hand-written SQL
-7. **CodeQL for the Java backend** (it scans the frontend only for now)
-8. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
+1. **A live demo**: a hosted instance linked from the README (follow [deploy.md](deploy.md))
+2. **Passkeys (WebAuthn)**: phishing-resistant sign-in, the next step after the authenticator app ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
+3. **Change password while signed in**, **alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
+4. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
+5. **Small admin tool** to grant moderator rights without hand-written SQL
+6. **CodeQL for the Java backend** (it scans the frontend only for now)
+7. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
 
 ## Known limitations
 

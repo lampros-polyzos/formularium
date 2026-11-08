@@ -10,7 +10,7 @@ export const LEGAL = {
     /** Postal address of the operator. Required for EU/UK users. */
     address: "Katerou 8, 47132, Arta",
     /** Where users send privacy requests, account deletion requests and questions. */
-    contactEmail: "l.polyzos.dev@gmail.com",
+    contactEmail: "contact@formularium.dev",
     /** Country whose law governs the Terms, e.g. "Greece" or "England and Wales". */
     governingLaw: "Greece",
     /** Where the app and its API are hosted, e.g. "Vercel (USA)" or "Hetzner (Germany)". */

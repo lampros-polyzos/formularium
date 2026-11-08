@@ -1,0 +1,52 @@
+# Render Blueprint: describes the backend service, so it can be created from the repository in one step.
+# Secrets are NOT written here. Render asks for the ones marked "sync: false" when the Blueprint is first applied.
+# The full list of settings, with explanations, is in backend/.env.example; the steps are in docs/deploy.md.
+services:
+  - type: web
+    name: formularium-api
+    runtime: docker
+    region: frankfurt            # close to the database (Supabase, eu-west)
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/v1/public/health
+    autoDeploy: true             # a push to main deploys; CI runs the tests on the same push
+    envVars:
+      # --- where the website lives
+      - key: CORS_ALLOWED_ORIGIN
+        value: https://formularium.dev
+      - key: APP_URL
+        value: https://formularium.dev
+      # --- sign-in: the website and the API share a site (formularium.dev and api.formularium.dev), so Lax works
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_COOKIE_SAMESITE
+        value: Lax
+      - key: AUTH_REQUIRE_VERIFIED_EMAIL
+        value: "true"
+      - key: AUTH_JWT_SECRET
+        generateValue: true      # Render makes a long random value, once
+      # --- email
+      - key: MAIL_FROM
+        value: "Formularium <no-reply@formularium.dev>"
+      - key: MAIL_PORT
+        value: "587"
+      # --- secrets to enter in the Render dashboard
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: AUTH_MFA_ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: TURNSTILE_SECRET
+        sync: false
+      - key: MAIL_HOST
+        sync: false
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false

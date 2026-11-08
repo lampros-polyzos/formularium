@@ -78,7 +78,7 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 
 ## Documentation
 
-[Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Decision records](docs/decisions/README.md) · [Testing](docs/testing.md) · [Security](docs/security.md) · [Engineering journal](docs/engineering-journal.md) · [Roadmap](docs/roadmap.md) · [Backend](backend/README.md) · [Frontend](frontend/README.md)
+[Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Decision records](docs/decisions/README.md) · [Testing](docs/testing.md) · [Security](docs/security.md) · [Deploying](docs/deploy.md) · [Engineering journal](docs/engineering-journal.md) · [Roadmap](docs/roadmap.md) · [Backend](backend/README.md) · [Frontend](frontend/README.md)
 
 ## Run it locally
 
