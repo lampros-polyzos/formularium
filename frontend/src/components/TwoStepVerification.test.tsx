@@ -4,13 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TwoStepVerification from './TwoStepVerification';
 
 const mocks = vi.hoisted(() => ({
-    fetchMfaStatus: vi.fn(), startMfaSetup: vi.fn(), enableMfa: vi.fn(), disableMfa: vi.fn(), newRecoveryCodes: vi.fn(), toDataURL: vi.fn(), downloadTextFile: vi.fn(),
+    fetchMfaStatus: vi.fn(), startMfaSetup: vi.fn(), enableMfa: vi.fn(), disableMfa: vi.fn(), newRecoveryCodes: vi.fn(), toString: vi.fn(), downloadTextFile: vi.fn(),
 }));
 
 vi.mock('../lib/mfaClient', () => ({
     fetchMfaStatus: mocks.fetchMfaStatus, startMfaSetup: mocks.startMfaSetup, enableMfa: mocks.enableMfa, disableMfa: mocks.disableMfa, newRecoveryCodes: mocks.newRecoveryCodes,
 }));
-vi.mock('qrcode', () => ({ default: { toDataURL: mocks.toDataURL } }));
+vi.mock('qrcode', () => ({ default: { toString: mocks.toString } }));
 vi.mock('../lib/accountData', () => ({ downloadTextFile: mocks.downloadTextFile }));
 
 const OFF = { available: true, enabled: false, recoveryCodesLeft: 0, needsPassword: true };
@@ -21,7 +21,7 @@ beforeEach(() => {
     Object.values(mocks).forEach(m => m.mockReset());
     mocks.fetchMfaStatus.mockResolvedValue(OFF);
     mocks.startMfaSetup.mockResolvedValue({ secret: 'ABCDEFGHJKLMNPQR', otpauthUri: 'otpauth://totp/Formularium:a%40b.co?secret=ABCDEFGHJKLMNPQR' });
-    mocks.toDataURL.mockResolvedValue('data:image/png;base64,QR');
+    mocks.toString.mockResolvedValue('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1H0z"/></svg>');
     mocks.enableMfa.mockResolvedValue(CODES);
 });
 afterEach(cleanup);
@@ -54,8 +54,11 @@ describe('TwoStepVerification', () => {
         click(/Continue/i);
         await waitFor(() => expect(mocks.startMfaSetup).toHaveBeenCalledWith('my password'));
 
-        expect(await screen.findByAltText(/QR code to scan/i)).toHaveAttribute('src', 'data:image/png;base64,QR');
-        expect(mocks.toDataURL).toHaveBeenCalledWith('otpauth://totp/Formularium:a%40b.co?secret=ABCDEFGHJKLMNPQR', expect.anything());
+        const qr = await screen.findByAltText(/QR code to scan/i);
+        expect(qr.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);   // an SVG, not a canvas picture: Firefox's tracking protection scrambles canvases
+        expect(decodeURIComponent(qr.getAttribute('src')!)).toContain('<svg');
+        // the address inside the code is the one the server made, with the standard blank border around it (what scanners need)
+        expect(mocks.toString).toHaveBeenCalledWith('otpauth://totp/Formularium:a%40b.co?secret=ABCDEFGHJKLMNPQR', expect.objectContaining({ type: 'svg', margin: 4 }));
         expect(screen.getByText('ABCD EFGH JKLM NPQR')).toBeInTheDocument();   // the key to type by hand, in groups of four
 
         const turnOn = screen.getByRole('button', { name: /Turn on/i });

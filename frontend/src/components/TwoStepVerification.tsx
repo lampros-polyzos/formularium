@@ -11,7 +11,7 @@ const grouped = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
 type Step =
     | { name: 'idle' }
     | { name: 'password' }                                          // asks for the password before starting
-    | { name: 'scan'; setup: MfaSetup; qr: string }                 // the QR code, and the first code to prove it works
+    | { name: 'scan'; setup: MfaSetup; qr: string }                 // the QR code (an SVG address), and the first code to prove it works
     | { name: 'codes'; codes: string[] }                            // the recovery codes, shown once
     | { name: 'confirm'; action: 'off' | 'codes' };                 // a code is needed to turn it off, or to get new recovery codes
 
@@ -66,7 +66,10 @@ export default function TwoStepVerification() {
 
     const begin = (pw?: string) => run(async () => {
         const setup = await startMfaSetup(pw);
-        const qr = await QRCode.toDataURL(setup.otpauthUri, { margin: 1, width: 192 });
+        // Drawn as SVG, not through a canvas: browsers with strict tracking protection (Firefox) scramble canvas pixels, which corrupts a QR code.
+        // A vector image also stays sharp at any size, and the generous blank border (margin 4, the standard) is what scanners need.
+        const svg = await QRCode.toString(setup.otpauthUri, { type: 'svg', margin: 4, errorCorrectionLevel: 'M' });
+        const qr = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
         setPassword('');
         setStep({ name: 'scan', setup, qr });
     }, 'Could not start the setup. Please try again.');
@@ -132,7 +135,7 @@ export default function TwoStepVerification() {
                         <li>Enter the 6-digit code the app shows to finish.</li>
                     </ol>
                     <div className="flex justify-center mb-2">
-                        <img src={step.qr} alt="QR code to scan with your authenticator app" width={192} height={192} className="border border-gray-200 rounded-lg" />
+                        <img src={step.qr} alt="QR code to scan with your authenticator app" width={240} height={240} className="border border-gray-200 rounded-lg bg-white" />
                     </div>
                     <p className="text-xs text-gray-500 text-center mb-3">Cannot scan? Enter this key in the app instead: <span className="font-mono text-gray-800 select-all">{grouped(step.setup.secret)}</span></p>
                     <label htmlFor="mfa-first-code" className="block text-sm font-medium text-gray-700 mb-1">6-digit code</label>
