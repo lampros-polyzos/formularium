@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
@@ -26,6 +27,8 @@ public class AuthService {
     private final TokenService tokens;
     private final PasswordEncoder passwords;
     private final LoginAttemptLimiter limiter;
+    private final AuthEvents events;
+    private final PasswordBreachChecker breach;
     private final CaptchaVerifier captcha;
     private final GoogleTokenVerifier google;
     private final AuthProperties properties;
@@ -36,13 +39,15 @@ public class AuthService {
     private final String decoyHash;
 
     AuthService(UserRepository users, AccountCreator accounts, RefreshTokenRepository refreshTokens, TokenService tokens, PasswordEncoder passwords, LoginAttemptLimiter limiter,
-                CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
+                AuthEvents events, PasswordBreachChecker breach, CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
         this.users = users;
         this.accounts = accounts;
         this.refreshTokens = refreshTokens;
         this.tokens = tokens;
         this.passwords = passwords;
         this.limiter = limiter;
+        this.events = events;
+        this.breach = breach;
         this.captcha = captcha;
         this.google = google;
         this.properties = properties;
@@ -54,6 +59,25 @@ public class AuthService {
 
     static String normalizeEmail(String email) { return email.trim().toLowerCase(Locale.ROOT); }
 
+    /** bcrypt reads only the first 72 BYTES (not characters), so a longer password is refused rather than silently cut. */
+    private static final int MAX_PASSWORD_BYTES = 72;
+
+    private static boolean fitsBcrypt(String password) { return password.getBytes(StandardCharsets.UTF_8).length <= MAX_PASSWORD_BYTES; }
+
+    /** For a password someone is about to SET (sign-up, reset): short enough for bcrypt, and not one that is known from a data breach. */
+    private void requireUsablePassword(String password) {
+        if (!fitsBcrypt(password)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "password_too_long", "That password is too long: the limit is 72 bytes (72 letters; fewer if it has accents or emoji).");
+        }
+        if (breach.isBreached(password)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "password_breached", "That password has appeared in a known data breach, so it is not safe to use. Please choose a different one.");
+        }
+    }
+
+    private void record(String type, String email, String ip, UUID userId, String userAgent) {
+        events.record(type, email == null ? null : TokenService.hash(normalizeEmail(email)), ip, userId, userAgent, clock.instant());
+    }
+
     /** The confirmation link is valid for a day, the reset link for an hour; a new one is not sent more than once a minute. */
     static final Duration VERIFY_TTL = Duration.ofDays(1);
     static final Duration RESET_TTL = Duration.ofHours(1);
@@ -62,12 +86,16 @@ public class AuthService {
     /** @return the new session, or null when the email must be confirmed first (a link was sent) */
     public Session register(AuthRequests.Register request, String ip, String userAgent) {
         requireCaptcha(request.captchaToken(), ip);
+        requireUsablePassword(request.password());
+        if (properties.requireVerifiedEmail()) limiter.checkEmailRequest(ip);
         String email = normalizeEmail(request.email());
         String username = request.username().trim();
         if (users.findByEmail(email).isPresent() || users.usernameTaken(username)) throw accountExists();
         try {
             UserAccount user = accounts.create(email, passwords.encode(request.password()), null, username, properties.requireVerifiedEmail() ? null : clock.instant());
+            record(AuthEvents.REGISTER, email, ip, user.id(), userAgent);
             if (!properties.requireVerifiedEmail()) return startSession(user, userAgent);
+            record(AuthEvents.EMAIL_REQUESTED, null, ip, user.id(), userAgent);
             sendVerification(user);
             return null;
         } catch (DuplicateKeyException e) {
@@ -77,17 +105,18 @@ public class AuthService {
 
     public Session login(AuthRequests.Login request, String ip, String userAgent) {
         String email = normalizeEmail(request.email());
-        String key = email + "|" + ip;
-        limiter.check(key);
+        String emailHash = TokenService.hash(email);
+        limiter.check(emailHash, ip);
         requireCaptcha(request.captchaToken(), ip);
         UserAccount user = users.findByEmail(email).orElse(null);
         String hash = user != null && user.passwordHash() != null ? user.passwordHash() : decoyHash;
-        boolean matches = passwords.matches(request.password(), hash);
+        boolean tooLong = !fitsBcrypt(request.password());   // cannot be anyone's password; still spend the same time hashing
+        boolean matches = passwords.matches(tooLong ? "" : request.password(), hash) && !tooLong;
         if (user == null || user.passwordHash() == null || !matches) {
-            limiter.failed(key);
+            events.record(AuthEvents.LOGIN_FAILED, emailHash, ip, user == null ? null : user.id(), userAgent, clock.instant());
             throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "The email or password is not right.");
         }
-        limiter.succeeded(key);
+        events.record(AuthEvents.LOGIN_SUCCESS, emailHash, ip, user.id(), userAgent, clock.instant());
         if (properties.requireVerifiedEmail() && !user.emailVerified()) {
             // Said only after the password was right, so this does not tell strangers which emails have accounts
             throw new ApiException(HttpStatus.FORBIDDEN, "email_not_verified", "Please confirm your email address first. We sent you a link.");
@@ -96,7 +125,7 @@ public class AuthService {
         return startSession(user, userAgent);
     }
 
-    public Session loginWithGoogle(String idToken, String userAgent) {
+    public Session loginWithGoogle(String idToken, String ip, String userAgent) {
         GoogleTokenVerifier.Identity who = google.verify(idToken);
         if (who.email() == null || !who.emailVerified()) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "email_not_verified", "Your Google account has no verified email address.");
@@ -115,11 +144,12 @@ public class AuthService {
             }
         }
         users.touchLogin(user.id(), clock.instant());
+        record(AuthEvents.GOOGLE_LOGIN, null, ip, user.id(), userAgent);
         return startSession(user, userAgent);
     }
 
     /** Swaps a valid refresh token for a new one (the old one stops working). A token used twice ends the whole sign-in. */
-    public Session refresh(String refreshToken, String userAgent) {
+    public Session refresh(String refreshToken, String ip, String userAgent) {
         if (refreshToken == null || refreshToken.isBlank()) throw noSession();
         RefreshTokenRepository.Stored stored = refreshTokens.findByHash(TokenService.hash(refreshToken)).orElseThrow(AuthService::noSession);
         Instant now = clock.instant();
@@ -128,6 +158,7 @@ public class AuthService {
                 throw new ApiException(HttpStatus.CONFLICT, "refresh_in_progress", "The session was just renewed. Try again.");
             }
             refreshTokens.revokeFamily(stored.familyId());   // an old token came back: assume it was stolen
+            record(AuthEvents.REFRESH_REUSE, null, ip, stored.userId(), userAgent);
             throw noSession();
         }
         if (!stored.expiresAt().isAfter(now)) throw noSession();
@@ -142,19 +173,25 @@ public class AuthService {
         EmailTokenRepository.Found found = emailTokens.findUsable(TokenService.hash(token), EmailTokenRepository.VERIFY, now).orElseThrow(AuthService::badLink);
         if (!emailTokens.markUsed(found.id(), now)) throw badLink();
         users.markEmailVerified(found.userId(), now);
+        record(AuthEvents.EMAIL_VERIFIED, null, null, found.userId(), null);
     }
 
     /** Sends a new confirmation link. Answers the same whether or not the email has an account that needs one. */
     public void resendVerification(AuthRequests.EmailOnly request, String ip) {
         requireCaptcha(request.captchaToken(), ip);
+        limiter.checkEmailRequest(ip);
+        record(AuthEvents.EMAIL_REQUESTED, null, ip, null, null);   // counted whether or not the address has an account, so the answer stays the same
         users.findByEmail(normalizeEmail(request.email())).filter(u -> !u.emailVerified()).ifPresent(this::sendVerification);
     }
 
     /** Sends a password reset link. Answers the same whether or not the email has an account. */
     public void forgotPassword(AuthRequests.EmailOnly request, String ip) {
         requireCaptcha(request.captchaToken(), ip);
+        limiter.checkEmailRequest(ip);
+        record(AuthEvents.EMAIL_REQUESTED, null, ip, null, null);
         users.findByEmail(normalizeEmail(request.email())).ifPresent(user -> {
             Instant now = clock.instant();
+            record(AuthEvents.PASSWORD_RESET_REQUESTED, null, ip, user.id(), null);
             if (recentlySent(user.id(), EmailTokenRepository.RESET, now)) return;
             emailTokens.cancelUnused(user.id(), EmailTokenRepository.RESET, now);
             String token = tokens.newRefreshToken();
@@ -168,6 +205,7 @@ public class AuthService {
 
     /** Sets a new password from the link in the email, and signs the account out everywhere. */
     public void resetPassword(AuthRequests.ResetPassword request) {
+        requireUsablePassword(request.password());   // before the link is used up, so a refused password can be changed and tried again
         Instant now = clock.instant();
         EmailTokenRepository.Found found = emailTokens.findUsable(TokenService.hash(request.token()), EmailTokenRepository.RESET, now).orElseThrow(AuthService::badLink);
         if (!emailTokens.markUsed(found.id(), now)) throw badLink();
@@ -175,6 +213,7 @@ public class AuthService {
         users.markEmailVerified(found.userId(), now);   // the link reached their inbox, so the address is theirs
         emailTokens.cancelUnused(found.userId(), EmailTokenRepository.RESET, now);
         refreshTokens.revokeAllForUser(found.userId());
+        record(AuthEvents.PASSWORD_RESET_DONE, null, null, found.userId(), null);
     }
 
     public void logout(String refreshToken) {
@@ -206,7 +245,11 @@ public class AuthService {
     public void purgeExpiredTokens() {
         refreshTokens.deleteExpired(clock.instant());
         emailTokens.deleteExpired(clock.instant());
+        events.deleteOlderThan(clock.instant().minus(EVENT_RETENTION));
     }
+
+    /** Sign-in events hold addresses and browser strings, so they are not kept for long. */
+    static final Duration EVENT_RETENTION = Duration.ofDays(90);
 
     private UserAccount createGoogleUser(String email, GoogleTokenVerifier.Identity who) {
         String base = (who.name() != null && !who.name().isBlank() ? who.name() : email.substring(0, email.indexOf('@')))

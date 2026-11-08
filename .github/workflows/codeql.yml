@@ -1,0 +1,41 @@
+name: CodeQL
+
+# Static analysis for security problems (injection, unsafe handling of user input and so on). Free for public repositories.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '23 4 * * 1'   # weekly, in case a new rule finds something in old code
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # To scan the backend as well, add java-kotlin here (build-mode none needs no build). Not enabled yet: check first that CodeQL
+        # understands the Java version in backend/pom.xml.
+        language: [ javascript-typescript ]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

@@ -76,12 +76,12 @@ public class AuthController {
 
     @PostMapping("/google")
     ResponseEntity<AuthResponse> google(@Valid @RequestBody AuthRequests.Google body, HttpServletRequest request) {
-        return respond(HttpStatus.OK, auth.loginWithGoogle(body.idToken(), request.getHeader(HttpHeaders.USER_AGENT)));
+        return respond(HttpStatus.OK, auth.loginWithGoogle(body.idToken(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     @PostMapping("/refresh")
     ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
-        return respond(HttpStatus.OK, auth.refresh(refreshCookie(request), request.getHeader(HttpHeaders.USER_AGENT)));
+        return respond(HttpStatus.OK, auth.refresh(refreshCookie(request), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     @PostMapping("/logout")

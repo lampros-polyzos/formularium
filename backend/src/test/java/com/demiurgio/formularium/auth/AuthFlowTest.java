@@ -73,6 +73,7 @@ class AuthFlowTest {
 
     @BeforeEach
     void clean() {
+        jdbc.update("delete from auth_events");
         jdbc.update("delete from refresh_tokens");
         jdbc.update("delete from app_users");
         GOOGLE.clear();

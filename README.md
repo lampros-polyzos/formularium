@@ -65,7 +65,7 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 - **Accessible, tested UI.** Roles and labels throughout, and Testing Library tests that drive the UI the way a person does (1,600+ frontend tests).
 
 **Backend**
-- **Auth written from scratch.** Short-lived access token kept in memory only. Rotating refresh token in an HttpOnly cookie, stored hashed, with reuse detection. Google ID-token verification, Cloudflare Turnstile, sign-in throttling, and email confirmation and password reset with single-use hashed links that don't reveal which emails have accounts.
+- **Auth written from scratch.** Short-lived access token kept in memory only. Rotating refresh token in an HttpOnly cookie, stored hashed, with reuse detection. Google ID-token verification, Cloudflare Turnstile, three-layer sign-in throttling shared through the database, leaked-password rejection (Pwned Passwords, k-anonymity), an audit trail, and email confirmation and password reset with single-use hashed links that don't reveal which emails have accounts. The design, what it covers and what it doesn't are in [docs/security.md](docs/security.md).
 - **Authorization in Java, not in the database.** Ownership is enforced in every query and covered by tests. About a dozen Postgres triggers and row-level-security policies were ported to tested Java services (community rules, limits, notifications, moderation).
 - **Real transactions around real data.** Creating a batch deducts stash lots with a guard against overdrawing and computes the cost atomically. Saving a formula rewrites its phases in one transaction.
 - **Server-side rules and documents.** The validation rules engine and the PDF exports (product information file, batch record, shopping list) run in Spring.
@@ -78,7 +78,7 @@ Supabase is used **only as a PostgreSQL host**. Authentication, authorization, v
 
 ## Documentation
 
-[Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Decision records](docs/decisions/README.md) · [Testing](docs/testing.md) · [Engineering journal](docs/engineering-journal.md) · [Roadmap](docs/roadmap.md) · [Backend](backend/README.md) · [Frontend](frontend/README.md)
+[Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Decision records](docs/decisions/README.md) · [Testing](docs/testing.md) · [Security](docs/security.md) · [Engineering journal](docs/engineering-journal.md) · [Roadmap](docs/roadmap.md) · [Backend](backend/README.md) · [Frontend](frontend/README.md)
 
 ## Run it locally
 
@@ -108,6 +108,6 @@ Without an SMTP server the backend only logs emails, links included, so sign-up 
 
 ## Status and limits
 
-A working solo project, still evolving. Honest gaps (the full list is in the [roadmap](docs/roadmap.md)): sign-in throttling is in memory (fine for one instance, needs a shared store for several), notifications poll every 30 seconds instead of streaming, and regional limits cover the EU only. It supports a formulator's own safety checks and is **not** a substitute for a professional safety assessment.
+A working solo project, still evolving. Honest gaps (the full list is in the [roadmap](docs/roadmap.md)): there is no multi-factor sign-in yet, notifications poll every 30 seconds instead of streaming, and regional limits cover the EU only. It supports a formulator's own safety checks and is **not** a substitute for a professional safety assessment.
 
 Built by [Lampros Polyzos](https://github.com/lampros-polyzos). Released under the [MIT License](LICENSE).

@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-08: Sign-in that is safe enough for real users, for free
+
+- **Situation.** The app was heading for real users, with no money for an identity provider, so "don't roll your own auth" had to be answered with evidence, not a shrug.
+- **Task.** Find out what was actually weak in the own-built sign-in and fix what matters, without adding cost.
+- **Action.** Read the code against a production threat model and found five gaps: login throttling lived in memory and only covered one account from one address (so rotating addresses, or one password across many accounts, got through, and a restart or second instance reset it); no check for leaked passwords; no audit trail; a 72-limit that counted characters while bcrypt counts bytes; and a doubt about the cookie endpoints that turned out to be unfounded, because Spring's CORS handling already refuses a foreign origin (a test now proves it, and the guard I had written was deleted). Fixed the rest: a database table that serves as both the audit trail and the throttle's counters (three layers, shared across instances), the free Pwned Passwords range check with k-anonymity that fails open, byte-length validation, an email-request limit per address, and 90-day retention with the events shown in the account export and the privacy policy. Added Dependabot, CodeQL and a security policy, and wrote the decision and the known gaps down ([ADR 0010](decisions/0010-keep-own-authentication-and-harden-it.md), [docs/security.md](security.md)).
+- **Result.** The main attacks on a password sign-in each have a control and a test. MFA is still missing and is stated as the biggest remaining gap. Also learned: a test that wipes the table it needs to check silently passes for the wrong reason, so each throttling test now builds its account first.
+
 ## 2026-11-07: Nobody could build the database
 
 - **Situation.** The migrations were small changes on top of a schema first made by clicking in the Supabase dashboard, so there was no way to create the database from nothing. The backend tests ran on a hand-kept copy of the tables that had quietly drifted from production.

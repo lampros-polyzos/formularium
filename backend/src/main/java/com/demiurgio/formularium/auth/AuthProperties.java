@@ -18,10 +18,13 @@ import java.time.Duration;
  * @param appUrl         the website's address, used for the links in emails
  * @param mailFrom       the sender shown on emails
  * @param cookieSameSite Lax when the site and API share a registrable domain, None when they do not (needs cookieSecure)
+ * @param breachedPasswordCheck refuse passwords found in known data breaches (default true; only a 5-character hash prefix is sent out)
+ * @param breachedPasswordUrl   the range service used for that check; the default is the free haveibeenpwned.com one
  */
 @ConfigurationProperties("auth")
 public record AuthProperties(String jwtSecret, Duration accessTtl, Duration refreshTtl, String issuer, String googleClientId,
-                             String turnstileSecret, boolean cookieSecure, String cookieSameSite, boolean requireVerifiedEmail, String appUrl, String mailFrom) {
+                             String turnstileSecret, boolean cookieSecure, String cookieSameSite, boolean requireVerifiedEmail, String appUrl, String mailFrom,
+                             Boolean breachedPasswordCheck, String breachedPasswordUrl) {
 
     public AuthProperties {
         if (jwtSecret == null || jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
@@ -34,5 +37,7 @@ public record AuthProperties(String jwtSecret, Duration accessTtl, Duration refr
         if (appUrl.endsWith("/")) appUrl = appUrl.substring(0, appUrl.length() - 1);
         if (mailFrom == null || mailFrom.isBlank()) mailFrom = "Formularium <no-reply@localhost>";
         if (cookieSameSite == null || cookieSameSite.isBlank()) cookieSameSite = "Lax";
+        if (breachedPasswordCheck == null) breachedPasswordCheck = true;
+        if (breachedPasswordUrl == null || breachedPasswordUrl.isBlank()) breachedPasswordUrl = "https://api.pwnedpasswords.com/range/";
     }
 }

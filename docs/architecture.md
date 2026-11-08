@@ -65,4 +65,4 @@ config/     security and CORS
 
 ## Deployment
 
-Not deployed yet. The backend is one stateless jar (it needs the settings in [`backend/.env.example`](../backend/.env.example)) and the frontend is static files from `npm run build`, so any host that runs Java and serves static files will do. One limit to know about: the sign-in attempt counter lives in memory, so run a single backend instance or move it to a shared store first (see the [roadmap](roadmap.md)).
+Not deployed yet. The backend is one stateless jar (it needs the settings in [`backend/.env.example`](../backend/.env.example)) and the frontend is static files from `npm run build`, so any host that runs Java and serves static files will do. Several instances can run side by side: sessions and the sign-in throttling live in the database. The backend must only be reachable through the proxy that sets the client address (see the checklist in [security.md](security.md)).

@@ -19,7 +19,7 @@ export const LEGAL = {
     supabaseRegion: "us-east-1",
     /** Minimum age to create an account. 16 is the safe default across the EU. */
     minimumAge: 16,
-    lastUpdated: "2026-11-04",
+    lastUpdated: "2026-11-08",
 } as const;
 
 export interface LegalDocument {
@@ -210,6 +210,7 @@ export const PRIVACY_POLICY: LegalDocument = {
                 "Account data and your content: for as long as you have an account.",
                 "When you delete your account in Settings (or ask us to), your data is removed from our database straight away. Copies in backups are overwritten on a rolling basis, within **30 days**.",
                 "Community posts and comments are deleted with your account. Where deleting a comment would break a discussion, we may instead remove your name and keep the text anonymously.",
+                "Our sign-in security log (when you sign in, reset your password or confirm your email, with the time, your IP address and browser, never your password): **90 days**, to spot and stop attacks. It is included in the copy of your data you can download.",
                 "Security logs kept by our providers: for the short period they need them.",
             ],
         },

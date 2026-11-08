@@ -37,6 +37,7 @@ Files in [`supabase/migrations`](../supabase/migrations), named `YYYYMMDDHHMMSS_
 | `20261101000001_reference_data.sql` | The shared ingredient library and the product types. Never anyone's own rows |
 | `20261108000000_align_production_with_baseline.sql` | Brings the existing production database in line with the baseline (drops the old policies and Supabase-specific column defaults). A no-op on a database built from the baseline |
 | `20261108000001_remove_duplicate_ingredients.sql` | Deletes two duplicate ingredients (BTMS-50 and Euxyl PE 9010 each existed twice) if nothing uses them, and adds a unique index so a shared ingredient's trade name cannot repeat |
+| `20261108000002_auth_events.sql` | The `auth_events` table: the audit trail of sign-ins, failures, resets and replayed tokens (no passwords, no raw emails, 90 days), which the login throttle also reads |
 
 **Building a database from nothing:** run the first two files, or `supabase db reset`. **Production** already has the baseline, so it only needs the files after the first two (20261108000000 and 20261108000001); with the Supabase CLI, first mark the first two as applied (`supabase migration repair --status applied 20261101000000 20261101000001`), because the history was kept by hand.
 

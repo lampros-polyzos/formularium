@@ -45,7 +45,8 @@ public class AccountExportService {
             new Source("recipe_ratings", "user_id = :uid"),
             new Source("notifications", "recipient_id = :uid"),
             new Source("community_mutes", "user_id = :uid"),
-            new Source("content_reports", "reporter_id = :uid"));
+            new Source("content_reports", "reporter_id = :uid"),
+            new Source("auth_events", "user_id = :uid"));   // their own sign-ins and resets: time, address and browser
 
     /** Tables that have a column pointing at a person but are deliberately left out of the export. */
     static final List<String> NOT_EXPORTED = List.of(
