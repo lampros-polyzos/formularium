@@ -2,6 +2,8 @@
 
 **A workbench for home skincare formulators:** design a recipe in percentages, get instant safety and compatibility checks, then turn it into a real batch with stash tracking, costs and printable lab sheets.
 
+**Try it live: [formularium.dev](https://formularium.dev)** (free to sign up). The backend runs on a free plan that sleeps when idle, so the first request after a quiet spell can take up to a minute.
+
 [![CI](https://github.com/lampros-polyzos/formularium/actions/workflows/ci.yml/badge.svg)](https://github.com/lampros-polyzos/formularium/actions/workflows/ci.yml)
 ![Java 27](https://img.shields.io/badge/Java-27-orange) ![Spring Boot 4](https://img.shields.io/badge/Spring_Boot-4-6DB33F) ![React 19](https://img.shields.io/badge/React-19-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1)
 

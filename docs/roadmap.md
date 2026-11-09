@@ -16,16 +16,16 @@
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 - Screenshots and a demo GIF in the README
 - Docker image for the backend, Render and Vercel configuration, and a step-by-step [deploy guide](deploy.md)
+- **Live at [formularium.dev](https://formularium.dev)**: website on Vercel, API on Render (`api.formularium.dev`), PostgreSQL on Supabase, DNSSEC, email through Brevo, with the sign-in limits counting the visitor's real address
 
 ## Next
 
-1. **A live demo**: a hosted instance linked from the README (follow [deploy.md](deploy.md))
-2. **Passkeys (WebAuthn)**: phishing-resistant sign-in, the next step after the authenticator app ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
-3. **Change password while signed in**, **alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
-4. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
-5. **Small admin tool** to grant moderator rights without hand-written SQL
-6. **CodeQL for the Java backend** (it scans the frontend only for now)
-7. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
+1. **Passkeys (WebAuthn)**: phishing-resistant sign-in, the next step after the authenticator app ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
+2. **Change password while signed in**, **alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
+3. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
+4. **Small admin tool** to grant moderator rights without hand-written SQL
+5. **CodeQL for the Java backend** (it scans the frontend only for now)
+6. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
 
 ## Known limitations
 
