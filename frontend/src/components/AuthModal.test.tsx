@@ -17,20 +17,25 @@ vi.mock('../lib/authClient', async (importOriginal) => ({
   completeMfaLogin: mocks.completeMfaLogin,
 }));
 
+// Every new widget gives one token, as the real one does (and a token is good for one use): the first is 'mock-captcha-token', the next ones 'mock-captcha-token-2', '-3'...
+const widgets = vi.hoisted(() => ({ made: 0 }));
+
 vi.mock('@marsidev/react-turnstile', () => ({
   Turnstile: ({ onSuccess }: { onSuccess: (token: string) => void }) => {
     // Fire synchronously during initial mount
     const fired = React.useRef(false);
     if (!fired.current) {
       fired.current = true;
+      const token = ++widgets.made === 1 ? 'mock-captcha-token' : `mock-captcha-token-${widgets.made}`;
       // Queue microtask so React processes it right after initial render
-      queueMicrotask(() => onSuccess('mock-captcha-token'));
+      queueMicrotask(() => onSuccess(token));
     }
     return <div data-testid="turnstile-mock" />;
   },
 }));
 
 beforeEach(() => {
+  widgets.made = 0;
   vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');   // whatever the developer's own .env says
   mocks.login.mockReset().mockResolvedValue({ id: 'u1', email: 'test@example.com', username: 'tester' });
   mocks.register.mockReset().mockResolvedValue({ id: 'u1', email: 'test@example.com', username: 'tester' });
@@ -92,6 +97,59 @@ describe('AuthModal', () => {
     await waitFor(() => expect(submitButton).toBeEnabled());
   });
 
+  it('after a wrong password the next try carries a NEW bot check, so it can be retried without reloading the page', async () => {
+    mocks.login.mockRejectedValueOnce(new AuthError('invalid_credentials', 'The email or password is not right.', 401));
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    type(/Email address/i, 'test@example.com');
+    type(/Password/i, 'wrong');
+    const submit = screen.getByRole('button', { name: /Sign In/i });
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.click(submit);
+    expect(await screen.findByText('The email or password is not right.')).toBeInTheDocument();
+
+    type(/Password/i, 'the right one');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Sign In/i })).toBeEnabled());   // enabled again only once a new check has been passed
+    fireEvent.click(screen.getByRole('button', { name: /Sign In/i }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(mocks.login).toHaveBeenNthCalledWith(1, { email: 'test@example.com', password: 'wrong', captchaToken: 'mock-captcha-token' });
+    expect(mocks.login).toHaveBeenNthCalledWith(2, { email: 'test@example.com', password: 'the right one', captchaToken: 'mock-captcha-token-2' });   // not the used one again
+  });
+
+  it('the same for sign-up: a refusal (for example, the address is taken) leaves a fresh bot check for the next try', async () => {
+    mocks.register.mockRejectedValueOnce(new AuthError('account_exists', 'An account with this email already exists.', 409));
+    render(<AuthModal isOpen={true} onClose={vi.fn()} initialMode="signup" />);
+    type(/Username/i, 'sam');
+    type(/Email address/i, 'sam@example.com');
+    type(/Password/i, 'a long enough password');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Sign Up/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /Sign Up/i }));
+    expect(await screen.findByText('An account with this email already exists.')).toBeInTheDocument();
+
+    type(/Email address/i, 'sam2@example.com');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Sign Up/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /Sign Up/i }));
+    await waitFor(() => expect(mocks.register).toHaveBeenCalledTimes(2));
+    expect(mocks.register.mock.calls[1][0].captchaToken).toBe('mock-captcha-token-2');
+  });
+
+  it('asking for a reset link that fails also leaves a fresh bot check', async () => {
+    mocks.forgotPassword.mockRejectedValueOnce(new Error('Too many requests. Try again later.'));
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Forgot your password/i }));
+    type(/Email address/i, 'test@example.com');
+    const send = () => screen.getByRole('button', { name: /Send reset link/i });
+    await waitFor(() => expect(send()).toBeEnabled());
+    fireEvent.click(send());
+    expect(await screen.findByText('Too many requests. Try again later.')).toBeInTheDocument();
+
+    await waitFor(() => expect(send()).toBeEnabled());
+    fireEvent.click(send());
+    await waitFor(() => expect(mocks.forgotPassword).toHaveBeenCalledTimes(2));
+    expect(mocks.forgotPassword.mock.calls[0][0].captchaToken).not.toBe(mocks.forgotPassword.mock.calls[1][0].captchaToken);
+  });
+
   it('shows no Google button when the site has no Google client id', () => {
     render(<AuthModal isOpen={true} onClose={vi.fn()} />);
     expect(screen.queryByTestId('google-button')).not.toBeInTheDocument();
@@ -126,7 +184,7 @@ describe('AuthModal', () => {
     const send = screen.getByRole('button', { name: 'Send a new link' });
     await waitFor(() => expect(send).toBeEnabled());
     fireEvent.click(send);
-    await waitFor(() => expect(mocks.resendVerification).toHaveBeenCalledWith({ email: 'sam@example.com', captchaToken: 'mock-captcha-token' }));
+    await waitFor(() => expect(mocks.resendVerification).toHaveBeenCalledWith({ email: 'sam@example.com', captchaToken: 'mock-captcha-token-2' }));   // the second screen has its own, new check
     expect(await screen.findByText(/we sent a new link/i)).toBeInTheDocument();
   });
 
@@ -139,7 +197,7 @@ describe('AuthModal', () => {
     await waitFor(() => expect(send).toBeEnabled());
     fireEvent.click(send);
 
-    await waitFor(() => expect(mocks.forgotPassword).toHaveBeenCalledWith({ email: 'nobody@example.com', captchaToken: 'mock-captcha-token' }));
+    await waitFor(() => expect(mocks.forgotPassword).toHaveBeenCalledWith({ email: 'nobody@example.com', captchaToken: 'mock-captcha-token-2' }));   // the second screen has its own, new check
     expect(await screen.findByText(/If that address has an account/)).toBeInTheDocument();
   });
 

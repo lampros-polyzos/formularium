@@ -27,12 +27,17 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
   // Each bot check can be used once, so a screen that needs another one starts with a fresh widget
   const [widgetKey, setWidgetKey] = useState(0);
 
+  // The server has used up the bot check once it has looked at it, success or not, so the next try needs a new one
+  const freshBotCheck = () => {
+    setCaptchaToken(null);
+    setWidgetKey(k => k + 1);
+  };
+
   const goTo = (next: 'form' | 'confirm' | 'forgot' | 'mfa', note = '') => {
     setView(next);
     setNotice(note);
     setMessage('');
-    setCaptchaToken(null);
-    setWidgetKey(k => k + 1);
+    freshBotCheck();
   };
 
   useEffect(() => {
@@ -85,6 +90,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
       onClose();   // signed in: the page behind the form notices and moves on
     } catch (error) {
       if (error instanceof AuthError && error.code === 'email_not_verified') { goTo('confirm', 'Your email address is not confirmed yet. Open the link we sent you, or ask for a new one.'); return; }
+      freshBotCheck();   // a wrong password must not leave a used-up check behind: the next try would be refused too, until the page was reloaded
       setMessage(error instanceof AuthError || error instanceof Error ? error.message : 'An error occurred.');
     } finally {
       setIsLoading(false);
@@ -100,12 +106,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
       if (!captchaToken) throw new Error("Please complete the security check.");
       if (view === 'forgot') await forgotPassword({ email, captchaToken });
       else await resendVerification({ email, captchaToken });
-      setCaptchaToken(null);
-      setWidgetKey(k => k + 1);
+      freshBotCheck();
       setNotice(view === 'forgot'
         ? 'If that address has an account, we sent a link to choose a new password. It works for one hour.'
         : 'If that address needs confirming, we sent a new link. The old one no longer works.');
     } catch (error) {
+      freshBotCheck();
       setMessage(error instanceof Error ? error.message : 'An error occurred.');
     } finally {
       setIsLoading(false);
