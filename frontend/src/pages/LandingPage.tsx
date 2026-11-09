@@ -254,7 +254,7 @@ const LandingPage = () => {
               Open the Studio <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
-          <div className="md:col-span-2 bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9] flex flex-col sm:flex-row gap-8">
+          <div className="md:col-span-2 min-w-0 bg-[#d8e2d3] rounded-[2rem] p-8 border border-[#c1d1b9] flex flex-col sm:flex-row gap-8">
             <div className="flex-1 flex flex-col">
               <h3 className="text-2xl font-bold text-[#1f382a] mb-3">The Ingredient Library</h3>
               <p className="text-[#3a5a4a] leading-relaxed mb-6">Combine ingredients, ensure percentage compatibility, and complete safety checks instantly.</p>
@@ -262,7 +262,7 @@ const LandingPage = () => {
                 Explore the Library <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
-            <div className="flex-1 bg-[#eef2eb] min-h-[150px] rounded-xl shadow-inner border border-[#c1d1b9] p-4 space-y-2" aria-hidden="true">
+            <div className="flex-1 min-w-0 bg-[#eef2eb] min-h-[150px] rounded-xl shadow-inner border border-[#c1d1b9] p-4 space-y-2" aria-hidden="true">
               {[
                 { name: 'Niacinamide', inci: 'Niacinamide', fn: 'Active' },
                 { name: 'Squalane', inci: 'Squalane', fn: 'Emollient' },
@@ -496,7 +496,7 @@ const LandingPage = () => {
       <section className="px-6 md:px-12 py-24 bg-[#1f382a] text-center">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-4xl font-bold text-white mb-6">Ready to build your first formulation?</h2>
-          <p className="text-[#c1d1b9] text-lg mb-10">Join thousands of formulators building safer, smarter skincare.</p>
+          <p className="text-[#c1d1b9] text-lg mb-10">Build, check and print your first recipe in a few minutes. It is free.</p>
           <button
             onClick={handleGetStarted}
             className="px-8 py-4 bg-[#d8e2d3] text-[#1f382a] rounded-full font-bold text-lg hover:bg-white transition-colors shadow-lg"

@@ -31,7 +31,7 @@ function Cover({ category, large }: { category: ArticleCategory; large?: boolean
 export default function ArticleCard({ article, featured = false }: { article: Article; featured?: boolean }) {
     const { formatDate } = useSettings();
     const meta = (
-        <div className="flex items-center gap-3 text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
             <span>{formatDate(article.publishedAt)}</span>
             <span className="flex items-center gap-1"><Clock size={12} aria-hidden /> {readingMinutes(article)} min read</span>
             <span>{article.level}</span>
@@ -59,7 +59,7 @@ export default function ArticleCard({ article, featured = false }: { article: Ar
     }
 
     return (
-        <Link to={`/blog/${article.slug}`} className="group flex flex-col bg-white border border-[#c1d1b9] rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full">
+        <Link to={`/blog/${article.slug}`} className="group flex flex-col min-w-0 bg-white border border-[#c1d1b9] rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full">
             <Cover category={article.category} />
             <div className="p-5 flex flex-col gap-2 flex-1">
                 <CategoryBadge category={article.category} />
