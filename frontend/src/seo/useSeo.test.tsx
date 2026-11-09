@@ -68,9 +68,19 @@ describe('the pre-built page', () => {
         expect(html.match(/<title>/g)).toHaveLength(1);
         expect(html).toContain(`<link rel="canonical" href="https://formularium.example${page.path}" />`);
         expect(html).toContain('application/ld+json');
-        expect(html).toContain(`<div id="root"><nav`);
+        expect(html).toContain(`<div id="root"><div class="seo-static"><nav`);
         expect(html).toContain(ARTICLES[0].takeaways[0].replace(/\*\*/g, '').slice(0, 20));
         expect(html).not.toContain('<div id="root"></div>');
+    });
+
+    it('styles only its own wrapper, never the page: that style stays in place once the app is running', () => {
+        const html = renderPage(template, pageFor('/blog')!, '');
+        const style = html.match(/<style>([^<]*)<\/style>/)![1];
+        const selectors = style.split('}').map(rule => rule.split('{')[0].trim()).filter(Boolean);
+        expect(selectors.length).toBeGreaterThan(0);
+        for (const selector of selectors.flatMap(s => s.split(','))) {
+            expect(selector.trim()).toMatch(/^\.seo-static(\s|$)/);   // not body, html, table, a ... on their own
+        }
     });
 
     it('leaves the canonical address and structured data out when the site address is not set', () => {
