@@ -12,10 +12,11 @@ The website goes on **Vercel**, the backend on **Render** (as a Docker image), t
 The website and the API share one site (`formularium.dev`), so the sign-in cookie stays first-party and works in every browser. Why it is built this way: [ADR 0010](decisions/0010-keep-own-authentication-and-harden-it.md) and [security.md](security.md).
 
 ## Before you start
-- [x] The domain is registered, and its mail routing works.
-- [x] Every migration in [`supabase/migrations`](../supabase/migrations) is applied to the production database (see [data-model.md](data-model.md)).
-- [ ] You have your secrets to hand (database password, Google client ID, Turnstile keys, the two-step encryption key). Keep them in a password manager, never in the repository.
-- [ ] Everything is pushed to the `main` branch on GitHub, and CI is green.
+You need:
+- A registered domain, with mail routing working (here `formularium.dev`, on Cloudflare).
+- Every migration in [`supabase/migrations`](../supabase/migrations) applied to the production database, in order and before the code that needs it (see [data-model.md](data-model.md) and [ADR 0012](decisions/0012-migrations-are-sql-files-applied-by-hand.md)).
+- Your secrets to hand: the database password, the Google client ID, the Turnstile keys and the two-step encryption key. Keep them in a password manager, never in the repository.
+- Everything pushed to the `main` branch on GitHub, with CI green.
 
 ## 1. Accounts
 Sign up for **Render** and **Vercel** with the GitHub account that owns the repository, and let each read that repository. For an email sending provider (step 6), create an account with Brevo, Resend or a similar service.

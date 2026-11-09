@@ -29,7 +29,7 @@ There are no database policies doing this work. Each service method takes the ca
 
 ## Migrations
 
-Files in [`supabase/migrations`](../supabase/migrations), named `YYYYMMDDHHMMSS_what_it_does.sql`, applied in order:
+Files in [`supabase/migrations`](../supabase/migrations), named `YYYYMMDDHHMMSS_what_it_does.sql`, applied in order, by hand ([ADR 0012](decisions/0012-migrations-are-sql-files-applied-by-hand.md)):
 
 | File | What it is |
 |---|---|
@@ -40,7 +40,7 @@ Files in [`supabase/migrations`](../supabase/migrations), named `YYYYMMDDHHMMSS_
 | `20261108000002_auth_events.sql` | The `auth_events` table: the audit trail of sign-ins, failures, resets and replayed tokens (no passwords, no raw emails, 90 days), which the login throttle also reads |
 | `20261108000003_two_step_verification.sql` | The tables for two-step verification: the encrypted authenticator secret (`user_mfa`), hashed recovery codes (`mfa_recovery_codes`) and the one-time sign-in challenges (`mfa_challenges`) |
 
-**Building a database from nothing:** run the first two files, or `supabase db reset`. **Production** already has the baseline, so it only needs the files after the first two (20261108000000 and 20261108000001); with the Supabase CLI, first mark the first two as applied (`supabase migration repair --status applied 20261101000000 20261101000001`), because the history was kept by hand.
+**Building a database from nothing:** run all six files in order (the first two are the schema and the shared data; the rest add the sign-in audit trail and two-step verification, which the backend needs), or `supabase db reset`. The tests do exactly this. **A database that was already in production before the baseline** has that schema and data, so it needs only the four files after the first two (`20261108000000` to `20261108000003`); with the Supabase CLI, first mark the first two as applied (`supabase migration repair --status applied 20261101000000 20261101000001`), because the history was kept by hand. The live production database has all six.
 
 The migrations that built the schema step by step (20261110 to 20261124) are in `supabase/migrations-archive/` for the history. They must not be applied on top of the baseline.
 

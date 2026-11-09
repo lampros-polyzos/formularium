@@ -15,5 +15,6 @@ One short file per significant choice: what was decided, why, and what it costs.
 | [0009](0009-api-tests-on-real-postgresql.md) | API tests run on a real PostgreSQL, not H2 | Accepted | 2026-11-07 |
 | [0010](0010-keep-own-authentication-and-harden-it.md) | Keep our own authentication, and harden it for real users | Accepted | 2026-11-08 |
 | [0011](0011-two-step-verification-with-an-authenticator-app.md) | Two-step verification with an authenticator app | Accepted | 2026-11-08 |
+| [0012](0012-migrations-are-sql-files-applied-by-hand.md) | Migrations are plain SQL files, applied by hand | Accepted | 2026-11-08 |
 
 Format: Status, Date, Context, Decision, Consequences. The date is when the decision was put into practice, taken from the commit history. Add a new file rather than rewriting an old one; mark the old one "Superseded by NNNN".
