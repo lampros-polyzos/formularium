@@ -29,8 +29,7 @@ services:
       # --- email
       - key: MAIL_FROM
         value: "Formularium <no-reply@formularium.dev>"
-      - key: MAIL_PORT
-        value: "587"
+      # Render's free plan blocks SMTP ports, so email goes out through Brevo's HTTPS API (BREVO_API_KEY below)
       # --- secrets to enter in the Render dashboard
       - key: DATABASE_URL
         sync: false
@@ -44,9 +43,5 @@ services:
         sync: false
       - key: TURNSTILE_SECRET
         sync: false
-      - key: MAIL_HOST
-        sync: false
-      - key: MAIL_USERNAME
-        sync: false
-      - key: MAIL_PASSWORD
+      - key: BREVO_API_KEY
         sync: false

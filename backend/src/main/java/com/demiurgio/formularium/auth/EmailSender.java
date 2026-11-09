@@ -8,33 +8,39 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
 /**
- * Sends the plain-text emails of the account flows. With an SMTP server configured (MAIL_HOST) they are really sent; without one they are written to the log,
- * links included, so the flow can be tried in development.
+ * Sends the plain-text emails of the account flows. Three ways, in this order: Brevo's HTTPS API (BREVO_API_KEY; the one that works on hosts that block
+ * SMTP), an SMTP server (MAIL_HOST), or, with neither, the log, links included, so the flow can be tried in development.
  */
 @Component
 public class EmailSender {
     private static final Logger log = LoggerFactory.getLogger(EmailSender.class);
 
+    private final BrevoMailApi brevo;
     private final ObjectProvider<JavaMailSender> smtp;
     private final AuthProperties properties;
 
-    EmailSender(ObjectProvider<JavaMailSender> smtp, AuthProperties properties) {
+    EmailSender(BrevoMailApi brevo, ObjectProvider<JavaMailSender> smtp, AuthProperties properties) {
+        this.brevo = brevo;
         this.smtp = smtp;
         this.properties = properties;
     }
 
     public void send(String to, String subject, String body) {
-        JavaMailSender sender = smtp.getIfAvailable();
-        if (sender == null) {
-            log.info("Email (no mail server configured, so it is only logged)\nTo: {}\nSubject: {}\n\n{}", to, subject, body);
-            return;
-        }
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(properties.mailFrom());
-        message.setTo(to);
-        message.setSubject(subject);
-        message.setText(body);
         try {
+            if (brevo.enabled()) {
+                brevo.send(properties.mailFrom(), to, subject, body);
+                return;
+            }
+            JavaMailSender sender = smtp.getIfAvailable();
+            if (sender == null) {
+                log.info("Email (no mail service configured, so it is only logged)\nTo: {}\nSubject: {}\n\n{}", to, subject, body);
+                return;
+            }
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(properties.mailFrom());
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(body);
             sender.send(message);
         } catch (RuntimeException e) {
             // The caller answers the same whether or not the email went out (it must not reveal which addresses have accounts), so the failure is logged here

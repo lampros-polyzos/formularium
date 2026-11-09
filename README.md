@@ -43,7 +43,7 @@ flowchart LR
     B["React SPA<br/>(TypeScript, Vite, Tailwind)"] -- "REST + JWT" --> A["Spring Boot API<br/>(Java 27)"]
     A -- "JDBC" --> D[("PostgreSQL<br/>hosted on Supabase")]
     A --> G["Google sign-in<br/>Turnstile bot check"]
-    A --> M["SMTP email"]
+    A --> M["Email (Brevo API)"]
 ```
 
 Supabase is used **only as a PostgreSQL host**. Authentication, authorization, validation, business rules, PDF export and email all live in the Spring backend; the React app talks to nothing else.
@@ -102,7 +102,7 @@ npm ci
 npm run dev
 ```
 
-Without an SMTP server the backend only logs emails, links included, so sign-up and password reset can be tried locally. `backend/.env` and `frontend/.env.local` are git-ignored: keep real secrets there, never in tracked files, and the secret check before commits is turned on automatically by `npm install` in `frontend/` (or by hand: `node scripts/install-hooks.mjs`).
+Without a mail service (`BREVO_API_KEY`, or an SMTP server) the backend only logs emails, links included, so sign-up and password reset can be tried locally. `backend/.env` and `frontend/.env.local` are git-ignored: keep real secrets there, never in tracked files, and the secret check before commits is turned on automatically by `npm install` in `frontend/` (or by hand: `node scripts/install-hooks.mjs`).
 
 **Tests:** `cd backend && ./mvnw test` and `cd frontend && npm test`.
 
