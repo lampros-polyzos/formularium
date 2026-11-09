@@ -40,6 +40,8 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // HTTPS is ended at the host's proxy, so the app itself sees plain HTTP and would never send this on its own. Browsers ignore it over plain HTTP.
+                .headers(h -> h.httpStrictTransportSecurity(hsts -> hsts.requestMatcher(request -> true).maxAgeInSeconds(31536000).includeSubDomains(true)))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()

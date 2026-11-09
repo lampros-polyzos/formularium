@@ -29,15 +29,17 @@ public class AuthController {
 
     private final AuthService auth;
     private final AuthProperties properties;
+    private final ClientAddress clientAddress;
 
-    AuthController(AuthService auth, AuthProperties properties) {
+    AuthController(AuthService auth, AuthProperties properties, ClientAddress clientAddress) {
         this.auth = auth;
         this.properties = properties;
+        this.clientAddress = clientAddress;
     }
 
     @PostMapping("/register")
     ResponseEntity<?> register(@Valid @RequestBody AuthRequests.Register body, HttpServletRequest request) {
-        AuthService.Session session = auth.register(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT));
+        AuthService.Session session = auth.register(body, clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT));
         if (session == null) {
             // The account exists but must confirm its email before signing in: no session yet
             return ResponseEntity.accepted().header(HttpHeaders.CACHE_CONTROL, "no-store").body(Map.of("verification_required", true, "email", body.email().trim().toLowerCase()));
@@ -53,13 +55,13 @@ public class AuthController {
 
     @PostMapping("/resend-verification")
     ResponseEntity<Void> resendVerification(@Valid @RequestBody AuthRequests.EmailOnly body, HttpServletRequest request) {
-        auth.resendVerification(body, request.getRemoteAddr());
+        auth.resendVerification(body, clientAddress.of(request));
         return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/forgot-password")
     ResponseEntity<Void> forgotPassword(@Valid @RequestBody AuthRequests.EmailOnly body, HttpServletRequest request) {
-        auth.forgotPassword(body, request.getRemoteAddr());
+        auth.forgotPassword(body, clientAddress.of(request));
         return ResponseEntity.accepted().build();
     }
 
@@ -71,23 +73,23 @@ public class AuthController {
 
     @PostMapping("/login")
     ResponseEntity<?> login(@Valid @RequestBody AuthRequests.Login body, HttpServletRequest request) {
-        return respondLogin(auth.login(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+        return respondLogin(auth.login(body, clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     /** The second step of signing in, for accounts with two-step verification. */
     @PostMapping("/login/mfa")
     ResponseEntity<AuthResponse> loginMfa(@Valid @RequestBody AuthRequests.MfaLogin body, HttpServletRequest request) {
-        return respond(HttpStatus.OK, auth.completeMfaLogin(body, request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+        return respond(HttpStatus.OK, auth.completeMfaLogin(body, clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     @PostMapping("/google")
     ResponseEntity<?> google(@Valid @RequestBody AuthRequests.Google body, HttpServletRequest request) {
-        return respondLogin(auth.loginWithGoogle(body.idToken(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+        return respondLogin(auth.loginWithGoogle(body.idToken(), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     @PostMapping("/refresh")
     ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
-        return respond(HttpStatus.OK, auth.refresh(refreshCookie(request), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT)));
+        return respond(HttpStatus.OK, auth.refresh(refreshCookie(request), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
     @PostMapping("/logout")

@@ -26,6 +26,9 @@ services:
         value: "true"
       - key: AUTH_JWT_SECRET
         generateValue: true      # Render makes a long random value, once
+      # --- the visitor's real address, for the sign-in limits: a header Render's edge sets and visitors cannot forge (never X-Forwarded-For)
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP
       # --- email
       - key: MAIL_FROM
         value: "Formularium <no-reply@formularium.dev>"

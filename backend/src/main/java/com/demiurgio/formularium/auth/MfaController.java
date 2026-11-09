@@ -21,8 +21,12 @@ import java.util.UUID;
 @RequestMapping("/api/v1/auth/mfa")
 class MfaController {
     private final MfaService mfa;
+    private final ClientAddress clientAddress;
 
-    MfaController(MfaService mfa) { this.mfa = mfa; }
+    MfaController(MfaService mfa, ClientAddress clientAddress) {
+        this.mfa = mfa;
+        this.clientAddress = clientAddress;
+    }
 
     @GetMapping
     Map<String, Object> status(@AuthenticationPrincipal Jwt jwt) {
@@ -33,26 +37,26 @@ class MfaController {
     /** Makes a secret (and the address for its QR code). Does nothing until a code from it is given to /enable. */
     @PostMapping("/setup")
     ResponseEntity<Map<String, String>> setup(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AuthRequests.MfaSetup body, HttpServletRequest request) {
-        MfaService.Setup setup = mfa.setup(user(jwt), body.password(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT));
+        MfaService.Setup setup = mfa.setup(user(jwt), body.password(), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT));
         return noStore(Map.of("secret", setup.secret(), "otpauth_uri", setup.otpauthUri()));
     }
 
     /** Switches it on. The recovery codes in the answer are the only time they are shown. */
     @PostMapping("/enable")
     ResponseEntity<Map<String, List<String>>> enable(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AuthRequests.MfaCode body, HttpServletRequest request) {
-        return noStore(Map.of("recovery_codes", mfa.enable(user(jwt), body.code(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT))));
+        return noStore(Map.of("recovery_codes", mfa.enable(user(jwt), body.code(), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT))));
     }
 
     @PostMapping("/disable")
     ResponseEntity<Void> disable(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AuthRequests.MfaCode body, HttpServletRequest request) {
-        mfa.disable(user(jwt), body.code(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT));
+        mfa.disable(user(jwt), body.code(), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT));
         return ResponseEntity.noContent().build();
     }
 
     /** Replaces all recovery codes with new ones (the old ones stop working). */
     @PostMapping("/recovery-codes")
     ResponseEntity<Map<String, List<String>>> recoveryCodes(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AuthRequests.MfaCode body, HttpServletRequest request) {
-        return noStore(Map.of("recovery_codes", mfa.newRecoveryCodes(user(jwt), body.code(), request.getRemoteAddr(), request.getHeader(HttpHeaders.USER_AGENT))));
+        return noStore(Map.of("recovery_codes", mfa.newRecoveryCodes(user(jwt), body.code(), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT))));
     }
 
     private static UUID user(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }

@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-09: The limit that anyone could walk around
+
+- **Situation.** The sign-in limits count attempts per client address. Behind Render's proxy the app learned that address from `X-Forwarded-For`, through Spring's forwarded-header support. The production audit trail showed real addresses, so it looked right.
+- **Task.** Find out whether a visitor could choose the address the limits see.
+- **Action.** Read it from the framework instead of trusting it: a one-class test showed Spring takes the first entry of `X-Forwarded-For`, which is the entry the visitor writes. A temporary endpoint on the live API then showed the same on Render, and showed that `True-Client-IP` is overwritten by the edge and `CF-Connecting-IP` cannot be sent at all. The fix reads the address from one configured header (`CLIENT_IP_HEADER`), ignores `X-Forwarded-For` completely, accepts only a single address, and falls back to the connection's own address. Dropping the forwarded-header setting also removed the HTTPS signal the HSTS header depended on, so HSTS is now sent explicitly.
+- **Result.** Changing `X-Forwarded-For` no longer changes the counted address, in the unit tests and through the endpoints (12 forged requests still hit the email limit). The account-level limits never depended on the address, so password guessing against one account was capped throughout.
+
 ## 2026-11-08: A second factor without a vendor
 
 - **Situation.** The hardening left one large gap: a leaked or guessed password was still enough to take over an account, and the app was going to real users with no money for a provider.
