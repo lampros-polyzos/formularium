@@ -12,15 +12,18 @@ import java.util.UUID;
 
 @Repository
 class UserRepository {
-    private static final String COLUMNS = "id, email, password_hash, google_sub, username, email_verified_at";
+    private static final String COLUMNS = "id, email, password_hash, google_sub, username, email_verified_at, guest_expires_at";
 
     private final JdbcClient jdbc;
 
     UserRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
     private static UserAccount map(ResultSet rs, int row) throws SQLException {
-        return new UserAccount(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("password_hash"), rs.getString("google_sub"), rs.getString("username"), rs.getTimestamp("email_verified_at") != null);
+        return new UserAccount(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("password_hash"), rs.getString("google_sub"), rs.getString("username"), rs.getTimestamp("email_verified_at") != null,
+                instant(rs.getTimestamp("guest_expires_at")));
     }
+
+    private static Instant instant(Timestamp timestamp) { return timestamp == null ? null : timestamp.toInstant(); }
 
     Optional<UserAccount> findByEmail(String email) {
         return jdbc.sql("select " + COLUMNS + " from app_users where lower(email) = lower(:email)").param("email", email).query(UserRepository::map).optional();
@@ -40,11 +43,26 @@ class UserRepository {
 
     /** @throws org.springframework.dao.DuplicateKeyException when the email, username or Google id is already used */
     UserAccount insert(String email, String passwordHash, String googleSub, String username, Instant verifiedAt) {
+        return insert(email, passwordHash, googleSub, username, verifiedAt, null);
+    }
+
+    /** @param guestExpiresAt null for a real account; for a guest, the moment it is deleted */
+    UserAccount insert(String email, String passwordHash, String googleSub, String username, Instant verifiedAt, Instant guestExpiresAt) {
         UUID id = UUID.randomUUID();
-        jdbc.sql("insert into app_users (id, email, password_hash, google_sub, username, email_verified_at) values (:id, :email, :hash, :sub, :username, :verified)")
+        jdbc.sql("insert into app_users (id, email, password_hash, google_sub, username, email_verified_at, guest_expires_at) values (:id, :email, :hash, :sub, :username, :verified, :guest)")
                 .param("id", id).param("email", email).param("hash", passwordHash).param("sub", googleSub).param("username", username)
-                .param("verified", verifiedAt == null ? null : Timestamp.from(verifiedAt)).update();
-        return new UserAccount(id, email, passwordHash, googleSub, username, verifiedAt != null);
+                .param("verified", verifiedAt == null ? null : Timestamp.from(verifiedAt))
+                .param("guest", guestExpiresAt == null ? null : Timestamp.from(guestExpiresAt)).update();
+        return new UserAccount(id, email, passwordHash, googleSub, username, verifiedAt != null, guestExpiresAt);
+    }
+
+    long countActiveGuests(Instant now) {
+        return jdbc.sql("select count(*) from app_users where guest_expires_at > :now").param("now", Timestamp.from(now)).query(Long.class).single();
+    }
+
+    /** Deletes the guests whose time is up. Everything that belongs to them goes with them (every foreign key to app_users cascades). */
+    int deleteExpiredGuests(Instant now) {
+        return jdbc.sql("delete from app_users where guest_expires_at is not null and guest_expires_at <= :now").param("now", Timestamp.from(now)).update();
     }
 
     /** Marks the address as confirmed (keeps the first date if it already was). */

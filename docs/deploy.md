@@ -78,7 +78,8 @@ New accounts must confirm their email, so sending has to work before real users 
 3. Sign in, reload the page: you stay signed in. Sign out, then in with Google.
 4. Turn on two-step verification in Settings, sign out, and sign in with a code.
 5. Save a formula, make a PDF, and send a password-reset email to yourself.
-6. Work through the checklist in [security.md](security.md#running-it-checklist), in particular the real client address behind Render's proxy.
+6. In a private window, press **Try the demo**: you land in the studio with the starter formulas and a banner saying the work is temporary. Posting to the community is refused, and "Create a free account" opens the sign-up form.
+7. Work through the checklist in [security.md](security.md#running-it-checklist), in particular the real client address behind Render's proxy.
 
 ## Free-plan limits
 - A free Render service **sleeps after about 15 minutes without requests**, so the first request after a pause can take 30 to 60 seconds. The website retries by itself, but it will feel slow. A paid plan, or a regular ping, avoids it.

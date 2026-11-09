@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-10: A demo nobody has to sign up for
+
+- **Situation.** The app was live, but the only way in was to create an account, confirm an email and choose a password. Nobody reviewing a portfolio will do that, so the best features would go unseen.
+- **Task.** Let a visitor try the real app in one click, without opening the public site to abuse or to each other's data.
+- **Action.** Rejected a shared demo login (shared mess, anyone can change its password or spam the community) and a read-only one (hides the best parts). Each press now creates a private account that expires: the same account system, with a `guest_expires_at` column, no password and an address under `guest.invalid`. Because it is open to everyone it is limited three ways (the bot check, 10 per address per hour, 200 at once) and restricted in one place: a `guest` claim in the token, and two rules in the security configuration that refuse community writes and two-step setup with a clear message. An hourly job deletes expired guests, and an expired guest cannot renew even before that. The new column is read by every user query, so the migration has to be applied before the code (the decision in ADR 0012 earning its keep).
+- **Result.** 13 backend tests (limits, restrictions, expiry, the cleanup, and that real members are not affected), 5 for the migration on a real Postgres engine and 16 for the button, the banner, the sign-in form, the landing page and the client. What it does not do is keep a guest's work when they sign up, and a determined bot with many addresses could still fill the 200 places ([ADR 0013](decisions/0013-guest-sessions-for-the-demo.md)).
+
 ## 2026-11-09: The limit that anyone could walk around
 
 - **Situation.** The sign-in limits count attempts per client address. Behind Render's proxy the app learned that address from `X-Forwarded-For`, through Spring's forwarded-header support. The production audit trail showed real addresses, so it looked right.

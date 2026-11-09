@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthModal from './AuthModal';
 import { AuthError } from '../lib/authClient';
 
-const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn(), completeMfaLogin: vi.fn() }));
+const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn(), completeMfaLogin: vi.fn(), startGuest: vi.fn(), navigate: vi.fn() }));
+
+// The demo button moves on to the studio itself; these tests render the form without a router
+vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
 
 vi.mock('../lib/authClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/authClient')>()),
@@ -15,6 +18,7 @@ vi.mock('../lib/authClient', async (importOriginal) => ({
   resendVerification: mocks.resendVerification,
   forgotPassword: mocks.forgotPassword,
   completeMfaLogin: mocks.completeMfaLogin,
+  startGuest: mocks.startGuest,
 }));
 
 // Every new widget gives one token, as the real one does (and a token is good for one use): the first is 'mock-captcha-token', the next ones 'mock-captcha-token-2', '-3'...
@@ -43,6 +47,8 @@ beforeEach(() => {
   mocks.resendVerification.mockReset().mockResolvedValue(undefined);
   mocks.forgotPassword.mockReset().mockResolvedValue(undefined);
   mocks.completeMfaLogin.mockReset().mockResolvedValue({ id: 'u1', email: 'test@example.com', username: 'tester' });
+  mocks.startGuest.mockReset().mockResolvedValue({ id: 'g1', email: 'g@guest.invalid', username: 'guest-1', guest: true });
+  mocks.navigate.mockReset();
 });
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
@@ -148,6 +154,31 @@ describe('AuthModal', () => {
     fireEvent.click(send());
     await waitFor(() => expect(mocks.forgotPassword).toHaveBeenCalledTimes(2));
     expect(mocks.forgotPassword.mock.calls[0][0].captchaToken).not.toBe(mocks.forgotPassword.mock.calls[1][0].captchaToken);
+  });
+
+  it('offers "Try the demo" on the sign-in and sign-up forms, so nobody has to sign up to look around', () => {
+    const { unmount } = render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Try the demo' })).toBeInTheDocument();
+    unmount();
+    render(<AuthModal isOpen={true} onClose={vi.fn()} initialMode="signup" />);
+    expect(screen.getByRole('button', { name: 'Try the demo' })).toBeInTheDocument();
+  });
+
+  it('"Try the demo" starts a guest, closes the form and opens the studio', async () => {
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Try the demo' }));
+
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/studio'));
+    expect(mocks.startGuest).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalled();
+    expect(mocks.login).not.toHaveBeenCalled();
+  });
+
+  it('does not offer the demo on the password-reset screen', () => {
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Forgot your password/i }));
+    expect(screen.queryByRole('button', { name: 'Try the demo' })).not.toBeInTheDocument();
   });
 
   it('shows no Google button when the site has no Google client id', () => {

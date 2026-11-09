@@ -37,6 +37,18 @@ describe('Landing page after an account is deleted', () => {
     });
 });
 
+describe('The landing page demo', () => {
+    it('offers "Try the demo" to a visitor who is not signed in', async () => {
+        await renderAt('/');
+        expect(screen.getByRole('button', { name: 'Try the demo' })).toBeInTheDocument();
+    });
+
+    it('opens the sign-up form from the demo banner\'s link, and cleans the address', async () => {
+        await renderAt('/?signup=1');
+        expect(screen.getByLabelText(/Username/i)).toBeInTheDocument();   // only the sign-up form asks for a username
+    });
+});
+
 describe('The landing page blog preview', () => {
     it('shows the three newest of our own articles', async () => {
         await renderAt('/');

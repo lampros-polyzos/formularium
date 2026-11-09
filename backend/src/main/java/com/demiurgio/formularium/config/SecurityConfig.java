@@ -6,6 +6,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -17,6 +20,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
@@ -47,12 +52,33 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         // Free uptime monitors check with HEAD (they only read the status, and GET is a paid option); only the health check answers it
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/public/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/login/mfa", "/api/v1/auth/google", "/api/v1/auth/refresh", "/api/v1/auth/logout",
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/login/mfa", "/api/v1/auth/google", "/api/v1/auth/guest", "/api/v1/auth/refresh", "/api/v1/auth/logout",
                                 "/api/v1/auth/verify-email", "/api/v1/auth/resend-verification", "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
+                        // A guest ("Try the demo") may look around and use the tools, but not publish where other people read, or secure an account it will not keep
+                        .requestMatchers(HttpMethod.POST, "/api/v1/community/**").access(MEMBERS_ONLY)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/community/**").access(MEMBERS_ONLY)
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/community/**").access(MEMBERS_ONLY)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/community/**").access(MEMBERS_ONLY)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/mfa/**").access(MEMBERS_ONLY)
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder)));
+                .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder)).accessDeniedHandler((request, response, denied) -> {
+                    // The only 403 this API gives: a guest asking for something that needs a real account. Same error shape as everywhere else (see GlobalExceptionHandler).
+                    response.setStatus(403);
+                    response.setContentType("application/json");
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write(GUEST_REFUSED);
+                }));
         return http.build();
     }
+
+    private static final String GUEST_REFUSED = "{\"error\":{\"code\":\"guest_account\",\"message\":\"This needs a free account. The demo cannot post to the community or set up two-step verification.\"}}";
+
+    /** Anyone signed in who is not a guest. (Not signed in at all is still answered 401, as for every other protected path.) */
+    private static final AuthorizationManager<RequestAuthorizationContext> MEMBERS_ONLY = (authentication, context) -> {
+        var who = authentication.get();
+        boolean guest = who instanceof JwtAuthenticationToken jwt && Boolean.TRUE.equals(jwt.getToken().getClaim("guest"));
+        return new AuthorizationDecision(who != null && who.isAuthenticated() && !(who instanceof AnonymousAuthenticationToken) && !guest);
+    };
 
     @Bean
     PasswordEncoder passwordEncoder() {

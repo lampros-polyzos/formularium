@@ -32,6 +32,9 @@ public final class AuthRequests {
             @NotBlank @Size(max = 200) String token,
             @NotBlank @Size(min = 10, max = 72, message = "must be between 10 and 72 characters") String password) { }
 
+    /** "Try the demo": nothing but the bot check. */
+    public record Guest(String captchaToken) { }
+
     public record Google(@NotBlank @Size(max = 4096) String idToken) { }
 
     /** The second step of signing in: the one-time token from the first step, and a code from the app (or a recovery code). */

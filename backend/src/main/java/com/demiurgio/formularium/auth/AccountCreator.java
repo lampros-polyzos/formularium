@@ -30,6 +30,14 @@ class AccountCreator {
         events.publishEvent(new UsernameChanged(id, username));
     }
 
+    /** A temporary account for "Try the demo": no password, a starting set of formulas like any account, deleted at {@code expiresAt}. */
+    @Transactional
+    UserAccount createGuest(String email, String username, java.time.Instant verifiedAt, java.time.Instant expiresAt) {
+        UserAccount account = users.insert(email, null, null, username, verifiedAt, expiresAt);
+        starterFormulas.createFor(account.id());
+        return account;
+    }
+
     /** @throws org.springframework.dao.DuplicateKeyException when the email, username or Google id is already used (nothing is kept) */
     @Transactional
     UserAccount create(String email, String passwordHash, String googleSub, String username, java.time.Instant verifiedAt) {

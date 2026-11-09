@@ -11,7 +11,8 @@
 
 import { apiUrl } from './api';
 
-export interface AuthUser { id: string; email: string; username: string }
+/** `guest` is true for the temporary "Try the demo" account (see {@link startGuest}). */
+export interface AuthUser { id: string; email: string; username: string; guest?: boolean }
 
 interface AuthResponse { accessToken: string; expiresInSeconds: number; user: AuthUser }
 
@@ -124,6 +125,16 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 export async function register(input: { email: string; password: string; username: string; captchaToken?: string | null }): Promise<AuthUser | null> {
     const response = await post<AuthResponse | { verification_required: true }>('/api/v1/auth/register', input);
     if ('verification_required' in response) return null;
+    setSession(response);
+    return response.user;
+}
+
+/**
+ * "Try the demo": the server makes a temporary account (deleted after about a day) and signs it in. No email or password. The bot check is the same as at
+ * sign-up and works once.
+ */
+export async function startGuest(captchaToken?: string | null): Promise<AuthUser> {
+    const response = await post<AuthResponse>('/api/v1/auth/guest', { captchaToken });
     setSession(response);
     return response.user;
 }

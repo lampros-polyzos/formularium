@@ -16,5 +16,6 @@ One short file per significant choice: what was decided, why, and what it costs.
 | [0010](0010-keep-own-authentication-and-harden-it.md) | Keep our own authentication, and harden it for real users | Accepted | 2026-11-08 |
 | [0011](0011-two-step-verification-with-an-authenticator-app.md) | Two-step verification with an authenticator app | Accepted | 2026-11-08 |
 | [0012](0012-migrations-are-sql-files-applied-by-hand.md) | Migrations are plain SQL files, applied by hand | Accepted | 2026-11-08 |
+| [0013](0013-guest-sessions-for-the-demo.md) | "Try the demo" makes a temporary guest account for each visitor | Accepted | 2026-11-10 |
 
 Format: Status, Date, Context, Decision, Consequences. The date is when the decision was put into practice, taken from the commit history. Add a new file rather than rewriting an old one; mark the old one "Superseded by NNNN".

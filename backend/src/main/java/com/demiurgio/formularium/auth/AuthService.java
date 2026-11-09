@@ -35,6 +35,7 @@ public class AuthService {
     private final LoginAttemptLimiter limiter;
     private final AuthEvents events;
     private final MfaService mfa;
+    private final GuestService guests;
     private final PasswordBreachChecker breach;
     private final CaptchaVerifier captcha;
     private final GoogleTokenVerifier google;
@@ -46,7 +47,7 @@ public class AuthService {
     private final String decoyHash;
 
     AuthService(UserRepository users, AccountCreator accounts, RefreshTokenRepository refreshTokens, TokenService tokens, PasswordEncoder passwords, LoginAttemptLimiter limiter,
-                AuthEvents events, MfaService mfa, PasswordBreachChecker breach, CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
+                AuthEvents events, MfaService mfa, GuestService guests, PasswordBreachChecker breach, CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
         this.users = users;
         this.accounts = accounts;
         this.refreshTokens = refreshTokens;
@@ -55,6 +56,7 @@ public class AuthService {
         this.limiter = limiter;
         this.events = events;
         this.mfa = mfa;
+        this.guests = guests;
         this.breach = breach;
         this.captcha = captcha;
         this.google = google;
@@ -111,6 +113,12 @@ public class AuthService {
         }
     }
 
+    /** "Try the demo": a new temporary account, signed in at once. No email, no password, but the same bot check as sign-up. */
+    public Session startGuest(AuthRequests.Guest request, String ip, String userAgent) {
+        requireCaptcha(request.captchaToken(), ip);
+        return startSession(guests.create(ip, userAgent), userAgent);
+    }
+
     public LoginResult login(AuthRequests.Login request, String ip, String userAgent) {
         String email = normalizeEmail(request.email());
         String emailHash = TokenService.hash(email);
@@ -147,7 +155,7 @@ public class AuthService {
                 // Same verified email: it is the same person, so the accounts are joined
                 users.linkGoogle(byEmail.id(), who.sub());
                 users.markEmailVerified(byEmail.id(), clock.instant());   // Google vouched for the address
-                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username(), true);
+                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username(), true, byEmail.guestExpiresAt());
             } else {
                 user = createGoogleUser(email, who);
             }
@@ -182,6 +190,7 @@ public class AuthService {
         if (!stored.expiresAt().isAfter(now)) throw noSession();
         if (!refreshTokens.revoke(stored.id(), now)) throw new ApiException(HttpStatus.CONFLICT, "refresh_in_progress", "The session was just renewed. Try again.");
         UserAccount user = users.findById(stored.userId()).orElseThrow(AuthService::noSession);
+        if (user.guestExpired(now)) throw noSession();   // the demo account's day is over, even if the cleanup has not removed it yet
         return issue(user, stored.familyId(), userAgent);
     }
 
@@ -199,7 +208,7 @@ public class AuthService {
         requireCaptcha(request.captchaToken(), ip);
         limiter.checkEmailRequest(ip);
         record(AuthEvents.EMAIL_REQUESTED, null, ip, null, null);   // counted whether or not the address has an account, so the answer stays the same
-        users.findByEmail(normalizeEmail(request.email())).filter(u -> !u.emailVerified()).ifPresent(this::sendVerification);
+        users.findByEmail(normalizeEmail(request.email())).filter(u -> !u.emailVerified() && !u.guest()).ifPresent(this::sendVerification);
     }
 
     /** Sends a password reset link. Answers the same whether or not the email has an account. */
@@ -207,7 +216,7 @@ public class AuthService {
         requireCaptcha(request.captchaToken(), ip);
         limiter.checkEmailRequest(ip);
         record(AuthEvents.EMAIL_REQUESTED, null, ip, null, null);
-        users.findByEmail(normalizeEmail(request.email())).ifPresent(user -> {
+        users.findByEmail(normalizeEmail(request.email())).filter(u -> !u.guest()).ifPresent(user -> {   // a guest has no real address to send to
             Instant now = clock.instant();
             record(AuthEvents.PASSWORD_RESET_REQUESTED, null, ip, user.id(), null);
             if (recentlySent(user.id(), EmailTokenRepository.RESET, now)) return;
@@ -265,7 +274,11 @@ public class AuthService {
         emailTokens.deleteExpired(clock.instant());
         events.deleteOlderThan(clock.instant().minus(EVENT_RETENTION));
         mfa.purgeExpired();
+        guests.purgeExpired();
     }
+
+    /** Deletes the "Try the demo" accounts whose day is over, with everything in them. Run every hour. */
+    public int purgeExpiredGuests() { return guests.purgeExpired(); }
 
     /** Sign-in events hold addresses and browser strings, so they are not kept for long. */
     static final Duration EVENT_RETENTION = Duration.ofDays(90);
@@ -312,7 +325,9 @@ public class AuthService {
 
     private Session issue(UserAccount user, UUID family, String userAgent) {
         String refresh = tokens.newRefreshToken();
-        refreshTokens.insert(user.id(), family, TokenService.hash(refresh), clock.instant().plus(properties.refreshTtl()), userAgent);
+        Instant expires = clock.instant().plus(properties.refreshTtl());
+        if (user.guest() && user.guestExpiresAt().isBefore(expires)) expires = user.guestExpiresAt();   // a demo sign-in never outlives its account
+        refreshTokens.insert(user.id(), family, TokenService.hash(refresh), expires, userAgent);
         return new Session(new AuthResponse(tokens.accessToken(user), tokens.accessTtlSeconds(), user.view()), refresh);
     }
 

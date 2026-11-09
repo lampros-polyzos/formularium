@@ -47,6 +47,12 @@ public class AuthController {
         return respond(HttpStatus.CREATED, session);
     }
 
+    /** "Try the demo": a temporary account and a session at once. */
+    @PostMapping("/guest")
+    ResponseEntity<AuthResponse> guest(@Valid @RequestBody AuthRequests.Guest body, HttpServletRequest request) {
+        return respond(HttpStatus.CREATED, auth.startGuest(body, clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));
+    }
+
     @PostMapping("/verify-email")
     ResponseEntity<Void> verifyEmail(@Valid @RequestBody AuthRequests.Token body) {
         auth.verifyEmail(body.token());

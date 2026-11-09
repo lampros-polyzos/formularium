@@ -24,6 +24,8 @@ class AuthEvents {
     static final String PASSWORD_RESET_DONE = "password_reset_done";
     /** An already-used refresh token came back after the grace period: the sign-in was ended as possibly stolen. */
     static final String REFRESH_REUSE = "refresh_reuse";
+    /** A guest ("Try the demo") account was made; counted per address so one connection cannot make them without end. */
+    static final String GUEST_CREATED = "guest_created";
     static final String MFA_ENABLED = "mfa_enabled";
     static final String MFA_DISABLED = "mfa_disabled";
     /** A wrong authenticator or recovery code (or, when setting up, a wrong password). Counted per account and per address. */

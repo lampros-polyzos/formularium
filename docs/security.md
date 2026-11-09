@@ -21,6 +21,7 @@ How sign-in and accounts are protected, what is not covered, and what to do when
 | Reading other members' data | The caller's id comes from the verified token and is part of every query ([ADR 0005](decisions/0005-authorization-in-java.md)); each endpoint is tested as a second member |
 | Direct database access from the browser | The browser roles have no privileges, and row-level security is on with no policies |
 | Leaked secrets in git | A pre-commit hook blocks them. GitHub push protection is a second layer, but it only knows the formats of well-known secrets (an OAuth client secret, many API keys), not a database or mail password, so the hook stays essential |
+| Abuse of "Try the demo" ([ADR 0013](decisions/0013-guest-sessions-for-the-demo.md)) | The same bot check as sign-up; 10 demos per address per hour; at most 200 guests at once; each guest is deleted after 24 hours with everything it made. A guest can read the community but not write to it, and cannot set up two-step verification (the API answers `403 guest_account`). `GUEST_ENABLED=false` switches it off |
 | Vulnerable libraries | Dependabot opens weekly update pull requests; CodeQL scans the frontend code |
 
 Every sign-in, failure, reset, confirmation and replayed token is recorded in `auth_events` without passwords or raw email addresses, kept 90 days, and included in the member's data export.
@@ -35,6 +36,7 @@ Every sign-in, failure, reset, confirmation and replayed token is recorded in `a
 - **The signing key is one shared secret (HS256).** That is fine while only this backend checks tokens. Rotating it is cheap: access tokens last 15 minutes and sessions live in the database, so a rotation only makes clients renew once. There is no support for two keys at the same time.
 - **Locking out a victim.** The per-account limit means someone can block a member's sign-in for 15 minutes by failing on purpose. The bot check and the short window are what keep this costly.
 - **Sign-up still says "already in use"** for an existing email, a deliberate choice for a clearer message ([ADR 0007](decisions/0007-email-confirmation-required.md)).
+- **The demo can be crowded out.** Someone who solves the bot check many times from many addresses could fill the 200 places and show other visitors "busy". The ceiling protects the database; `GUEST_MAX_ACTIVE`, `GUEST_PER_IP_PER_HOUR` and the off switch are the tools. A guest has no quota on how much it saves during its day, and an office behind one address shares the per-address limit.
 - **CodeQL does not scan the Java backend yet.**
 
 ## Running it: checklist
@@ -49,6 +51,7 @@ Before the first real user:
 - **GitHub settings** (free), in this repository's Settings, under Code security (also called Advanced Security): turn on *Dependency graph*, *Dependabot alerts* and *security updates*, *Private vulnerability reporting*, and *Secret scanning* with *Push protection*. The account-level Code security page only sets defaults for NEW repositories (use its *Enable all* buttons for existing ones), apart from *Push protection for yourself*, which covers all your public repositories. Keep that one on.
 - **Backups.** Check that the database host keeps backups, and that you have restored one at least once.
 - **Two-step verification key.** Create `AUTH_MFA_ENCRYPTION_KEY` once (`openssl rand -base64 32`), keep it apart from `AUTH_JWT_SECRET`, and **back it up** with your other secrets: authenticator secrets are encrypted with it. Leave it empty and the feature is simply off.
+- **The demo.** On by default. Apply its migration before deploying the code that needs it. The settings are `GUEST_ENABLED`, `GUEST_TTL_HOURS` (24), `GUEST_MAX_ACTIVE` (200) and `GUEST_PER_IP_PER_HOUR` (10).
 - **Database.** The backend must connect as the table owner, never as `anon` or `authenticated`, and the migrations in `supabase/migrations` must all be applied.
 
 ## Helping someone who is locked out

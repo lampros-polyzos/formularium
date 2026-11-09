@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthError, completeMfaLogin, forgotPassword, isMfaChallenge, login, loginWithGoogle, register, resendVerification } from '../lib/authClient';
 import GoogleSignInButton from './GoogleSignInButton';
+import DemoButton from './DemoButton';
 import { Beaker, X } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
 
@@ -222,6 +223,11 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
 
           {view === 'form' && (<>
           <GoogleSignInButton onCredential={handleGoogleCredential} onError={setMessage} />
+
+          <div className="mb-5 text-center">
+            <DemoButton onStarted={onClose} className="w-full py-3 px-4 rounded-full border border-[#2c4c3b] text-sm font-bold text-[#2c4c3b] hover:bg-[#eef2eb] disabled:opacity-60 transition-colors" />
+            <p className="mt-1.5 text-xs text-gray-500">Just looking? No sign-up needed.</p>
+          </div>
 
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">

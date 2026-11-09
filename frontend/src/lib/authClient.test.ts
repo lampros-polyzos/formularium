@@ -65,6 +65,29 @@ describe('signing in', () => {
     });
 });
 
+describe('trying the demo', () => {
+    it('asks the backend for a temporary account with only the bot check, and signs it in as a guest', async () => {
+        const guest = { ...USER, username: 'guest-1a2b3c4d', guest: true };
+        fetchMock.mockResolvedValue(reply(201, { ...session(), user: guest }));
+        const user = await client.startGuest('check');
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(String(url)).toBe('/api/v1/auth/guest');
+        expect(init.credentials).toBe('include');   // the refresh cookie comes back with the answer
+        expect(JSON.parse(init.body)).toEqual({ captchaToken: 'check' });
+        expect(user).toEqual(guest);
+        expect(client.getCurrentUser()?.guest).toBe(true);
+        expect(client.getAccessToken()).toBe('token-1');
+    });
+
+    it('signs nobody in when the demo is refused, and says why', async () => {
+        fetchMock.mockResolvedValue(error(503, 'demo_busy', 'The demo is busy right now.'));
+        await expect(client.startGuest('check')).rejects.toMatchObject({ code: 'demo_busy', status: 503, message: 'The demo is busy right now.' });
+        expect(client.getCurrentUser()).toBeNull();
+        expect(client.getAccessToken()).toBeNull();
+    });
+});
+
 describe('staying signed in', () => {
     it('resumes from the refresh cookie', async () => {
         fetchMock.mockResolvedValue(reply(200, session('fresh')));

@@ -32,15 +32,15 @@ public class TokenService {
 
     String accessToken(UserAccount user) {
         Instant now = clock.instant();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .issuer(properties.issuer())
                 .subject(user.id().toString())
                 .issuedAt(now)
                 .expiresAt(now.plus(properties.accessTtl()))
                 .claim("email", user.email())
-                .claim("username", user.username())
-                .build();
-        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+                .claim("username", user.username());
+        if (user.guest()) claims.claim("guest", true);   // the API refuses guests the things that need a real account (see SecurityConfig)
+        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build())).getTokenValue();
     }
 
     long accessTtlSeconds() { return properties.accessTtl().toSeconds(); }

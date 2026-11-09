@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ScrollManager from './components/ScrollManager';
+import GuestBanner from './components/GuestBanner';
 import './App.css'
 import LandingPage from './pages/LandingPage';
 import StudioPage from './pages/StudioPage';
@@ -40,6 +41,7 @@ function App() {
         <DialogProvider>
         <BrowserRouter>
           <ScrollManager />
+          <GuestBanner />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />

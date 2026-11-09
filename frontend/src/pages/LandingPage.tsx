@@ -15,6 +15,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ARTICLES } from '../content/articles';
 import ArticleCard from '../components/content/ArticleCard';
 import HeroIllustration from '../components/HeroIllustration';
+import DemoButton from '../components/DemoButton';
 import { fetchRecipePreviews } from '../lib/communityApi';
 import { contactLink } from '../lib/contact';
 import { useSeo } from '../seo/useSeo';
@@ -59,14 +60,16 @@ const LandingPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const accountDeleted = searchParams.get('account') === 'deleted';
 
-  // The pages that follow an email link (confirmed, password changed) send people here to sign in
+  // Two links send people here to open the form: the pages that follow an email link (confirmed, password changed) ask for sign-in,
+  // and "Create a free account" in the demo banner asks for sign-up
   const wantsSignIn = searchParams.get('signin') === '1';
+  const wantsSignUp = searchParams.get('signup') === '1';
   useEffect(() => {
-    if (!wantsSignIn) return;
-    setAuthMode('signin');
+    if (!wantsSignIn && !wantsSignUp) return;
+    setAuthMode(wantsSignUp ? 'signup' : 'signin');
     setIsAuthModalOpen(true);
-    setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('signin'); return next; }, { replace: true });
-  }, [wantsSignIn, setSearchParams]);
+    setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('signin'); next.delete('signup'); return next; }, { replace: true });
+  }, [wantsSignIn, wantsSignUp, setSearchParams]);
 
   // Resume the navigation the visitor asked for before they were prompted to sign in
   useEffect(() => {
@@ -203,9 +206,15 @@ const LandingPage = () => {
               Combine ingredients, calculate percentages, and validate your skincare recipes with real-time safety checks.
             </p>
             <div className="flex flex-wrap gap-4">
+              {/* Someone who is not signed in is offered the demo first: it needs no sign-up */}
+              {!user && (
+                <DemoButton className="px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] disabled:opacity-60 transition-colors shadow-sm" />
+              )}
               <button
                 onClick={() => goTo('/studio/start', 'signup')}
-                className="px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors shadow-sm"
+                className={user
+                  ? 'px-6 py-3 bg-[#2c4c3b] text-white rounded-full font-medium hover:bg-[#1f382a] transition-colors shadow-sm'
+                  : 'px-6 py-3 bg-transparent border border-[#2c4c3b] text-[#2c4c3b] rounded-full font-medium hover:bg-white/20 transition-colors'}
               >
                 Start a New Formula
               </button>

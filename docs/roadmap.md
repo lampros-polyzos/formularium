@@ -16,6 +16,7 @@
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 - Screenshots and a demo GIF in the README
 - Docker image for the backend, Render and Vercel configuration, and a step-by-step [deploy guide](deploy.md)
+- **"Try the demo"**: one press makes a private, temporary guest account (deleted after a day), so a visitor can look around without signing up ([ADR 0013](decisions/0013-guest-sessions-for-the-demo.md))
 - **Live at [formularium.dev](https://formularium.dev)**: website on Vercel, API on Render (`api.formularium.dev`), PostgreSQL on Supabase, DNSSEC, email through Brevo, with the sign-in limits counting the visitor's real address
 
 ## Next

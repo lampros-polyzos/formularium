@@ -166,7 +166,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         </select>
                     </div>
 
-                    <TwoStepVerification />
+                    {!user?.guest && <TwoStepVerification />}   {/* the demo account is temporary: nothing to secure */}
 
                     <AccountDataSection />
                 </div>
