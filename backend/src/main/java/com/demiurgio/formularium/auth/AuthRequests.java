@@ -1,9 +1,14 @@
 package com.demiurgio.formularium.auth;
 
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+
+import tools.jackson.databind.JsonNode;
+
+import java.util.UUID;
 
 /** The request bodies of the sign-in endpoints. */
 public final class AuthRequests {
@@ -42,6 +47,15 @@ public final class AuthRequests {
 
     /** Starting to set up two-step verification. The password is required for accounts that have one. */
     public record MfaSetup(@Size(max = 200) String password) { }
+
+    /** The password that changing passkeys asks for (empty for an account that has none). */
+    public record PasskeyPassword(@Size(max = 200) String password) { }
+
+    /** What the browser made for a new passkey, with the id of the challenge it answers; {@code name} is how the member will recognise it. */
+    public record PasskeyRegistration(@NotNull UUID challengeId, @NotNull JsonNode credential, @Size(max = 60) String name) { }
+
+    /** What the browser signed for a passkey sign-in, with the id of the challenge it answers. */
+    public record PasskeyLogin(@NotNull UUID challengeId, @NotNull JsonNode credential) { }
 
     /** A code from the app, or a recovery code. */
     public record MfaCode(@NotBlank @Size(max = 64) String code) { }

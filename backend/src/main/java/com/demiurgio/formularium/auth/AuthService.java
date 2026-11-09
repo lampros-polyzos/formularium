@@ -36,6 +36,7 @@ public class AuthService {
     private final AuthEvents events;
     private final MfaService mfa;
     private final GuestService guests;
+    private final PasskeyService passkeys;
     private final PasswordBreachChecker breach;
     private final CaptchaVerifier captcha;
     private final GoogleTokenVerifier google;
@@ -47,7 +48,7 @@ public class AuthService {
     private final String decoyHash;
 
     AuthService(UserRepository users, AccountCreator accounts, RefreshTokenRepository refreshTokens, TokenService tokens, PasswordEncoder passwords, LoginAttemptLimiter limiter,
-                AuthEvents events, MfaService mfa, GuestService guests, PasswordBreachChecker breach, CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
+                AuthEvents events, MfaService mfa, GuestService guests, PasskeyService passkeys, PasswordBreachChecker breach, CaptchaVerifier captcha, GoogleTokenVerifier google, AuthProperties properties, EmailTokenRepository emailTokens, EmailSender mail, Clock clock) {
         this.users = users;
         this.accounts = accounts;
         this.refreshTokens = refreshTokens;
@@ -57,6 +58,7 @@ public class AuthService {
         this.events = events;
         this.mfa = mfa;
         this.guests = guests;
+        this.passkeys = passkeys;
         this.breach = breach;
         this.captcha = captcha;
         this.google = google;
@@ -117,6 +119,19 @@ public class AuthService {
     public Session startGuest(AuthRequests.Guest request, String ip, String userAgent) {
         requireCaptcha(request.captchaToken(), ip);
         return startSession(guests.create(ip, userAgent), userAgent);
+    }
+
+    /** Step 1 of signing in with a passkey: a challenge for the browser. Open to anyone, and limited per address. */
+    public PasskeyService.Options passkeyLoginOptions(String ip) { return passkeys.loginOptions(ip); }
+
+    /**
+     * Step 2: the browser's signature. A passkey needs the device and the person's fingerprint, face or PIN, so it stands for both a password and a second step:
+     * no password and no authenticator code are asked, and the session starts here.
+     */
+    public Session loginWithPasskey(AuthRequests.PasskeyLogin request, String ip, String userAgent) {
+        UserAccount user = passkeys.finishLogin(request.challengeId(), request.credential(), ip, userAgent);
+        users.touchLogin(user.id(), clock.instant());
+        return startSession(user, userAgent);
     }
 
     public LoginResult login(AuthRequests.Login request, String ip, String userAgent) {
@@ -275,10 +290,14 @@ public class AuthService {
         events.deleteOlderThan(clock.instant().minus(EVENT_RETENTION));
         mfa.purgeExpired();
         guests.purgeExpired();
+        passkeys.purgeExpired();
     }
 
     /** Deletes the "Try the demo" accounts whose day is over, with everything in them. Run every hour. */
-    public int purgeExpiredGuests() { return guests.purgeExpired(); }
+    public int purgeExpiredGuests() {
+        passkeys.purgeExpired();   // the challenges of passkey sign-ins that were started and never finished
+        return guests.purgeExpired();
+    }
 
     /** Sign-in events hold addresses and browser strings, so they are not kept for long. */
     static final Duration EVENT_RETENTION = Duration.ofDays(90);

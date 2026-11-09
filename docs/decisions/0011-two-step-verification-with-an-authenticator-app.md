@@ -32,4 +32,4 @@ Members can protect their account with a second factor. It had to cost nothing t
 - **Good:** a leaked or guessed password is no longer enough; no running cost; no new personal data; the design is covered by 28 backend and 27 frontend tests, including the replay, throttling, expiry and "stolen token" cases.
 - **Cost:** someone who loses both the phone and the recovery codes cannot get in by themselves. There is no self-service path on purpose (it would be the weak point). The operator can switch it off after checking who is asking: the steps are in [docs/security.md](../security.md).
 - **Cost:** `AUTH_MFA_ENCRYPTION_KEY` must be kept and backed up. If it is lost, every member's authenticator stops working. Rotating it is not supported yet.
-- **Not covered:** phishing. A fake site can relay a code in real time; only passkeys fix that.
+- **Not covered:** phishing. A fake site can relay a code in real time; only passkeys fix that ([ADR 0014](0014-passkeys-as-a-full-sign-in.md)).

@@ -29,6 +29,11 @@ services:
       # --- the visitor's real address, for the sign-in limits: a header Render's edge sets and visitors cannot forge (never X-Forwarded-For)
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP
+      # --- passkeys: bound to this domain, so choose once and never change (a changed id makes every registered passkey stop working)
+      - key: WEBAUTHN_RP_ID
+        value: formularium.dev
+      - key: WEBAUTHN_ORIGINS
+        value: https://formularium.dev
       # --- email
       - key: MAIL_FROM
         value: "Formularium <no-reply@formularium.dev>"

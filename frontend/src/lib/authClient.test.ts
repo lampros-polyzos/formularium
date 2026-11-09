@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const browser = vi.hoisted(() => ({ startAuthentication: vi.fn(), supported: true }));
+vi.mock('@simplewebauthn/browser', () => ({ startAuthentication: browser.startAuthentication, browserSupportsWebAuthn: () => browser.supported }));
+
 type Client = typeof import('./authClient');
 
 const USER = { id: 'u1', email: 'sam@example.com', username: 'sam' };
@@ -62,6 +65,61 @@ describe('signing in', () => {
         fetchMock.mockResolvedValue(reply(200, session()));
         await client.loginWithGoogle('google-id-token');
         expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ idToken: 'google-id-token' });
+    });
+});
+
+describe('signing in with a passkey', () => {
+    const OPTIONS = { challenge: 'abc', rpId: 'formularium.dev', userVerification: 'required', allowCredentials: [] };
+    const SIGNED = { id: 'cred-1', rawId: 'cred-1', type: 'public-key', response: { clientDataJSON: 'x', authenticatorData: 'y', signature: 'z', userHandle: 'u' } };
+
+    beforeEach(() => { browser.startAuthentication.mockReset().mockResolvedValue(SIGNED); browser.supported = true; });
+
+    it('asks for a challenge, lets the browser sign it, and signs in with the answer: nothing typed', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, { challengeId: 'ch-1', options: OPTIONS })).mockResolvedValueOnce(reply(200, session()));
+
+        const user = await client.loginWithPasskey();
+
+        expect(user).toEqual(USER);
+        expect(String(fetchMock.mock.calls[0][0])).toBe('/api/v1/auth/login/passkey/options');
+        expect(browser.startAuthentication).toHaveBeenCalledWith({ optionsJSON: OPTIONS });
+        const [url, init] = fetchMock.mock.calls[1];
+        expect(String(url)).toBe('/api/v1/auth/login/passkey');
+        expect(init.credentials).toBe('include');   // the refresh cookie comes back with the answer
+        expect(JSON.parse(init.body)).toEqual({ challengeId: 'ch-1', credential: SIGNED });
+        expect(client.getCurrentUser()).toEqual(USER);
+        expect(client.getAccessToken()).toBe('token-1');
+    });
+
+    it('treats a cancelled prompt as a calm, named outcome, and asks the server for nothing more', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, { challengeId: 'ch-1', options: OPTIONS }));
+        browser.startAuthentication.mockRejectedValue(Object.assign(new Error('The operation either timed out or was not allowed.'), { name: 'NotAllowedError' }));
+
+        await expect(client.loginWithPasskey()).rejects.toMatchObject({ name: 'AuthError', code: 'passkey_cancelled', message: 'The passkey sign-in was cancelled or timed out. You can try again.' });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(client.getCurrentUser()).toBeNull();
+    });
+
+    it('signs nobody in when the server refuses the signature, and shows what it said', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, { challengeId: 'ch-1', options: OPTIONS }))
+            .mockResolvedValueOnce(error(401, 'passkey_failed', 'That passkey did not work. Try again, or sign in another way.'));
+
+        await expect(client.loginWithPasskey()).rejects.toMatchObject({ code: 'passkey_failed', status: 401, message: 'That passkey did not work. Try again, or sign in another way.' });
+
+        expect(client.getCurrentUser()).toBeNull();
+        expect(client.getAccessToken()).toBeNull();
+    });
+
+    it('never opens the browser\'s prompt when the server cannot even give a challenge', async () => {
+        fetchMock.mockResolvedValueOnce(error(503, 'passkeys_unavailable', 'Passkeys are not available on this server.'));
+        await expect(client.loginWithPasskey()).rejects.toMatchObject({ code: 'passkeys_unavailable' });
+        expect(browser.startAuthentication).not.toHaveBeenCalled();
+    });
+
+    it('says whether this browser can do passkeys at all', () => {
+        expect(client.passkeysSupported()).toBe(true);
+        browser.supported = false;
+        expect(client.passkeysSupported()).toBe(false);
     });
 });
 

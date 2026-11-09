@@ -88,6 +88,18 @@ public class AuthController {
         return respond(HttpStatus.OK, auth.completeMfaLogin(body, clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));
     }
 
+    /** Signing in with a passkey, step 1: a challenge for the browser. */
+    @PostMapping("/login/passkey/options")
+    ResponseEntity<PasskeyService.Options> passkeyOptions(HttpServletRequest request) {
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(auth.passkeyLoginOptions(clientAddress.of(request)));
+    }
+
+    /** Step 2: the browser's signature, which starts the session. */
+    @PostMapping("/login/passkey")
+    ResponseEntity<AuthResponse> loginPasskey(@Valid @RequestBody AuthRequests.PasskeyLogin body, HttpServletRequest request) {
+        return respond(HttpStatus.OK, auth.loginWithPasskey(body, clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));
+    }
+
     @PostMapping("/google")
     ResponseEntity<?> google(@Valid @RequestBody AuthRequests.Google body, HttpServletRequest request) {
         return respondLogin(auth.loginWithGoogle(body.idToken(), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT)));

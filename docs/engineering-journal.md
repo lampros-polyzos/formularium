@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-10: A sign-in that a fake site cannot relay
+
+- **Situation.** Two-step verification stopped stolen passwords, but a fake website can pass a password and a six-digit code to the real one in real time. That gap was written down as the biggest remaining one.
+- **Task.** Add the one credential that is bound to the site's domain (a passkey), without writing cryptographic verification by hand and without breaking the existing sign-in.
+- **Action.** Chose passkeys as a full sign-in next to the password (a passkey is device plus fingerprint or PIN, so it counts for both steps and skips the code), kept the password as the recovery path, and used Yubico's reference library instead of parsing authenticator data myself. The decisions that matter more than the wiring: challenges live in the database and are deleted as they are read, so each works once and any instance can finish another's; adding or removing a passkey needs the password, as MFA setup does; a counter that goes backwards refuses the sign-in; a guest cannot add one. To test the part that is easy to get wrong, I wrote a software authenticator (a key pair, the CBOR and COSE bytes the standard defines, signatures) that can also lie: a look-alike origin, a damaged or foreign signature, a missing fingerprint, a replayed challenge, a copied key. The unit tests would have passed against my own wrong assumptions, so I also ran the whole flow in a real browser engine with a virtual authenticator, against a throwaway database and servers started only for the check.
+- **Result.** 26 backend tests, 9 for the migration and 29 for the client, the settings screen and the sign-in form, plus a 12-step browser run that adds a passkey, signs out and signs in with nothing typed. Honest limits, written into [ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md): passwords stay valid and phishable until an account can switch them off, a synced passkey is only as safe as the cloud account behind it, and only Chromium was run against a virtual authenticator.
+
 ## 2026-11-10: A demo nobody has to sign up for
 
 - **Situation.** The app was live, but the only way in was to create an account, confirm an email and choose a password. Nobody reviewing a portfolio will do that, so the best features would go unseen.

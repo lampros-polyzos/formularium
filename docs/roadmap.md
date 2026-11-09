@@ -16,12 +16,13 @@
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 - Screenshots and a demo GIF in the README
 - Docker image for the backend, Render and Vercel configuration, and a step-by-step [deploy guide](deploy.md)
+- **Passkeys (WebAuthn)**: sign in with a fingerprint, face or screen lock, nothing typed; phishing-resistant, replaces the password and the authenticator code, managed in Settings ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md))
 - **"Try the demo"**: one press makes a private, temporary guest account (deleted after a day), so a visitor can look around without signing up ([ADR 0013](decisions/0013-guest-sessions-for-the-demo.md))
 - **Live at [formularium.dev](https://formularium.dev)**: website on Vercel, API on Render (`api.formularium.dev`), PostgreSQL on Supabase, DNSSEC, email through Brevo, with the sign-in limits counting the visitor's real address
 
 ## Next
 
-1. **Passkeys (WebAuthn)**: phishing-resistant sign-in, the next step after the authenticator app ([ADR 0011](decisions/0011-two-step-verification-with-an-authenticator-app.md))
+1. **Passkey follow-ups**: an option to switch password sign-in off once a passkey exists (which is what makes an account phishing-proof), passkey autofill on the sign-in form, and a check in Safari and Firefox
 2. **Change password while signed in**, **alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
 3. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
 4. **Small admin tool** to grant moderator rights without hand-written SQL

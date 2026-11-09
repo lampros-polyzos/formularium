@@ -86,6 +86,19 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Passkeys (WebAuthn): checks what the browser and the authenticator send. Brings its own Jackson 2, which lives beside Spring Boot's Jackson 3 (different packages). -->
+		<dependency>
+			<groupId>com.yubico</groupId>
+			<artifactId>webauthn-server-core</artifactId>
+			<version>2.10.1</version>
+		</dependency>
+		<!-- The library's methods name Jackson 2's JsonProcessingException, so the compiler needs it on the compile path, not only at run time. Same version it resolves to. -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-core</artifactId>
+			<version>2.21.7</version>
+		</dependency>
+
 		<dependency>
 			<groupId>com.github.librepdf</groupId>
 			<artifactId>openpdf</artifactId>

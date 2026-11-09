@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthModal from './AuthModal';
 import { AuthError } from '../lib/authClient';
 
-const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn(), completeMfaLogin: vi.fn(), startGuest: vi.fn(), navigate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn(), completeMfaLogin: vi.fn(), startGuest: vi.fn(), navigate: vi.fn(), loginWithPasskey: vi.fn(), passkeys: true }));
 
 // The demo button moves on to the studio itself; these tests render the form without a router
 vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
@@ -19,6 +19,8 @@ vi.mock('../lib/authClient', async (importOriginal) => ({
   forgotPassword: mocks.forgotPassword,
   completeMfaLogin: mocks.completeMfaLogin,
   startGuest: mocks.startGuest,
+  loginWithPasskey: mocks.loginWithPasskey,
+  passkeysSupported: () => mocks.passkeys,
 }));
 
 // Every new widget gives one token, as the real one does (and a token is good for one use): the first is 'mock-captcha-token', the next ones 'mock-captcha-token-2', '-3'...
@@ -49,6 +51,8 @@ beforeEach(() => {
   mocks.completeMfaLogin.mockReset().mockResolvedValue({ id: 'u1', email: 'test@example.com', username: 'tester' });
   mocks.startGuest.mockReset().mockResolvedValue({ id: 'g1', email: 'g@guest.invalid', username: 'guest-1', guest: true });
   mocks.navigate.mockReset();
+  mocks.loginWithPasskey.mockReset().mockResolvedValue({ id: 'u1', email: 'test@example.com', username: 'tester' });
+  mocks.passkeys = true;
 });
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
@@ -61,7 +65,7 @@ describe('AuthModal', () => {
     type(/Email address/i, 'test@example.com');
     type(/Password/i, 'password123');
 
-    const submitButton = screen.getByRole('button', { name: /Sign In/i });
+    const submitButton = screen.getByRole('button', { name: /^Sign In$/ });
     await waitFor(() => expect(submitButton).toBeEnabled());
     fireEvent.click(submitButton);
 
@@ -94,7 +98,7 @@ describe('AuthModal', () => {
     render(<AuthModal isOpen={true} onClose={onClose} />);
     type(/Email address/i, 'test@example.com');
     type(/Password/i, 'wrong');
-    const submitButton = screen.getByRole('button', { name: /Sign In/i });
+    const submitButton = screen.getByRole('button', { name: /^Sign In$/ });
     await waitFor(() => expect(submitButton).toBeEnabled());
     fireEvent.click(submitButton);
 
@@ -109,14 +113,14 @@ describe('AuthModal', () => {
     render(<AuthModal isOpen={true} onClose={onClose} />);
     type(/Email address/i, 'test@example.com');
     type(/Password/i, 'wrong');
-    const submit = screen.getByRole('button', { name: /Sign In/i });
+    const submit = screen.getByRole('button', { name: /^Sign In$/ });
     await waitFor(() => expect(submit).toBeEnabled());
     fireEvent.click(submit);
     expect(await screen.findByText('The email or password is not right.')).toBeInTheDocument();
 
     type(/Password/i, 'the right one');
-    await waitFor(() => expect(screen.getByRole('button', { name: /Sign In/i })).toBeEnabled());   // enabled again only once a new check has been passed
-    fireEvent.click(screen.getByRole('button', { name: /Sign In/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Sign In$/ })).toBeEnabled());   // enabled again only once a new check has been passed
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/ }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(mocks.login).toHaveBeenNthCalledWith(1, { email: 'test@example.com', password: 'wrong', captchaToken: 'mock-captcha-token' });
@@ -175,6 +179,45 @@ describe('AuthModal', () => {
     expect(mocks.login).not.toHaveBeenCalled();
   });
 
+  it('offers "Sign in with a passkey" on the sign-in form only, and only where the browser can do passkeys', () => {
+    const { unmount } = render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Sign in with a passkey' })).toBeInTheDocument();
+    unmount();
+
+    const signUp = render(<AuthModal isOpen={true} onClose={vi.fn()} initialMode="signup" />);
+    expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).not.toBeInTheDocument();   // signing up needs an account first
+    signUp.unmount();
+
+    mocks.passkeys = false;   // an older browser
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).not.toBeInTheDocument();
+  });
+
+  it('a passkey signs in without a password, a code or a bot check, and closes the form', async () => {
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(mocks.loginWithPasskey).toHaveBeenCalledOnce();
+    expect(mocks.login).not.toHaveBeenCalled();
+  });
+
+  it('a cancelled passkey prompt says so, leaves the form open, and can be tried again', async () => {
+    mocks.loginWithPasskey.mockRejectedValueOnce(new AuthError('passkey_cancelled', 'The passkey sign-in was cancelled or timed out. You can try again.', 0));
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+
+    expect(await screen.findByText('The passkey sign-in was cancelled or timed out. You can try again.')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign in with a passkey' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(screen.queryByText(/cancelled or timed out/)).not.toBeInTheDocument();   // the old message is cleared by the new try
+  });
+
   it('does not offer the demo on the password-reset screen', () => {
     render(<AuthModal isOpen={true} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Forgot your password/i }));
@@ -207,7 +250,7 @@ describe('AuthModal', () => {
     render(<AuthModal isOpen={true} onClose={vi.fn()} />);
     type(/Email address/i, 'sam@example.com');
     type(/Password/i, 'a long enough password');
-    const submit = screen.getByRole('button', { name: /Sign In/i });
+    const submit = screen.getByRole('button', { name: /^Sign In$/ });
     await waitFor(() => expect(submit).toBeEnabled());
     fireEvent.click(submit);
 
@@ -236,7 +279,7 @@ describe('AuthModal', () => {
     render(<AuthModal isOpen={true} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Forgot your password?' }));
     fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
-    expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Sign In$/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Forgot your password?' })).toBeInTheDocument();
   });
 
@@ -253,7 +296,7 @@ describe('AuthModal: the second step', () => {
   const submitPassword = async () => {
     type(/Email address/i, 'test@example.com');
     type(/Password/i, 'password123');
-    const button = screen.getByRole('button', { name: /Sign In/i });
+    const button = screen.getByRole('button', { name: /^Sign In$/ });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
   };
@@ -321,7 +364,7 @@ describe('AuthModal: the second step', () => {
     fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
 
     expect(await screen.findByText(/Too many wrong codes/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Sign In$/ })).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Code$/i)).not.toBeInTheDocument();
   });
 
@@ -331,6 +374,6 @@ describe('AuthModal: the second step', () => {
     await submitPassword();
     await screen.findByLabelText(/^Code$/i);
     fireEvent.click(screen.getByRole('button', { name: /Back to sign in/i }));
-    expect(await screen.findByRole('button', { name: /Sign In/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Sign In$/ })).toBeInTheDocument();
   });
 });

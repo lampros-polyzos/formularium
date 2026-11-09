@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.6.3",
+    "@simplewebauthn/browser": "^14.0.0",
     "lucide-react": "^1.69.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",

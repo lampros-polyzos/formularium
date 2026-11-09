@@ -6,6 +6,7 @@ import { updateUsername } from '../lib/authClient';
 import { REGIONS, regionFrom } from '../lib/regionalLimits';
 import AccountDataSection from './AccountDataSection';
 import TwoStepVerification from './TwoStepVerification';
+import Passkeys from './Passkeys';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -166,6 +167,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         </select>
                     </div>
 
+                    {!user?.guest && <Passkeys />}
                     {!user?.guest && <TwoStepVerification />}   {/* the demo account is temporary: nothing to secure */}
 
                     <AccountDataSection />

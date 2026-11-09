@@ -26,6 +26,14 @@ class AuthEvents {
     static final String REFRESH_REUSE = "refresh_reuse";
     /** A guest ("Try the demo") account was made; counted per address so one connection cannot make them without end. */
     static final String GUEST_CREATED = "guest_created";
+    /** A passkey was added or removed (a change to which devices may sign in). */
+    static final String PASSKEY_ADDED = "passkey_added";
+    static final String PASSKEY_REMOVED = "passkey_removed";
+    static final String PASSKEY_LOGIN = "passkey_login";
+    /** A passkey sign-in that did not check out, or a wrong password when changing passkeys. Counted per address, and per account for the password. */
+    static final String PASSKEY_FAILED = "passkey_failed";
+    /** A passkey sign-in was started (a challenge was asked for); counted per address so the endpoint cannot be used to fill the table. */
+    static final String PASSKEY_LOGIN_STARTED = "passkey_login_started";
     static final String MFA_ENABLED = "mfa_enabled";
     static final String MFA_DISABLED = "mfa_disabled";
     /** A wrong authenticator or recovery code (or, when setting up, a wrong password). Counted per account and per address. */

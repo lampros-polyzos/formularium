@@ -27,6 +27,9 @@ class LoginAttemptLimiter {
     static final Duration WINDOW = Duration.ofMinutes(15);
     static final int MAX_MFA_FAILURES_PER_USER = 10;
     static final int MAX_MFA_FAILURES_PER_IP = 30;
+    static final int MAX_PASSKEY_FAILURES_PER_USER = 10;
+    static final int MAX_PASSKEY_FAILURES_PER_IP = 30;
+    static final int MAX_PASSKEY_STARTS_PER_IP = 60;
     static final int MAX_EMAILS_PER_IP = 10;
     static final Duration EMAIL_WINDOW = Duration.ofHours(1);
 
@@ -56,6 +59,32 @@ class LoginAttemptLimiter {
         if (events.countForUser(AuthEvents.MFA_FAILED, userId, from, now) >= MAX_MFA_FAILURES_PER_USER
                 || events.count(AuthEvents.MFA_FAILED, "ip", ip, from, now) >= MAX_MFA_FAILURES_PER_IP) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many wrong codes. Try again in a few minutes.");
+        }
+    }
+
+    /** Adding or removing a passkey asks for the password: 10 wrong ones per account in the window (from anywhere), and 30 per address. */
+    void checkPasskeyManagement(UUID userId, String ip) {
+        Instant now = clock.instant();
+        Instant from = now.minus(WINDOW);
+        if (events.countForUser(AuthEvents.PASSKEY_FAILED, userId, from, now) >= MAX_PASSKEY_FAILURES_PER_USER
+                || events.count(AuthEvents.PASSKEY_FAILED, "ip", ip, from, now) >= MAX_PASSKEY_FAILURES_PER_IP) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many wrong passwords. Try again in a few minutes.");
+        }
+    }
+
+    /** Signing in with a passkey: 30 failures per address in the window. (There is no account to count against: the passkey has not said who it is.) */
+    void checkPasskeyLogin(String ip) {
+        Instant now = clock.instant();
+        if (events.count(AuthEvents.PASSKEY_FAILED, "ip", ip, now.minus(WINDOW), now) >= MAX_PASSKEY_FAILURES_PER_IP) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many failed passkey attempts. Try again in a few minutes.");
+        }
+    }
+
+    /** Asking for a passkey challenge writes a row, so it is limited per address: a person needs one or two, so 60 in the window is generous. */
+    void checkPasskeyStart(String ip) {
+        Instant now = clock.instant();
+        if (events.count(AuthEvents.PASSKEY_LOGIN_STARTED, "ip", ip, now.minus(WINDOW), now) >= MAX_PASSKEY_STARTS_PER_IP) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many sign-in attempts. Try again in a few minutes.");
         }
     }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AuthError, completeMfaLogin, forgotPassword, isMfaChallenge, login, loginWithGoogle, register, resendVerification } from '../lib/authClient';
+import { AuthError, completeMfaLogin, forgotPassword, isMfaChallenge, login, loginWithGoogle, loginWithPasskey, passkeysSupported, register, resendVerification } from '../lib/authClient';
 import GoogleSignInButton from './GoogleSignInButton';
 import DemoButton from './DemoButton';
 import { Beaker, X } from 'lucide-react';
@@ -119,6 +119,20 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
     }
   };
 
+  // The browser shows its own prompt (fingerprint, face or screen lock) listing the passkeys it holds for this site; nothing is typed
+  const handlePasskey = async () => {
+    setMessage('');
+    setIsLoading(true);
+    try {
+      await loginWithPasskey();
+      onClose();   // signed in: the page behind the form notices and moves on
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The passkey did not work. Please try again, or use your password.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleGoogleCredential = async (idToken: string) => {
     setMessage('');
     try {
@@ -223,6 +237,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
 
           {view === 'form' && (<>
           <GoogleSignInButton onCredential={handleGoogleCredential} onError={setMessage} />
+
+          {!isSignUp && passkeysSupported() && (
+            <button type="button" onClick={handlePasskey} disabled={isLoading} className="w-full mb-3 py-3 px-4 rounded-full border border-gray-300 bg-white text-sm font-bold text-[#1f382a] hover:bg-[#f7f8f6] disabled:opacity-60 transition-colors">
+              Sign in with a passkey
+            </button>
+          )}
 
           <div className="mb-5 text-center">
             <DemoButton onStarted={onClose} className="w-full py-3 px-4 rounded-full border border-[#2c4c3b] text-sm font-bold text-[#2c4c3b] hover:bg-[#eef2eb] disabled:opacity-60 transition-colors" />

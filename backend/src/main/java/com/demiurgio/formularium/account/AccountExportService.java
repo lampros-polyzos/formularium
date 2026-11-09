@@ -46,6 +46,7 @@ public class AccountExportService {
             new Source("notifications", "recipient_id = :uid"),
             new Source("community_mutes", "user_id = :uid"),
             new Source("content_reports", "reporter_id = :uid"),
+            new Source("passkeys", "user_id = :uid"),   // which devices may sign in: name, dates, and the public half of each key (never a secret)
             new Source("auth_events", "user_id = :uid"));   // their own sign-ins and resets: time, address and browser
 
     /** Tables that have a column pointing at a person but are deliberately left out of the export. */
@@ -56,6 +57,7 @@ public class AccountExportService {
             "user_mfa",             // the encrypted authenticator secret
             "mfa_recovery_codes",   // hashes of the recovery codes
             "mfa_challenges",       // one-time sign-in tokens
+            "webauthn_challenges",  // one-time passkey challenges, five minutes long
             "community_moderators"  // a role given by the operators, not the member's own data
     );
 

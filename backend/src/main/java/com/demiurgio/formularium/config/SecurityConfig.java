@@ -52,7 +52,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         // Free uptime monitors check with HEAD (they only read the status, and GET is a paid option); only the health check answers it
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/public/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/login/mfa", "/api/v1/auth/google", "/api/v1/auth/guest", "/api/v1/auth/refresh", "/api/v1/auth/logout",
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/login/mfa", "/api/v1/auth/login/passkey/options", "/api/v1/auth/login/passkey", "/api/v1/auth/google", "/api/v1/auth/guest", "/api/v1/auth/refresh", "/api/v1/auth/logout",
                                 "/api/v1/auth/verify-email", "/api/v1/auth/resend-verification", "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
                         // A guest ("Try the demo") may look around and use the tools, but not publish where other people read, or secure an account it will not keep
                         .requestMatchers(HttpMethod.POST, "/api/v1/community/**").access(MEMBERS_ONLY)
@@ -60,6 +60,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/community/**").access(MEMBERS_ONLY)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/community/**").access(MEMBERS_ONLY)
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/mfa/**").access(MEMBERS_ONLY)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/passkeys/**").access(MEMBERS_ONLY)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder)).accessDeniedHandler((request, response, denied) -> {
                     // The only 403 this API gives: a guest asking for something that needs a real account. Same error shape as everywhere else (see GlobalExceptionHandler).
@@ -71,7 +72,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    private static final String GUEST_REFUSED = "{\"error\":{\"code\":\"guest_account\",\"message\":\"This needs a free account. The demo cannot post to the community or set up two-step verification.\"}}";
+    private static final String GUEST_REFUSED = "{\"error\":{\"code\":\"guest_account\",\"message\":\"This needs a free account. The demo cannot post to the community, set up two-step verification or add passkeys.\"}}";
 
     /** Anyone signed in who is not a guest. (Not signed in at all is still answered 401, as for every other protected path.) */
     private static final AuthorizationManager<RequestAuthorizationContext> MEMBERS_ONLY = (authentication, context) -> {

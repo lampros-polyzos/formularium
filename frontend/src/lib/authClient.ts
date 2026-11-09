@@ -9,7 +9,9 @@
 //  - you are signed out only when the server says the sign-in is really over (401/403). A server that is down, busy or restarting
 //    (network error, 5xx, 429) never signs you out: the session is kept and renewal is tried again.
 
+import { browserSupportsWebAuthn, startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { apiUrl } from './api';
+import { describePasskeyError } from './passkeyErrors';
 
 /** `guest` is true for the temporary "Try the demo" account (see {@link startGuest}). */
 export interface AuthUser { id: string; email: string; username: string; guest?: boolean }
@@ -170,6 +172,28 @@ export async function completeMfaLogin(mfaToken: string, code: string): Promise<
 export async function loginWithGoogle(idToken: string): Promise<AuthUser | MfaChallenge> {
     const response = await post<LoginReply>('/api/v1/auth/google', { idToken });
     if ('mfa_required' in response) return { mfaRequired: true, mfaToken: response.mfa_token };
+    setSession(response);
+    return response.user;
+}
+
+/** Whether this browser can use passkeys at all (older ones cannot). */
+export const passkeysSupported = (): boolean => browserSupportsWebAuthn();
+
+/**
+ * Signs in with a passkey: the browser offers the passkeys it holds for this site, and the person confirms with their fingerprint, face or screen lock.
+ * No email, password or code is typed: the passkey is both the password and the second step. A cancelled prompt throws an AuthError with the code
+ * `passkey_cancelled`, which is not a failure worth shouting about.
+ */
+export async function loginWithPasskey(): Promise<AuthUser> {
+    const start = await post<{ challengeId: string; options: PublicKeyCredentialRequestOptionsJSON }>('/api/v1/auth/login/passkey/options');
+    let credential;
+    try {
+        credential = await startAuthentication({ optionsJSON: start.options });
+    } catch (error) {
+        const problem = describePasskeyError(error, 'sign in');
+        throw new AuthError(problem.code, problem.message, 0);
+    }
+    const response = await post<AuthResponse>('/api/v1/auth/login/passkey', { challengeId: start.challengeId, credential });
     setSession(response);
     return response.user;
 }

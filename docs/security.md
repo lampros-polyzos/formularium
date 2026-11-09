@@ -21,6 +21,8 @@ How sign-in and accounts are protected, what is not covered, and what to do when
 | Reading other members' data | The caller's id comes from the verified token and is part of every query ([ADR 0005](decisions/0005-authorization-in-java.md)); each endpoint is tested as a second member |
 | Direct database access from the browser | The browser roles have no privileges, and row-level security is on with no policies |
 | Leaked secrets in git | A pre-commit hook blocks them. GitHub push protection is a second layer, but it only knows the formats of well-known secrets (an OAuth client secret, many API keys), not a database or mail password, so the hook stays essential |
+| Phishing: a fake site relaying a password and a code | A passkey is bound to the website's own domain: the browser offers it only to pages of that domain, and what it signs names the site, so a relay through a look-alike fails. It protects the sign-ins that use a passkey; the password path stays open ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md)) |
+| Binding someone else's device to an account | Adding or removing a passkey needs the account password (wrong ones are limited per account and per address), is refused for guests, is capped at 10 per member and is recorded in the audit trail |
 | Abuse of "Try the demo" ([ADR 0013](decisions/0013-guest-sessions-for-the-demo.md)) | The same bot check as sign-up; 10 demos per address per hour; at most 200 guests at once; each guest is deleted after 24 hours with everything it made. A guest can read the community but not write to it, and cannot set up two-step verification (the API answers `403 guest_account`). `GUEST_ENABLED=false` switches it off |
 | Vulnerable libraries | Dependabot opens weekly update pull requests; CodeQL scans the frontend code |
 
@@ -28,7 +30,10 @@ Every sign-in, failure, reset, confirmation and replayed token is recorded in `a
 
 ## Known gaps
 
-- **Two-step verification is optional**, and it does not stop phishing: a fake site can relay a code in real time. Only passkeys fix that, and they are on the [roadmap](roadmap.md).
+- **Two-step verification is optional**, and a code does not stop phishing: a fake site can relay it in real time.
+- **Passkeys protect only the sign-ins that use them.** A password (with its code) still works and can still be phished, and there is no option yet to switch password sign-in off for an account ([roadmap](roadmap.md)).
+- **A passkey that syncs is as safe as the account that syncs it** (Apple, Google, a password manager), and a passkey skips two-step verification altogether.
+- **We do not check what kind of device made a passkey** (attestation is off), and the relying party id is fixed: moving the site to another domain makes every passkey stop working.
 - **Losing both the phone and the recovery codes locks the account out of self-service.** On purpose, as a self-service path would be the weak point. See "Helping someone who is locked out" below.
 - **The two-step encryption key cannot be rotated yet** (see the roadmap). Losing it means every member's authenticator stops working.
 - **No "change password" while signed in.** A password can only be changed through the email reset.
@@ -50,6 +55,7 @@ Before the first real user:
 - **Accounts.** Turn on two-step verification for the GitHub, Supabase, Google Cloud, Cloudflare and mail-provider accounts that can reach production.
 - **GitHub settings** (free), in this repository's Settings, under Code security (also called Advanced Security): turn on *Dependency graph*, *Dependabot alerts* and *security updates*, *Private vulnerability reporting*, and *Secret scanning* with *Push protection*. The account-level Code security page only sets defaults for NEW repositories (use its *Enable all* buttons for existing ones), apart from *Push protection for yourself*, which covers all your public repositories. Keep that one on.
 - **Backups.** Check that the database host keeps backups, and that you have restored one at least once.
+- **Passkeys.** Set `WEBAUTHN_RP_ID` (the website's domain) and `WEBAUTHN_ORIGINS` (its exact address) before anyone adds a passkey, and never change them afterwards: production is `formularium.dev` and `https://formularium.dev`. `PASSKEYS_ENABLED=false` switches the feature off.
 - **Two-step verification key.** Create `AUTH_MFA_ENCRYPTION_KEY` once (`openssl rand -base64 32`), keep it apart from `AUTH_JWT_SECRET`, and **back it up** with your other secrets: authenticator secrets are encrypted with it. Leave it empty and the feature is simply off.
 - **The demo.** On by default. Apply its migration before deploying the code that needs it. The settings are `GUEST_ENABLED`, `GUEST_TTL_HOURS` (24), `GUEST_MAX_ACTIVE` (200) and `GUEST_PER_IP_PER_HOUR` (10).
 - **Database.** The backend must connect as the table owner, never as `anon` or `authenticated`, and the migrations in `supabase/migrations` must all be applied.
@@ -68,3 +74,9 @@ delete from user_mfa           where user_id = '<that id>';
 ```
 
 They can sign in with their password again and set it up afresh. The event is not recorded automatically, so note it down.
+
+A member who has lost a device with a passkey on it can still sign in with their password (or Google). To make a lost device's passkey stop working when they cannot sign in to remove it themselves, delete it in the same way (it is recorded nowhere, so note it down):
+
+```sql
+delete from passkeys where user_id = '<that id>';   -- all of them; add  and id = '<passkey id>'  for one
+```
