@@ -46,8 +46,20 @@ class BrevoMailApi {
                 .header("api-key", apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
-                .body(Map.of("sender", sender, "to", List.of(Map.of("email", to)), "subject", subject, "textContent", body))
+                .body(Map.of("sender", sender, "to", List.of(Map.of("email", to)), "subject", subject, "textContent", body, "htmlContent", html(body)))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    private static final Pattern URL = Pattern.compile("https?://[^\\s<>\"]+");
+
+    /**
+     * The same text as HTML, with every address made into a real link. Plain text alone leaves it to the reader's mail program to notice a link, and some
+     * (Yahoo, for one) do not, so people had to copy and paste it.
+     */
+    static String html(String text) {
+        String escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+        String linked = URL.matcher(escaped).replaceAll(m -> Matcher.quoteReplacement("<a href=\"" + m.group() + "\">" + m.group() + "</a>"));
+        return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1f2937\">" + linked.replace("\r\n", "\n").replace("\n", "<br>") + "</div>";
     }
 }

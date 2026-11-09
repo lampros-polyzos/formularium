@@ -62,6 +62,21 @@ class BrevoMailApiTest {
     }
 
     @Test
+    void sendsAnHtmlVersionToo_withTheLinkClickable() {
+        api("k").send("Formularium <no-reply@formularium.dev>", "ann@example.com", "s", "Reset it here:\nhttps://formularium.dev/reset-password?token=a-b_c\n\nIgnore it otherwise.");
+        assertThat(body.get()).contains("htmlContent")
+                .contains("<a href=\\\"https://formularium.dev/reset-password?token=a-b_c\\\">https://formularium.dev/reset-password?token=a-b_c</a>")
+                .contains("<br>");
+    }
+
+    @Test
+    void htmlVersionEscapesWhateverIsNotALink() {
+        String html = BrevoMailApi.html("Hi <b>Ann</b> & co\nhttps://formularium.dev/x?a=1&b=2");
+        assertThat(html).contains("Hi &lt;b&gt;Ann&lt;/b&gt; &amp; co").doesNotContain("<b>")
+                .contains("<a href=\"https://formularium.dev/x?a=1&amp;b=2\">");
+    }
+
+    @Test
     void acceptsAPlainSenderAddressToo() {
         api("k").send("no-reply@formularium.dev", "ann@example.com", "s", "b");
         assertThat(body.get()).contains("\"email\":\"no-reply@formularium.dev\"").doesNotContain("\"name\"");
