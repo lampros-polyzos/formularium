@@ -12,7 +12,7 @@ import java.util.UUID;
 
 @Repository
 class UserRepository {
-    private static final String COLUMNS = "id, email, password_hash, google_sub, username, email_verified_at, guest_expires_at";
+    private static final String COLUMNS = "id, email, password_hash, google_sub, username, email_verified_at, guest_expires_at, password_login_disabled_at";
 
     private final JdbcClient jdbc;
 
@@ -20,7 +20,7 @@ class UserRepository {
 
     private static UserAccount map(ResultSet rs, int row) throws SQLException {
         return new UserAccount(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("password_hash"), rs.getString("google_sub"), rs.getString("username"), rs.getTimestamp("email_verified_at") != null,
-                instant(rs.getTimestamp("guest_expires_at")));
+                instant(rs.getTimestamp("guest_expires_at")), instant(rs.getTimestamp("password_login_disabled_at")));
     }
 
     private static Instant instant(Timestamp timestamp) { return timestamp == null ? null : timestamp.toInstant(); }
@@ -53,7 +53,7 @@ class UserRepository {
                 .param("id", id).param("email", email).param("hash", passwordHash).param("sub", googleSub).param("username", username)
                 .param("verified", verifiedAt == null ? null : Timestamp.from(verifiedAt))
                 .param("guest", guestExpiresAt == null ? null : Timestamp.from(guestExpiresAt)).update();
-        return new UserAccount(id, email, passwordHash, googleSub, username, verifiedAt != null, guestExpiresAt);
+        return new UserAccount(id, email, passwordHash, googleSub, username, verifiedAt != null, guestExpiresAt, null);
     }
 
     long countActiveGuests(Instant now) {
@@ -68,6 +68,11 @@ class UserRepository {
     /** Marks the address as confirmed (keeps the first date if it already was). */
     void markEmailVerified(UUID id, Instant now) {
         jdbc.sql("update app_users set email_verified_at = coalesce(email_verified_at, :now) where id = :id").param("now", Timestamp.from(now)).param("id", id).update();
+    }
+
+    /** @param at when password sign-in was switched off; null switches it back on */
+    void setPasswordLoginDisabled(UUID id, Instant at) {
+        jdbc.sql("update app_users set password_login_disabled_at = :at where id = :id").param("at", at == null ? null : Timestamp.from(at)).param("id", id).update();
     }
 
     void setPassword(UUID id, String passwordHash) {

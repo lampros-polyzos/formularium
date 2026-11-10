@@ -34,6 +34,11 @@ class AuthEvents {
     static final String PASSKEY_FAILED = "passkey_failed";
     /** A passkey sign-in was started (a challenge was asked for); counted per address so the endpoint cannot be used to fill the table. */
     static final String PASSKEY_LOGIN_STARTED = "passkey_login_started";
+    /** Password sign-in was switched off or on for an account (switched on again by the member, or by a password reset). */
+    static final String PASSWORD_LOGIN_DISABLED = "password_login_disabled";
+    static final String PASSWORD_LOGIN_ENABLED = "password_login_enabled";
+    /** The RIGHT password was given for an account that has password sign-in switched off, and was refused. Not counted as a failure: nothing was guessed. */
+    static final String PASSWORD_LOGIN_REFUSED = "password_login_refused";
     /** A signed-in member changed their password. */
     static final String PASSWORD_CHANGED = "password_changed";
     /** A wrong current password when changing it; counted per account and per address. */

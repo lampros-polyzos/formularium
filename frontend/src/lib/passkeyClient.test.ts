@@ -6,7 +6,7 @@ vi.mock('./apiClient', async (importOriginal) => ({ ...(await importOriginal<typ
 vi.mock('@simplewebauthn/browser', () => ({ startRegistration: mocks.startRegistration }));
 
 import { ApiError } from './apiClient';
-import { addPasskey, fetchPasskeys, removePasskey } from './passkeyClient';
+import { addPasskey, fetchPasskeys, removePasskey, setPasswordSignIn } from './passkeyClient';
 
 const OPTIONS = { challenge: 'abc', rp: { id: 'formularium.dev', name: 'Formularium' }, user: { id: 'u', name: 'sam@example.com', displayName: 'sam' } };
 const MADE = { id: 'cred-1', rawId: 'cred-1', type: 'public-key', response: { clientDataJSON: 'x', attestationObject: 'y' } };
@@ -18,8 +18,9 @@ beforeEach(() => {
 
 describe('listing passkeys', () => {
     it('asks the backend for the signed-in member\'s status', async () => {
-        mocks.request.mockResolvedValue({ available: true, needsPassword: true, passkeys: [] });
-        expect(await fetchPasskeys()).toEqual({ available: true, needsPassword: true, passkeys: [] });
+        const status = { available: true, needsPassword: true, passwordSignInOn: true, hasUsedPasskey: false, passkeys: [] };
+        mocks.request.mockResolvedValue(status);
+        expect(await fetchPasskeys()).toEqual(status);
         expect(mocks.request).toHaveBeenCalledWith('/api/v1/auth/passkeys');
     });
 });
@@ -78,5 +79,20 @@ describe('removing a passkey', () => {
         mocks.request.mockResolvedValue(undefined);
         await removePasskey('p1');
         expect(mocks.request.mock.calls[0][1].body).toEqual({ password: null });
+    });
+});
+
+describe('switching password sign-in off and on', () => {
+    it('posts the choice and the password', async () => {
+        mocks.request.mockResolvedValue(undefined);
+        await setPasswordSignIn(false, 'a long password');
+        await setPasswordSignIn(true, 'a long password');
+        expect(mocks.request).toHaveBeenNthCalledWith(1, '/api/v1/auth/password-sign-in', { method: 'POST', body: { enabled: false, password: 'a long password' } });
+        expect(mocks.request).toHaveBeenNthCalledWith(2, '/api/v1/auth/password-sign-in', { method: 'POST', body: { enabled: true, password: 'a long password' } });
+    });
+
+    it('passes on the server\'s reason when it refuses (a passkey that has never signed in)', async () => {
+        mocks.request.mockRejectedValue(new ApiError(409, 'passkey_not_proven', 'Sign in with a passkey once first, so we know it works on your device.'));
+        await expect(setPasswordSignIn(false, 'x')).rejects.toMatchObject({ status: 409, code: 'passkey_not_proven', message: expect.stringContaining('Sign in with a passkey once first') });
     });
 });

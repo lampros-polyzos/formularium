@@ -45,6 +45,9 @@ public final class AuthRequests {
             @NotBlank @Size(max = 72) String currentPassword,
             @NotBlank @Size(min = 10, max = 72, message = "must be between 10 and 72 characters") String newPassword) { }
 
+    /** Switching password sign-in off (`enabled` false) or back on (true). Needs the password, as changing it does. */
+    public record PasswordSignIn(@NotNull Boolean enabled, @Size(max = 72) String password) { }
+
     public record Google(@NotBlank @Size(max = 4096) String idToken) { }
 
     /** The second step of signing in: the one-time token from the first step, and a code from the app (or a recovery code). */

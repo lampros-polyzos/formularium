@@ -5,21 +5,22 @@ import Passkeys from './Passkeys';
 import { ApiError } from '../lib/apiClient';
 import type { PasskeyStatus } from '../lib/passkeyClient';
 
-const mocks = vi.hoisted(() => ({ fetchPasskeys: vi.fn(), addPasskey: vi.fn(), removePasskey: vi.fn(), supported: true }));
+const mocks = vi.hoisted(() => ({ fetchPasskeys: vi.fn(), addPasskey: vi.fn(), removePasskey: vi.fn(), setPasswordSignIn: vi.fn(), supported: true }));
 
-vi.mock('../lib/passkeyClient', () => ({ fetchPasskeys: mocks.fetchPasskeys, addPasskey: mocks.addPasskey, removePasskey: mocks.removePasskey }));
+vi.mock('../lib/passkeyClient', () => ({ fetchPasskeys: mocks.fetchPasskeys, addPasskey: mocks.addPasskey, removePasskey: mocks.removePasskey, setPasswordSignIn: mocks.setPasswordSignIn }));
 vi.mock('@simplewebauthn/browser', () => ({ browserSupportsWebAuthn: () => mocks.supported }));
 
 const PHONE = { id: 'p1', name: 'My phone', createdAt: '2026-11-03T10:00:00Z', lastUsedAt: '2026-11-09T08:00:00Z', synced: true };
 const KEY = { id: 'p2', name: 'Security key', createdAt: '2026-11-05T10:00:00Z', lastUsedAt: null, synced: false };
 
-const status = (over: Partial<PasskeyStatus> = {}): PasskeyStatus => ({ available: true, needsPassword: true, passkeys: [], ...over });
+const status = (over: Partial<PasskeyStatus> = {}): PasskeyStatus => ({ available: true, needsPassword: true, passwordSignInOn: true, hasUsedPasskey: false, passkeys: [], ...over });
 
 beforeEach(() => {
     mocks.supported = true;
     mocks.fetchPasskeys.mockReset().mockResolvedValue(status());
     mocks.addPasskey.mockReset().mockResolvedValue(PHONE);
     mocks.removePasskey.mockReset().mockResolvedValue(undefined);
+    mocks.setPasswordSignIn.mockReset().mockResolvedValue(undefined);
 });
 afterEach(cleanup);
 
@@ -135,5 +136,103 @@ describe('the Passkeys section of the settings', () => {
         expect(screen.getByText(/This browser cannot make passkeys/)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Add a passkey' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Remove My phone' })).toBeInTheDocument();
+    });
+});
+
+describe('the password sign-in switch in the Passkeys section', () => {
+    const withProvenPasskey = (over: Partial<PasskeyStatus> = {}) => status({ passkeys: [PHONE], hasUsedPasskey: true, ...over });
+
+    it('is not offered to an account with no passkey, or with no password (Google only)', async () => {
+        mocks.fetchPasskeys.mockResolvedValue(status());
+        const none = render(<Passkeys />);
+        await screen.findByRole('heading', { name: 'Passkeys' });
+        expect(screen.queryByText(/Password sign-in is/)).not.toBeInTheDocument();
+        none.unmount();
+
+        mocks.fetchPasskeys.mockResolvedValue(withProvenPasskey({ needsPassword: false }));
+        render(<Passkeys />);
+        await screen.findByRole('heading', { name: 'Passkeys' });
+        expect(screen.queryByText(/Password sign-in is/)).not.toBeInTheDocument();
+    });
+
+    it('says why it cannot be turned off yet, when no passkey has signed in, and offers no button', async () => {
+        mocks.fetchPasskeys.mockResolvedValue(status({ passkeys: [PHONE], hasUsedPasskey: false }));
+        await loaded();
+        expect(screen.getByText('Password sign-in is on')).toBeInTheDocument();
+        expect(screen.getByText(/first sign in once with a passkey so we know it works/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Turn off password sign-in' })).not.toBeInTheDocument();
+    });
+
+    it('turns password sign-in off: the consequences first, then the password, then the state changes and says what happened', async () => {
+        mocks.fetchPasskeys.mockResolvedValueOnce(withProvenPasskey()).mockResolvedValueOnce(withProvenPasskey({ passwordSignInOn: false }));
+        await loaded();
+        fireEvent.click(screen.getByRole('button', { name: 'Turn off password sign-in' }));
+
+        expect(screen.getByText(/Your password will no longer sign anyone in, even the right one/)).toBeInTheDocument();
+        expect(screen.getByText(/Your other devices are signed out now/)).toBeInTheDocument();
+        expect(screen.getByText(/emails you a link that turns it back on/)).toBeInTheDocument();
+        const confirm = screen.getByRole('button', { name: 'Turn off' });
+        expect(confirm).toBeDisabled();   // the password first
+        fireEvent.change(screen.getByLabelText('Your password'), { target: { value: 'a long password' } });
+        fireEvent.click(confirm);
+
+        await waitFor(() => expect(mocks.setPasswordSignIn).toHaveBeenCalledExactlyOnceWith(false, 'a long password'));
+        expect(await screen.findByText('Password sign-in is off')).toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('Your other devices were signed out');
+        expect(screen.getByRole('button', { name: 'Turn password sign-in back on' })).toBeInTheDocument();
+        expect(screen.queryByLabelText('Your password')).not.toBeInTheDocument();
+    });
+
+    it('while it is off, says how to get back in if every passkey is lost, and turns it back on with the password', async () => {
+        mocks.fetchPasskeys.mockResolvedValueOnce(withProvenPasskey({ passwordSignInOn: false })).mockResolvedValueOnce(withProvenPasskey());
+        await loaded();
+        expect(screen.getByText(/Forgot your password\?/)).toBeInTheDocument();
+        expect(screen.getByText(/turns password sign-in back on/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Turn password sign-in back on' }));
+        fireEvent.change(screen.getByLabelText('Your password'), { target: { value: 'a long password' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
+
+        await waitFor(() => expect(mocks.setPasswordSignIn).toHaveBeenCalledExactlyOnceWith(true, 'a long password'));
+        expect(await screen.findByText('Password sign-in is on')).toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('Password sign-in is back on.');
+    });
+
+    it('shows the server\'s reason, keeps the form, and clears the password on Cancel', async () => {
+        mocks.fetchPasskeys.mockResolvedValue(withProvenPasskey());
+        mocks.setPasswordSignIn.mockRejectedValueOnce(new ApiError(401, 'invalid_credentials', 'That password is not right.'));
+        await loaded();
+        fireEvent.click(screen.getByRole('button', { name: 'Turn off password sign-in' }));
+        fireEvent.change(screen.getByLabelText('Your password'), { target: { value: 'wrong' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('That password is not right.');
+        expect(screen.getByText('Turn off')).toBeInTheDocument();   // still on the confirm screen
+
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Turn off password sign-in' }));
+        expect(screen.getByLabelText('Your password')).toHaveValue('');
+    });
+
+    it('is hidden while another form is open, so only one thing is asked at a time', async () => {
+        mocks.fetchPasskeys.mockResolvedValue(withProvenPasskey());
+        await loaded();
+        fireEvent.click(screen.getByRole('button', { name: 'Add a passkey' }));
+        expect(screen.queryByText(/Password sign-in is/)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(screen.getByText('Password sign-in is on')).toBeInTheDocument();
+    });
+
+    it('shows the server\'s reason when the last working passkey cannot be removed', async () => {
+        mocks.fetchPasskeys.mockResolvedValue(withProvenPasskey({ passwordSignInOn: false }));
+        mocks.removePasskey.mockRejectedValueOnce(new ApiError(409, 'last_passkey', 'Password sign-in is turned off, so this passkey is one of the only ways into your account. Turn password sign-in back on before you remove it.'));
+        await loaded();
+        fireEvent.click(screen.getByRole('button', { name: 'Remove My phone' }));
+        fireEvent.change(screen.getByLabelText('Your password'), { target: { value: 'a long password' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Turn password sign-in back on before you remove it');
+        expect(within(screen.getByRole('list', { name: 'Your passkeys' })).getByText('My phone')).toBeInTheDocument();
     });
 });

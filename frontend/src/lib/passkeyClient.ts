@@ -22,6 +22,10 @@ export interface PasskeyStatus {
     available: boolean;
     /** The account has a password, which adding and removing ask for again (a Google-only account has none). */
     needsPassword: boolean;
+    /** False when the member has switched password sign-in off: only passkeys (and Google, if linked) open the account. */
+    passwordSignInOn: boolean;
+    /** At least one passkey has signed in before, which has to be true before password sign-in may be switched off (so nobody is locked out). */
+    hasUsedPasskey: boolean;
     passkeys: Passkey[];
 }
 
@@ -43,6 +47,14 @@ export async function addPasskey(input: { password?: string; name: string }): Pr
         throw new ApiError(0, problem.code, problem.message);
     }
     return request<Passkey>('/api/v1/auth/passkeys/registration', { method: 'POST', body: { challengeId: start.challengeId, credential, name: input.name } });
+}
+
+/**
+ * Switches password sign-in off (`enabled` false) or back on. Needs the password. Switching it off needs a passkey that has signed in before, and signs every other
+ * device out; the server's message says why when it refuses (`passkey_not_proven`, `invalid_credentials`).
+ */
+export async function setPasswordSignIn(enabled: boolean, password?: string): Promise<void> {
+    await request<void>('/api/v1/auth/password-sign-in', { method: 'POST', body: { enabled, password: password ?? null } });
 }
 
 /** Needs the password, when the account has one. */

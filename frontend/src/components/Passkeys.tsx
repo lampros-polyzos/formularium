@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { browserSupportsWebAuthn } from '@simplewebauthn/browser';
-import { addPasskey, fetchPasskeys, removePasskey, type Passkey, type PasskeyStatus } from '../lib/passkeyClient';
+import { addPasskey, fetchPasskeys, removePasskey, setPasswordSignIn, type Passkey, type PasskeyStatus } from '../lib/passkeyClient';
 
 const messageOf = (error: unknown, fallback: string) => (error instanceof Error && error.message ? error.message : fallback);
 
@@ -9,7 +9,9 @@ const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateS
 type Step =
     | { name: 'idle' }
     | { name: 'adding' }                    // the name, and the password when the account has one
-    | { name: 'removing'; passkey: Passkey };
+    | { name: 'removing'; passkey: Passkey }
+    | { name: 'passwordOff' }               // confirms switching password sign-in off, with the password
+    | { name: 'passwordOn' };               // confirms switching it back on, with the password
 
 /**
  * "Passkeys" in the settings: sign in with a fingerprint, face or screen lock instead of a password. A passkey only works on this website's own address, so a
@@ -24,6 +26,7 @@ export default function Passkeys() {
     const [password, setPassword] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const supported = browserSupportsWebAuthn();
 
     const reload = useCallback(async () => {
@@ -49,6 +52,13 @@ export default function Passkeys() {
         setError(null);
     };
 
+    const begin = (next: Step) => {
+        setError(null);
+        setNotice(null);
+        setPassword('');
+        setStep(next);
+    };
+
     const run = async (work: () => Promise<void>, fallback: string) => {
         setBusy(true);
         setError(null);
@@ -66,6 +76,15 @@ export default function Passkeys() {
         reset();
         await reload();
     }, 'Could not add the passkey. Please try again.');
+
+    const switchPasswordSignIn = (enabled: boolean) => run(async () => {
+        await setPasswordSignIn(enabled, password);
+        reset();
+        setNotice(enabled
+            ? 'Password sign-in is back on.'
+            : 'Password sign-in is off. Your other devices were signed out, and we emailed you a notice. From now on only a passkey can open your account.');
+        await reload();
+    }, 'Could not change that. Please try again.');
 
     const remove = (passkey: Passkey) => run(async () => {
         await removePasskey(passkey.id, status.needsPassword ? password : undefined);
@@ -95,7 +114,7 @@ export default function Passkeys() {
                                 <p className="text-xs text-gray-500">Added {day(p.createdAt)} · {p.lastUsedAt ? `last used ${day(p.lastUsedAt)}` : 'never used'}</p>
                             </div>
                             {step.name === 'idle' && (
-                                <button type="button" className="text-xs font-medium text-red-700 hover:underline shrink-0" aria-label={`Remove ${p.name}`} onClick={() => { setError(null); setStep({ name: 'removing', passkey: p }); }}>Remove</button>
+                                <button type="button" className="text-xs font-medium text-red-700 hover:underline shrink-0" aria-label={`Remove ${p.name}`} onClick={() => begin({ name: 'removing', passkey: p })}>Remove</button>
                             )}
                         </li>
                     ))}
@@ -105,10 +124,58 @@ export default function Passkeys() {
             {step.name === 'idle' && (
                 <>
                     {supported
-                        ? <button type="button" className={primary} disabled={busy} onClick={() => { setError(null); setStep({ name: 'adding' }); }}>Add a passkey</button>
+                        ? <button type="button" className={primary} disabled={busy} onClick={() => begin({ name: 'adding' })}>Add a passkey</button>
                         : <p className="text-xs text-gray-500">This browser cannot make passkeys. Use a recent version of Chrome, Edge, Safari or Firefox to add one.</p>}
                     {errorText}
                 </>
+            )}
+
+            {notice && step.name === 'idle' && <p role="status" className="text-xs text-[#2c4c3b] font-medium mt-3">{notice}</p>}
+
+            {step.name === 'idle' && status.needsPassword && status.passkeys.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                    <p className="text-sm font-medium text-[#1f382a]">Password sign-in is {status.passwordSignInOn ? 'on' : 'off'}</p>
+                    {status.passwordSignInOn ? (
+                        <>
+                            <p className="text-xs text-gray-500 mt-1 mb-2">
+                                Turn it off and only your passkeys (and Google, if you linked it) can open your account. A fake site can copy a password and a code, but never a passkey, so this is what makes the account safe from that.
+                            </p>
+                            {status.hasUsedPasskey
+                                ? <button type="button" className={secondary} onClick={() => begin({ name: 'passwordOff' })}>Turn off password sign-in</button>
+                                : <p className="text-xs text-amber-700">To turn this off, first sign in once with a passkey so we know it works: sign out, then choose &quot;Sign in with a passkey&quot;. Otherwise you could be locked out.</p>}
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-xs text-gray-500 mt-1 mb-2">
+                                Only a passkey opens your account now. If you ever lose them all, choose &quot;Forgot your password?&quot; on the sign-in form: the emailed link gets you back in and turns password sign-in back on.
+                            </p>
+                            <button type="button" className={secondary} onClick={() => begin({ name: 'passwordOn' })}>Turn password sign-in back on</button>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {(step.name === 'passwordOff' || step.name === 'passwordOn') && (
+                <form onSubmit={e => { e.preventDefault(); void switchPasswordSignIn(step.name === 'passwordOn'); }}>
+                    {step.name === 'passwordOff' ? (
+                        <ul className="text-xs text-gray-600 list-disc pl-4 space-y-1 mb-3">
+                            <li>Your password will no longer sign anyone in, even the right one.</li>
+                            <li>Your other devices are signed out now. This one stays signed in.</li>
+                            <li>If you lose all your passkeys, &quot;Forgot your password?&quot; on the sign-in form emails you a link that turns it back on.</li>
+                        </ul>
+                    ) : (
+                        <p className="text-sm text-gray-700 mb-2">Your password will sign you in again, as well as your passkeys.</p>
+                    )}
+                    <label htmlFor="password-sign-in-password" className="block text-sm font-medium text-gray-700 mb-1">Your password</label>
+                    <input id="password-sign-in-password" type="password" autoComplete="current-password" required maxLength={72} className={field} value={password} onChange={e => setPassword(e.target.value)} />
+                    {errorText}
+                    <div className="flex gap-2 mt-3">
+                        <button type="submit" className={step.name === 'passwordOff' ? danger : primary} disabled={busy || !password}>
+                            {busy ? 'Working...' : step.name === 'passwordOff' ? 'Turn off' : 'Turn on'}
+                        </button>
+                        <button type="button" className={secondary} onClick={reset}>Cancel</button>
+                    </div>
+                </form>
             )}
 
             {step.name === 'adding' && (

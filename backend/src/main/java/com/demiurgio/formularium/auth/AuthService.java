@@ -147,6 +147,11 @@ public class AuthService {
             events.record(AuthEvents.LOGIN_FAILED, emailHash, ip, user == null ? null : user.id(), userAgent, clock.instant());
             throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "The email or password is not right.");
         }
+        if (user.passwordLoginDisabled()) {
+            // Said only after the password was right, so it tells a guesser nothing: a phished password gets no further, and the owner is told what to do instead
+            record(AuthEvents.PASSWORD_LOGIN_REFUSED, null, ip, user.id(), userAgent);
+            throw new ApiException(HttpStatus.FORBIDDEN, "password_sign_in_off", "Password sign-in is turned off for this account. Sign in with a passkey instead.");
+        }
         events.record(AuthEvents.LOGIN_SUCCESS, emailHash, ip, user.id(), userAgent, clock.instant());
         if (properties.requireVerifiedEmail() && !user.emailVerified()) {
             // Said only after the password was right, so this does not tell strangers which emails have accounts
@@ -170,7 +175,7 @@ public class AuthService {
                 // Same verified email: it is the same person, so the accounts are joined
                 users.linkGoogle(byEmail.id(), who.sub());
                 users.markEmailVerified(byEmail.id(), clock.instant());   // Google vouched for the address
-                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username(), true, byEmail.guestExpiresAt());
+                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username(), true, byEmail.guestExpiresAt(), byEmail.passwordLoginDisabledAt());
             } else {
                 user = createGoogleUser(email, who);
             }
@@ -252,6 +257,7 @@ public class AuthService {
         EmailTokenRepository.Found found = emailTokens.findUsable(TokenService.hash(request.token()), EmailTokenRepository.RESET, now).orElseThrow(AuthService::badLink);
         if (!emailTokens.markUsed(found.id(), now)) throw badLink();
         users.setPassword(found.userId(), passwords.encode(request.password()));
+        users.setPasswordLoginDisabled(found.userId(), null);   // the way back in for someone who has lost every device: the mailbox, as for any account
         users.markEmailVerified(found.userId(), now);   // the link reached their inbox, so the address is theirs
         emailTokens.cancelUnused(found.userId(), EmailTokenRepository.RESET, now);
         refreshTokens.revokeAllForUser(found.userId());
@@ -294,6 +300,51 @@ public class AuthService {
                         + "\n\nIf this was you, there is nothing to do."
                         + "\n\nIf it was not you, someone else may have access to your account. Choose a new password right away with \"Forgot your password?\" on the sign-in form: "
                         + properties.appUrl() + "\nThat signs every device out.");
+    }
+
+    /**
+     * Switches password sign-in off or back on. Off is for members who have a passkey: a fake site can relay a password and a code, but not a passkey, so with the
+     * password off the account cannot be phished through the sign-in form. To make sure nobody is locked out:
+     * <ul>
+     *   <li>it needs a passkey that HAS SIGNED IN before (one registered and never used might not work on the next device), and the password, as every change here does;</li>
+     *   <li>it ends every other sign-in (somebody who got in with the password earlier is out), keeping the one in use, and the account's address is told;</li>
+     *   <li>the last passkey known to work cannot be removed while it is off (see {@code PasskeyService});</li>
+     *   <li>a password reset by email switches it back on: the mailbox is the way back for someone who lost every device, as it is for any account.</li>
+     * </ul>
+     * Google sign-in is a separate way in and is not affected.
+     */
+    public void setPasswordSignIn(UUID userId, AuthRequests.PasswordSignIn request, String currentRefreshToken, String ip, String userAgent) {
+        UserAccount user = users.findById(userId).orElseThrow(AuthService::noSession);
+        if (user.passwordHash() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, "no_password", "This account has no password, so there is nothing to switch off.");
+        }
+        limiter.checkPasswordChange(userId, ip);
+        if (request.password() == null || !fitsBcrypt(request.password()) || !passwords.matches(request.password(), user.passwordHash())) {
+            record(AuthEvents.PASSWORD_CHANGE_FAILED, null, ip, userId, userAgent);
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "That password is not right.");
+        }
+        boolean off = !request.enabled();
+        if (off == user.passwordLoginDisabled()) return;   // already as asked: nothing changes, nobody is signed out or emailed
+        if (off && !passkeys.hasUsedPasskey(userId)) {
+            throw new ApiException(HttpStatus.CONFLICT, "passkey_not_proven",
+                    "Sign in with a passkey once first, so we know it works on your device. Otherwise, with the password off, you could be locked out.");
+        }
+        Instant now = clock.instant();
+        users.setPasswordLoginDisabled(userId, off ? now : null);
+        RefreshTokenRepository.Stored current = currentRefreshToken == null || currentRefreshToken.isBlank() ? null
+                : refreshTokens.findByHash(TokenService.hash(currentRefreshToken)).filter(t -> t.userId().equals(userId) && t.revokedAt() == null).orElse(null);
+        if (off) {
+            if (current != null) refreshTokens.revokeAllForUserExceptFamily(userId, current.familyId());
+            else refreshTokens.revokeAllForUser(userId);
+        }
+        record(off ? AuthEvents.PASSWORD_LOGIN_DISABLED : AuthEvents.PASSWORD_LOGIN_ENABLED, null, ip, userId, userAgent);
+        mail.send(user.email(), off ? "Password sign-in was turned off on your Formularium account" : "Password sign-in was turned back on for your Formularium account",
+                "Hello " + user.username() + ",\n\n" + (off
+                        ? "Password sign-in was just turned off for your Formularium account, and your other devices were signed out. From now on the account opens only with a passkey (or with Google, if you linked it)."
+                        : "Password sign-in was just turned back on for your Formularium account. The account opens with your password again, as well as with a passkey.")
+                        + "\n\nIf this was you, there is nothing to do."
+                        + "\n\nIf it was not you, someone else may have access to your account. Choose a new password right away with \"Forgot your password?\" on the sign-in form: "
+                        + properties.appUrl() + "\nThat turns password sign-in back on and signs every device out.");
     }
 
     public void logout(String refreshToken) {

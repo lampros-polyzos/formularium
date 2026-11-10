@@ -22,7 +22,8 @@ How sign-in and accounts are protected, what is not covered, and what to do when
 | Reading other members' data | The caller's id comes from the verified token and is part of every query ([ADR 0005](decisions/0005-authorization-in-java.md)); each endpoint is tested as a second member |
 | Direct database access from the browser | The browser roles have no privileges, and row-level security is on with no policies |
 | Leaked secrets in git | A pre-commit hook blocks them. GitHub push protection is a second layer, but it only knows the formats of well-known secrets (an OAuth client secret, many API keys), not a database or mail password, so the hook stays essential |
-| Phishing: a fake site relaying a password and a code | A passkey is bound to the website's own domain: the browser offers it only to pages of that domain, and what it signs names the site, so a relay through a look-alike fails. It protects the sign-ins that use a passkey; the password path stays open ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md)) |
+| Phishing: a fake site relaying a password and a code | A passkey is bound to the website's own domain: the browser offers it only to pages of that domain, and what it signs names the site, so a relay through a look-alike fails. It protects the sign-ins that use a passkey, and an account can switch password sign-in off to close the password path ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md), [ADR 0015](decisions/0015-password-sign-in-can-be-switched-off.md)) |
+| Locking yourself out, or someone closing you out, with "password sign-in off" | Switching off needs the password and a passkey that has signed in before (one never used might not work); it signs out every other device and emails a notice; the last passkey known to work cannot be removed while it is off; and a password reset by email switches it back on |
 | Binding someone else's device to an account | Adding or removing a passkey needs the account password (wrong ones are limited per account and per address), is refused for guests, is capped at 10 per member and is recorded in the audit trail |
 | Abuse of "Try the demo" ([ADR 0013](decisions/0013-guest-sessions-for-the-demo.md)) | The same bot check as sign-up; 10 demos per address per hour; at most 200 guests at once; each guest is deleted after 24 hours with everything it made. A guest can read the community but not write to it, and cannot set up two-step verification (the API answers `403 guest_account`). `GUEST_ENABLED=false` switches it off |
 | Vulnerable libraries | Dependabot opens weekly update pull requests; CodeQL scans the frontend code |
@@ -32,7 +33,7 @@ Every sign-in, failure, reset, confirmation and replayed token is recorded in `a
 ## Known gaps
 
 - **Two-step verification is optional**, and a code does not stop phishing: a fake site can relay it in real time.
-- **Passkeys protect only the sign-ins that use them.** A password (with its code) still works and can still be phished, and there is no option yet to switch password sign-in off for an account ([roadmap](roadmap.md)).
+- **Switching password sign-in off is opt-in, and only about the password.** Until a member does it, their password (with its code) can still be phished. Google sign-in, if linked, stays a way in. And the mailbox is a way back in: a password reset by email switches password sign-in back on, so whoever controls the mailbox can undo it.
 - **A passkey that syncs is as safe as the account that syncs it** (Apple, Google, a password manager), and a passkey skips two-step verification altogether.
 - **We do not check what kind of device made a passkey** (attestation is off), and the relying party id is fixed: moving the site to another domain makes every passkey stop working.
 - **Losing both the phone and the recovery codes locks the account out of self-service.** On purpose, as a self-service path would be the weak point. See "Helping someone who is locked out" below.
@@ -75,6 +76,12 @@ delete from user_mfa           where user_id = '<that id>';
 ```
 
 They can sign in with their password again and set it up afresh. The event is not recorded automatically, so note it down.
+
+A member who switched password sign-in off and has lost every passkey normally gets back in with "Forgot your password?", whose emailed link switches it back on. If they cannot use their mailbox either, switch it back on for them, once you are sure it is them (it is recorded nowhere, so note it down):
+
+```sql
+update app_users set password_login_disabled_at = null where id = '<that id>';
+```
 
 A member who has lost a device with a passkey on it can still sign in with their password (or Google). To make a lost device's passkey stop working when they cannot sign in to remove it themselves, delete it in the same way (it is recorded nowhere, so note it down):
 

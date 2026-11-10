@@ -68,7 +68,11 @@ class PasskeyService {
     /** A passkey as the settings screen lists it. {@code synced} is true when it lives in a password manager or cloud keychain and so follows the member between devices. */
     record View(UUID id, String name, Instant createdAt, Instant lastUsedAt, boolean synced) { }
 
-    record Status(boolean available, boolean needsPassword, List<View> passkeys) { }
+    /**
+     * @param passwordSignInOn  false when the account has switched password sign-in off
+     * @param hasUsedPasskey    at least one passkey has signed in before, which is what has to be true before password sign-in may be switched off
+     */
+    record Status(boolean available, boolean needsPassword, boolean passwordSignInOn, boolean hasUsedPasskey, List<View> passkeys) { }
 
     private final RelyingParty rp;
     private final PasskeyRepository repository;
@@ -95,9 +99,14 @@ class PasskeyService {
     // ---- what the settings screen needs
 
     Status status(UUID userId) {
-        boolean needsPassword = users.findById(userId).map(u -> u.passwordHash() != null).orElse(false);
-        return new Status(enabled, needsPassword, repository.forUser(userId).stream().map(PasskeyService::view).toList());
+        UserAccount user = users.findById(userId).orElse(null);
+        boolean needsPassword = user != null && user.passwordHash() != null;
+        boolean passwordSignInOn = user == null || !user.passwordLoginDisabled();
+        return new Status(enabled, needsPassword, passwordSignInOn, repository.countUsed(userId) > 0, repository.forUser(userId).stream().map(PasskeyService::view).toList());
     }
+
+    /** Whether the member has a passkey that has signed in before, proof that at least one works on a real device. */
+    boolean hasUsedPasskey(UUID userId) { return repository.countUsed(userId) > 0; }
 
     // ---- adding one
 
@@ -157,6 +166,10 @@ class PasskeyService {
         requireEnabled();
         UserAccount user = users.findById(userId).orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "no_session", "Please sign in."));
         requirePassword(user, password, ip, userAgent);
+        if (user.passwordLoginDisabled() && repository.countUsedExcluding(userId, passkeyId) == 0) {
+            // With the password switched off, a passkey is the only way in: never remove the last one that is known to work
+            throw new ApiException(HttpStatus.CONFLICT, "last_passkey", "Password sign-in is turned off, so this passkey is one of the only ways into your account. Turn password sign-in back on before you remove it.");
+        }
         if (!repository.delete(passkeyId, userId)) throw new ApiException(HttpStatus.NOT_FOUND, "not_found", "That passkey does not exist.");
         events.record(AuthEvents.PASSKEY_REMOVED, null, ip, userId, userAgent, clock.instant());
     }

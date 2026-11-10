@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-10: Closing the password door without locking anyone in the hallway
+
+- **Situation.** Passkeys protect only the sign-ins that use them. A fake site can still collect a password and a code, so the account stays phishable until its password is refused.
+- **Task.** Let a member switch password sign-in off, such that doing so cannot leave them with no way in, and cannot be turned against them.
+- **Action.** Started from the ways it could go wrong, and designed each one out: no passkey at all, a passkey that was registered but never used (it might not work on the next device), removing the last one, losing every device, and someone with a borrowed session flipping it. The switch needs the password and a passkey that has signed in before (the existing `last_used_at`, so no second browser flow), ends every other sign-in, emails a notice, and the last working passkey cannot be removed while it is off. The password stays in the database and is only refused at sign-in, so the change is reversible; a password reset by email turns it back on, which is the way back in when every device is lost. The refusal says why, but only after the password checked out, so it reveals nothing to a guesser, and it comes before the two-step step, so no code is asked for or relayed.
+- **Result.** 16 backend tests for the rules (including a reset by email as the escape, and that two-step verification is never reached), 4 for the migration and 9 for the settings screen and client. A 13-step browser run with a virtual authenticator walked the whole story: unproven, proven, switch off with a wrong then right password, the password refused with the right message, the passkey still working, the last passkey protected, and back on. It found nothing new this time. The limits are in [ADR 0015](decisions/0015-password-sign-in-can-be-switched-off.md): it is opt-in, and the account is only as safe as its mailbox.
+
 ## 2026-11-10: Changing a password without breaking anything else
 
 - **Situation.** A password could only be changed by asking for an email link. Anyone who suspects a leak, or has lost a laptop, wants to change it from the settings, and to be sure the old password and any session it opened are finished.

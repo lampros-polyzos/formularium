@@ -123,6 +123,13 @@ public class AuthController {
         return ResponseEntity.noContent().header(HttpHeaders.CACHE_CONTROL, "no-store").build();
     }
 
+    /** Switches password sign-in off or on for the signed-in member. The refresh cookie says which sign-in is this one, so it is the one that stays. */
+    @PostMapping("/password-sign-in")
+    ResponseEntity<Void> passwordSignIn(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AuthRequests.PasswordSignIn body, HttpServletRequest request) {
+        auth.setPasswordSignIn(UUID.fromString(jwt.getSubject()), body, refreshCookie(request), clientAddress.of(request), request.getHeader(HttpHeaders.USER_AGENT));
+        return ResponseEntity.noContent().header(HttpHeaders.CACHE_CONTROL, "no-store").build();
+    }
+
     @GetMapping("/me")
     UserView me(@AuthenticationPrincipal Jwt jwt) {
         return auth.me(UUID.fromString(jwt.getSubject()));

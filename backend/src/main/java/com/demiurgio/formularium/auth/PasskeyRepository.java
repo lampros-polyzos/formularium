@@ -42,6 +42,16 @@ class PasskeyRepository {
         return jdbc.sql("select count(*) from passkeys where user_id = :user").param("user", userId).query(Long.class).single();
     }
 
+    /** How many of the member's passkeys have signed in at least once, so are known to work: the only ones that count as a way back in. */
+    long countUsed(UUID userId) {
+        return jdbc.sql("select count(*) from passkeys where user_id = :user and last_used_at is not null").param("user", userId).query(Long.class).single();
+    }
+
+    /** As {@link #countUsed}, without one passkey (about to be removed). */
+    long countUsedExcluding(UUID userId, UUID passkeyId) {
+        return jdbc.sql("select count(*) from passkeys where user_id = :user and last_used_at is not null and id <> :id").param("user", userId).param("id", passkeyId).query(Long.class).single();
+    }
+
     Optional<Passkey> byCredentialId(String credentialId) {
         return jdbc.sql("select " + COLUMNS + " from passkeys where credential_id = :id").param("id", credentialId).query(PasskeyRepository::map).optional();
     }
