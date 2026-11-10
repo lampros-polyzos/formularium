@@ -79,7 +79,7 @@ New accounts must confirm their email, so sending has to work before real users 
 2. Create an account. The confirmation email arrives (check spam the first time) and its link signs you in.
 3. Sign in, reload the page: you stay signed in. Sign out, then in with Google.
 4. Turn on two-step verification in Settings, sign out, and sign in with a code.
-5. Save a formula, make a PDF, and send a password-reset email to yourself.
+5. Save a formula, make a PDF, and send a password-reset email to yourself. In Settings, change your password: this browser stays signed in, you get an email notice, and a second browser that was signed in is signed out.
 6. In Settings, add a **passkey** (it asks for your password and then for your fingerprint, face or screen lock), sign out, and sign in with the passkey without typing anything. If the browser says passkeys do not work on this address, check the two settings above.
 7. In a private window, press **Try the demo**: you land in the studio with the starter formulas and a banner saying the work is temporary. Posting to the community is refused, and "Create a free account" opens the sign-up form.
 8. Work through the checklist in [security.md](security.md#running-it-checklist), in particular the real client address behind Render's proxy.

@@ -17,6 +17,7 @@ How sign-in and accounts are protected, what is not covered, and what to do when
 | Another website acting on a member's cookie | The refresh cookie is `HttpOnly`, `Secure` in production, scoped to `/api/v1/auth` and `SameSite`. Spring's CORS handling also refuses any request that names a foreign `Origin`, so the cookie is never used for it |
 | Finding out who has an account | The same answer for known and unknown emails at sign-in, password reset and resend, and a decoy hash so timing does not tell either |
 | Flooding inboxes through the email forms | 10 confirmation or reset requests per address per hour, plus one per account per minute |
+| Taking over an account from an open or stolen session | Changing the password needs the current one (wrong ones: 10 per account and 30 per address in 15 minutes), applies the sign-up rules to the new one, ends every OTHER sign-in while keeping the one in use, cancels a waiting reset link and emails the account a notice. An account that only uses Google cannot set a first password from a session: it uses "Forgot your password?", which proves the address by email |
 | Taking over an account through email | Links are 256-bit random, single use, expire (1 hour for resets, 24 for confirmation), and a reset signs the account out everywhere |
 | Reading other members' data | The caller's id comes from the verified token and is part of every query ([ADR 0005](decisions/0005-authorization-in-java.md)); each endpoint is tested as a second member |
 | Direct database access from the browser | The browser roles have no privileges, and row-level security is on with no policies |
@@ -36,7 +37,7 @@ Every sign-in, failure, reset, confirmation and replayed token is recorded in `a
 - **We do not check what kind of device made a passkey** (attestation is off), and the relying party id is fixed: moving the site to another domain makes every passkey stop working.
 - **Losing both the phone and the recovery codes locks the account out of self-service.** On purpose, as a self-service path would be the weak point. See "Helping someone who is locked out" below.
 - **The two-step encryption key cannot be rotated yet** (see the roadmap). Losing it means every member's authenticator stops working.
-- **No "change password" while signed in.** A password can only be changed through the email reset.
+- **The notice about a password change goes to the address on the account**, so it helps only if that mailbox is still the owner's. A changed email address is not a feature yet.
 - **No alert for a sign-in from a new device.**
 - **The signing key is one shared secret (HS256).** That is fine while only this backend checks tokens. Rotating it is cheap: access tokens last 15 minutes and sessions live in the database, so a rotation only makes clients renew once. There is no support for two keys at the same time.
 - **Locking out a victim.** The per-account limit means someone can block a member's sign-in for 15 minutes by failing on purpose. The bot check and the short window are what keep this costly.

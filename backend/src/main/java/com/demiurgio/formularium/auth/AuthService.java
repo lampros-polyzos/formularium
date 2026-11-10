@@ -258,6 +258,44 @@ public class AuthService {
         record(AuthEvents.PASSWORD_RESET_DONE, null, null, found.userId(), null);
     }
 
+    /**
+     * Changes the password of a signed-in member. Needs the current password (so someone who has only borrowed an open session cannot take the account over),
+     * and applies the same rules as sign-up to the new one. Every OTHER sign-in is ended, so a device that was lost, or somebody who got in with the old password,
+     * is locked out, while the one in use carries on. A reset link that was waiting is cancelled, and the account's address is told, so a change that was not
+     * theirs does not go unnoticed. Two-step verification and passkeys are left as they are.
+     *
+     * An account without a password (Google only) has nothing to change here: it adds one through "Forgot your password?", which proves the address by email.
+     * Letting an access token alone set a first password would give whoever holds it a permanent way in.
+     */
+    public void changePassword(UUID userId, AuthRequests.ChangePassword request, String currentRefreshToken, String ip, String userAgent) {
+        UserAccount user = users.findById(userId).orElseThrow(AuthService::noSession);
+        if (user.passwordHash() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, "no_password", "This account signs in with Google and has no password to change. To add one, choose \"Forgot your password?\" on the sign-in form.");
+        }
+        limiter.checkPasswordChange(userId, ip);
+        if (!fitsBcrypt(request.currentPassword()) || !passwords.matches(request.currentPassword(), user.passwordHash())) {
+            record(AuthEvents.PASSWORD_CHANGE_FAILED, null, ip, userId, userAgent);
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "Your current password is not right.");
+        }
+        if (fitsBcrypt(request.newPassword()) && passwords.matches(request.newPassword(), user.passwordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "password_unchanged", "Choose a password that is different from your current one.");
+        }
+        requireUsablePassword(request.newPassword());
+        Instant now = clock.instant();
+        users.setPassword(userId, passwords.encode(request.newPassword()));
+        emailTokens.cancelUnused(userId, EmailTokenRepository.RESET, now);
+        RefreshTokenRepository.Stored current = currentRefreshToken == null || currentRefreshToken.isBlank() ? null
+                : refreshTokens.findByHash(TokenService.hash(currentRefreshToken)).filter(t -> t.userId().equals(userId) && t.revokedAt() == null).orElse(null);
+        if (current != null) refreshTokens.revokeAllForUserExceptFamily(userId, current.familyId());
+        else refreshTokens.revokeAllForUser(userId);   // this sign-in cannot be told apart from the others: end them all, and the page asks to sign in again
+        record(AuthEvents.PASSWORD_CHANGED, null, ip, userId, userAgent);
+        mail.send(user.email(), "Your Formularium password was changed",
+                "Hello " + user.username() + ",\n\nThe password of your Formularium account was just changed, and your other devices were signed out."
+                        + "\n\nIf this was you, there is nothing to do."
+                        + "\n\nIf it was not you, someone else may have access to your account. Choose a new password right away with \"Forgot your password?\" on the sign-in form: "
+                        + properties.appUrl() + "\nThat signs every device out.");
+    }
+
     public void logout(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) return;
         refreshTokens.findByHash(TokenService.hash(refreshToken)).ifPresent(t -> refreshTokens.revokeFamily(t.familyId()));

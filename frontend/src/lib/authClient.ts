@@ -13,8 +13,11 @@ import { browserSupportsWebAuthn, startAuthentication, type PublicKeyCredentialR
 import { apiUrl } from './api';
 import { describePasskeyError } from './passkeyErrors';
 
-/** `guest` is true for the temporary "Try the demo" account (see {@link startGuest}). */
-export interface AuthUser { id: string; email: string; username: string; guest?: boolean }
+/**
+ * `guest` is true for the temporary "Try the demo" account (see {@link startGuest}). `hasPassword` is false for an account that only uses Google, which has no
+ * password to change.
+ */
+export interface AuthUser { id: string; email: string; username: string; guest?: boolean; hasPassword?: boolean }
 
 interface AuthResponse { accessToken: string; expiresInSeconds: number; user: AuthUser }
 
@@ -258,7 +261,21 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * fetch() for the signed-in API. Adds the access token, and if the server says it has expired, renews it once and tries again.
+ * Whether a 401 is one of the API's own answers (a wrong password, a wrong code: it has the JSON error body every endpoint uses) and not the bare 401 that the
+ * security filter gives for an expired or missing access token. Only the second means "renew and try again": repeating the first would send a wrong guess twice.
+ */
+async function isAnApiError(res: Response): Promise<boolean> {
+    try {
+        const body = await res.clone().json() as { error?: { code?: unknown } };
+        return typeof body?.error?.code === 'string';
+    } catch {
+        return false;   // no JSON body: the security filter's answer
+    }
+}
+
+/**
+ * fetch() for the signed-in API. Adds the access token, and if the server says it has expired, renews it once and tries again. An error the API gives for the
+ * request itself, even a 401 (a wrong current password), is handed back as it is, never repeated.
  * Throws AuthError('no_session') when you are not signed in.
  */
 export async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -269,7 +286,7 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
     };
     if (!accessToken && !(await refreshSession())) throw new AuthError('no_session', 'Please sign in.', 401);
     let res = await send();
-    if (res.status === 401) {
+    if (res.status === 401 && !(await isAnApiError(res))) {
         if (!(await refreshSession())) throw new AuthError('no_session', 'Please sign in.', 401);
         res = await send();
     }

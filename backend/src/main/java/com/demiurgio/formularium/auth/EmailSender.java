@@ -3,6 +3,7 @@ package com.demiurgio.formularium.auth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
@@ -18,11 +19,17 @@ public class EmailSender {
     private final BrevoMailApi brevo;
     private final ObjectProvider<JavaMailSender> smtp;
     private final AuthProperties properties;
+    private final boolean smtpConfigured;
 
-    EmailSender(BrevoMailApi brevo, ObjectProvider<JavaMailSender> smtp, AuthProperties properties) {
+    /**
+     * @param smtpHost spring.mail.host. Spring makes a mail sender even when this is EMPTY (the setting exists, so its condition holds), and such a sender fails
+     *                 on every email with "no password specified", so an empty host has to mean "no SMTP" here, or the log fallback below is never reached.
+     */
+    EmailSender(BrevoMailApi brevo, ObjectProvider<JavaMailSender> smtp, AuthProperties properties, @Value("${spring.mail.host:}") String smtpHost) {
         this.brevo = brevo;
         this.smtp = smtp;
         this.properties = properties;
+        this.smtpConfigured = smtpHost != null && !smtpHost.isBlank();
     }
 
     public void send(String to, String subject, String body) {
@@ -31,7 +38,7 @@ public class EmailSender {
                 brevo.send(properties.mailFrom(), to, subject, body);
                 return;
             }
-            JavaMailSender sender = smtp.getIfAvailable();
+            JavaMailSender sender = smtpConfigured ? smtp.getIfAvailable() : null;
             if (sender == null) {
                 log.info("Email (no mail service configured, so it is only logged)\nTo: {}\nSubject: {}\n\n{}", to, subject, body);
                 return;

@@ -40,6 +40,11 @@ public final class AuthRequests {
     /** "Try the demo": nothing but the bot check. */
     public record Guest(String captchaToken) { }
 
+    /** Changing the password while signed in: the current one proves it is the owner at the keyboard, and the new one follows the sign-up rules. */
+    public record ChangePassword(
+            @NotBlank @Size(max = 72) String currentPassword,
+            @NotBlank @Size(min = 10, max = 72, message = "must be between 10 and 72 characters") String newPassword) { }
+
     public record Google(@NotBlank @Size(max = 4096) String idToken) { }
 
     /** The second step of signing in: the one-time token from the first step, and a code from the app (or a recovery code). */

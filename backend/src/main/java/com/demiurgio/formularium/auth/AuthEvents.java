@@ -34,6 +34,10 @@ class AuthEvents {
     static final String PASSKEY_FAILED = "passkey_failed";
     /** A passkey sign-in was started (a challenge was asked for); counted per address so the endpoint cannot be used to fill the table. */
     static final String PASSKEY_LOGIN_STARTED = "passkey_login_started";
+    /** A signed-in member changed their password. */
+    static final String PASSWORD_CHANGED = "password_changed";
+    /** A wrong current password when changing it; counted per account and per address. */
+    static final String PASSWORD_CHANGE_FAILED = "password_change_failed";
     static final String MFA_ENABLED = "mfa_enabled";
     static final String MFA_DISABLED = "mfa_disabled";
     /** A wrong authenticator or recovery code (or, when setting up, a wrong password). Counted per account and per address. */

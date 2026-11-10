@@ -27,6 +27,8 @@ class LoginAttemptLimiter {
     static final Duration WINDOW = Duration.ofMinutes(15);
     static final int MAX_MFA_FAILURES_PER_USER = 10;
     static final int MAX_MFA_FAILURES_PER_IP = 30;
+    static final int MAX_PASSWORD_CHANGE_FAILURES_PER_USER = 10;
+    static final int MAX_PASSWORD_CHANGE_FAILURES_PER_IP = 30;
     static final int MAX_PASSKEY_FAILURES_PER_USER = 10;
     static final int MAX_PASSKEY_FAILURES_PER_IP = 30;
     static final int MAX_PASSKEY_STARTS_PER_IP = 60;
@@ -59,6 +61,19 @@ class LoginAttemptLimiter {
         if (events.countForUser(AuthEvents.MFA_FAILED, userId, from, now) >= MAX_MFA_FAILURES_PER_USER
                 || events.count(AuthEvents.MFA_FAILED, "ip", ip, from, now) >= MAX_MFA_FAILURES_PER_IP) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many wrong codes. Try again in a few minutes.");
+        }
+    }
+
+    /**
+     * Changing the password asks for the current one, so the form is a way to test guesses for anyone holding a stolen access token:
+     * 10 wrong ones per account in the window (from anywhere), and 30 per address.
+     */
+    void checkPasswordChange(UUID userId, String ip) {
+        Instant now = clock.instant();
+        Instant from = now.minus(WINDOW);
+        if (events.countForUser(AuthEvents.PASSWORD_CHANGE_FAILED, userId, from, now) >= MAX_PASSWORD_CHANGE_FAILURES_PER_USER
+                || events.count(AuthEvents.PASSWORD_CHANGE_FAILED, "ip", ip, from, now) >= MAX_PASSWORD_CHANGE_FAILURES_PER_IP) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too_many_attempts", "Too many wrong passwords. Try again in a few minutes.");
         }
     }
 

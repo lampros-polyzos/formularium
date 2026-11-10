@@ -32,7 +32,8 @@ public class PostgresForTests implements ApplicationContextInitializer<Configura
 
     @SuppressWarnings("resource")   // stopped by Testcontainers when the test run ends
     private static PostgreSQLContainer start() {
-        PostgreSQLContainer container = new PostgreSQLContainer("postgres:17-alpine").withDatabaseName("formularium");
+        PostgreSQLContainer container = new PostgreSQLContainer("postgres:17-alpine").withDatabaseName("formularium")
+                .withCommand("postgres", "-c", "max_connections=300");   // headroom: each cached Spring test context holds a small pool of its own
         // The image runs the files in /docker-entrypoint-initdb.d in name order, once, when the database is first created
         List<Path> files = migrations();
         for (int i = 0; i < files.size(); i++) {

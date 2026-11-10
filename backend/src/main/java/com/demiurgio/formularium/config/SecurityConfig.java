@@ -61,6 +61,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/community/**").access(MEMBERS_ONLY)
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/mfa/**").access(MEMBERS_ONLY)
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/passkeys/**").access(MEMBERS_ONLY)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").access(MEMBERS_ONLY)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder)).accessDeniedHandler((request, response, denied) -> {
                     // The only 403 this API gives: a guest asking for something that needs a real account. Same error shape as everywhere else (see GlobalExceptionHandler).
@@ -72,7 +73,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    private static final String GUEST_REFUSED = "{\"error\":{\"code\":\"guest_account\",\"message\":\"This needs a free account. The demo cannot post to the community, set up two-step verification or add passkeys.\"}}";
+    private static final String GUEST_REFUSED = "{\"error\":{\"code\":\"guest_account\",\"message\":\"This needs a free account. The demo cannot post to the community, change a password, set up two-step verification or add passkeys.\"}}";
 
     /** Anyone signed in who is not a guest. (Not signed in at all is still answered 401, as for every other protected path.) */
     private static final AuthorizationManager<RequestAuthorizationContext> MEMBERS_ONLY = (authentication, context) -> {

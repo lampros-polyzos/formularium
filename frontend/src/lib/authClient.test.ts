@@ -368,7 +368,7 @@ describe('calling the signed-in API', () => {
     it('renews an expired token once and repeats the request', async () => {
         fetchMock
             .mockResolvedValueOnce(reply(200, session('old')))
-            .mockResolvedValueOnce(error(401, 'x'))               // the API says the token expired
+            .mockResolvedValueOnce(reply(401))                      // the security filter says the token expired: a bare 401, no body
             .mockResolvedValueOnce(reply(200, session('new')))    // refresh
             .mockResolvedValueOnce(reply(200, { ok: true }));     // the repeated request
         await client.login({ email: 'a@b.co', password: 'x' });
@@ -380,8 +380,8 @@ describe('calling the signed-in API', () => {
     it('gives up with no_session when the sign-in cannot be renewed, instead of looping', async () => {
         fetchMock
             .mockResolvedValueOnce(reply(200, session()))
-            .mockResolvedValueOnce(error(401, 'x'))
-            .mockResolvedValueOnce(error(401, 'no_session'));
+            .mockResolvedValueOnce(reply(401))                      // a bare 401: the token expired
+            .mockResolvedValueOnce(error(401, 'no_session'));       // and the renewal is refused
         await client.login({ email: 'a@b.co', password: 'x' });
         await expect(client.authFetch('/api/v1/validate')).rejects.toMatchObject({ code: 'no_session' });
         expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -398,6 +398,47 @@ describe('calling the signed-in API', () => {
         fetchMock.mockResolvedValue(error(401, 'no_session'));
         await expect(client.authFetch('/api/v1/validate')).rejects.toMatchObject({ code: 'no_session', status: 401 });
         expect(callsTo('/api/v1/validate')).toHaveLength(0);
+    });
+});
+
+describe('a 401 that is the API\'s own answer is not an expired token', () => {
+    it('hands back a wrong-password 401 as it is: no renewal, and the wrong guess is not sent a second time', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, session()));
+        await client.login({ email: 'sam@example.com', password: 'secret' });
+        fetchMock.mockClear();
+        fetchMock.mockResolvedValueOnce(error(401, 'invalid_credentials', 'Your current password is not right.'));
+
+        const res = await client.authFetch('/api/v1/auth/password', { method: 'POST', body: '{}' });
+
+        expect(res.status).toBe(401);
+        expect((await res.json()).error.code).toBe('invalid_credentials');
+        expect(fetchMock).toHaveBeenCalledTimes(1);   // one request: not refreshed, not repeated
+        expect(client.getCurrentUser()).toEqual(USER);   // and nobody was signed out by a wrong password
+    });
+
+    it('still renews and repeats when the 401 is the bare one for an expired token', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, session('token-1')));
+        await client.login({ email: 'sam@example.com', password: 'secret' });
+        fetchMock.mockClear();
+        fetchMock.mockResolvedValueOnce(reply(401))                      // the security filter: no body
+            .mockResolvedValueOnce(reply(200, session('token-2')))       // the renewal
+            .mockResolvedValueOnce(reply(200, { ok: true }));            // the repeated request
+
+        const res = await client.authFetch('/api/v1/formulas');
+
+        expect(res.status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(String(fetchMock.mock.calls[1][0])).toBe('/api/v1/auth/refresh');
+        expect(client.getAccessToken()).toBe('token-2');
+    });
+
+    it('treats a 401 with a body that is not the API\'s error shape as an expired token too', async () => {
+        fetchMock.mockResolvedValueOnce(reply(200, session('token-1')));
+        await client.login({ email: 'sam@example.com', password: 'secret' });
+        fetchMock.mockClear();
+        fetchMock.mockResolvedValueOnce(reply(401, { message: 'something else' })).mockResolvedValueOnce(reply(200, session('token-2'))).mockResolvedValueOnce(reply(200, {}));
+        await client.authFetch('/api/v1/formulas');
+        expect(String(fetchMock.mock.calls[1][0])).toBe('/api/v1/auth/refresh');
     });
 });
 

@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-10: Changing a password without breaking anything else
+
+- **Situation.** A password could only be changed by asking for an email link. Anyone who suspects a leak, or has lost a laptop, wants to change it from the settings, and to be sure the old password and any session it opened are finished.
+- **Task.** Add it so that a borrowed or stolen session cannot be used to take the account over, and so that changing it does what people assume it does.
+- **Action.** The current password is required (wrong guesses limited per account and per address), the new one follows the sign-up rules including the breached-password check, every other sign-in ends while the one in use stays (the refresh cookie says which that is), a waiting reset link is cancelled, and the account's address gets a notice. An account that only uses Google gets no form: letting an access token alone set a first password would hand whoever holds it a permanent way in, so it adds one through the email link, which proves the address. Because unit tests only prove my own assumptions, I ran it in a real browser against a throwaway database, with other "devices" as plain HTTP clients holding their own sessions.
+- **Result.** The browser run found two bugs that 357 passing tests had not. The shared request helper treated every 401 as "the token expired", renewed the session and sent the request again, so a wrong password was sent, and counted, twice (the same flaw affected two-step setup and the passkey forms); it now repeats a request only for the bare 401 of an expired token, never for the API's own errors. And a blank mail host still created a mail sender that failed on every email, so the "no mail service: write the link to the log" fallback the docs promise was never reached; a blank host now means no SMTP. A third find was in the tests themselves: each distinct test configuration keeps its own connection pool, and together they exhausted the test database's connections, so the pool is smaller and the database has headroom. 16 backend tests cover the change; 13 browser checks passed.
+
 ## 2026-11-10: A sign-in that a fake site cannot relay
 
 - **Situation.** Two-step verification stopped stolen passwords, but a fake website can pass a password and a six-digit code to the real one in real time. That gap was written down as the biggest remaining one.
