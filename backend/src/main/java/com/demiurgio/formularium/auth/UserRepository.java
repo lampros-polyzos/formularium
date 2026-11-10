@@ -12,7 +12,7 @@ import java.util.UUID;
 
 @Repository
 class UserRepository {
-    private static final String COLUMNS = "id, email, password_hash, google_sub, username, email_verified_at, guest_expires_at, password_login_disabled_at";
+    private static final String COLUMNS = "id, email, password_hash, google_sub, username, email_verified_at, guest_expires_at, password_login_disabled_at, exists (select 1 from app_admins a where a.user_id = app_users.id) as is_admin";
 
     private final JdbcClient jdbc;
 
@@ -20,7 +20,7 @@ class UserRepository {
 
     private static UserAccount map(ResultSet rs, int row) throws SQLException {
         return new UserAccount(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("password_hash"), rs.getString("google_sub"), rs.getString("username"), rs.getTimestamp("email_verified_at") != null,
-                instant(rs.getTimestamp("guest_expires_at")), instant(rs.getTimestamp("password_login_disabled_at")));
+                instant(rs.getTimestamp("guest_expires_at")), instant(rs.getTimestamp("password_login_disabled_at")), rs.getBoolean("is_admin"));
     }
 
     private static Instant instant(Timestamp timestamp) { return timestamp == null ? null : timestamp.toInstant(); }
@@ -53,7 +53,7 @@ class UserRepository {
                 .param("id", id).param("email", email).param("hash", passwordHash).param("sub", googleSub).param("username", username)
                 .param("verified", verifiedAt == null ? null : Timestamp.from(verifiedAt))
                 .param("guest", guestExpiresAt == null ? null : Timestamp.from(guestExpiresAt)).update();
-        return new UserAccount(id, email, passwordHash, googleSub, username, verifiedAt != null, guestExpiresAt, null);
+        return new UserAccount(id, email, passwordHash, googleSub, username, verifiedAt != null, guestExpiresAt, null, false);
     }
 
     long countActiveGuests(Instant now) {

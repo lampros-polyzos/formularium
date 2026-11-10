@@ -48,6 +48,12 @@ public final class AuthRequests {
     /** Switching password sign-in off (`enabled` false) or back on (true). Needs the password, as changing it does. */
     public record PasswordSignIn(@NotNull Boolean enabled, @Size(max = 72) String password) { }
 
+    /** One thing an administrator does to a member's account. The password is the administrator's own, asked for again each time; the reason is kept in the audit log. */
+    public record AdminAction(
+            @NotBlank @Size(max = 40) String action,
+            @NotBlank @Size(min = 3, max = 300, message = "must be between 3 and 300 characters") String reason,
+            @Size(max = 72) String password) { }
+
     public record Google(@NotBlank @Size(max = 4096) String idToken) { }
 
     /** The second step of signing in: the one-time token from the first step, and a code from the app (or a recovery code). */

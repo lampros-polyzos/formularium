@@ -22,6 +22,7 @@ import IngredientsLibraryPage from './pages/IngredientsLibraryPage';
 import CommunityFeed from './pages/CommunityFeed';
 import PostDetail from './pages/PostDetail';
 import ModerationPage from './pages/ModerationPage';
+import AdminPage from './pages/AdminPage';
 import BlogPage from './pages/BlogPage';
 import BlogArticlePage from './pages/BlogArticlePage';
 import LearnHubPage from './pages/LearnHubPage';
@@ -73,6 +74,7 @@ function App() {
               <Route path="/library" element={<IngredientsLibraryPage />} />
               <Route path="/community" element={<CommunityFeed />} />
               <Route path="/community/moderation" element={<ModerationPage />} />
+              <Route path="/admin" element={<AdminPage />} />
               <Route path="/community/:id" element={<PostDetail />} />
             </Route>
           </Routes>

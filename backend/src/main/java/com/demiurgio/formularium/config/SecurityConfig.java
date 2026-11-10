@@ -63,6 +63,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/passkeys/**").access(MEMBERS_ONLY)
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").access(MEMBERS_ONLY)
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/password-sign-in").access(MEMBERS_ONLY)
+                        // The admin tool: not for guests; whether the member is an administrator is then asked of the database on every request
+                        .requestMatchers("/api/v1/admin/**").access(MEMBERS_ONLY)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder)).accessDeniedHandler((request, response, denied) -> {
                     // The only 403 this API gives: a guest asking for something that needs a real account. Same error shape as everywhere else (see GlobalExceptionHandler).

@@ -120,6 +120,16 @@ export default function Header({ title, backPath, backLabel, children, leading }
                                         <span>⚙️</span> Global Settings
                                     </button>
 
+                                    {user.admin && (
+                                        <Link
+                                            to="/admin"
+                                            onClick={() => setIsProfileOpen(false)}
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#2c4c3b] transition-colors"
+                                        >
+                                            <span>🛡️</span> Admin
+                                        </Link>
+                                    )}
+
                                     <a
                                         href={contactLink(`${title} (${window.location.pathname})`)}
                                         onClick={() => setIsProfileOpen(false)}

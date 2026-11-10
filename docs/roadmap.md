@@ -17,6 +17,7 @@
 - Screenshots and a demo GIF in the README
 - Docker image for the backend, Render and Vercel configuration, and a step-by-step [deploy guide](deploy.md)
 - **Change password while signed in**: needs the current password, signs out every other device but keeps this one, and emails a notice
+- **Admin tool**: administrators (rows added by hand) look a member up, give or take away moderator rights, and do the recovery steps that needed SQL (switch off two-step verification, remove passkeys, switch password sign-in back on, sign out every device); each needs the administrator's password and a reason, is audited and emailed to the member ([ADR 0017](decisions/0017-an-admin-tool-for-recovery-and-moderators.md))
 - **Alerts for a sign-in from a new browser**: an email with when, which browser, network address and how, for every way of signing in; the first browser is learnt silently and the email is capped per day ([ADR 0016](decisions/0016-alerts-for-sign-ins-from-a-new-browser.md))
 - **Passkey autofill**: on the sign-in form, clicking the email box offers the saved passkeys in the browser's autofill list; it renews itself before the server's challenge expires and never fights the "Sign in with a passkey" button ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md))
 - **Switch password sign-in off**: an account with a passkey that has signed in can refuse its own password, which closes the one path a fake site can still use; it cannot lock the owner out ([ADR 0015](decisions/0015-password-sign-in-can-be-switched-off.md))
@@ -29,15 +30,14 @@
 1. **Passkey check in Safari and Firefox**, including choosing a passkey from the autofill popup, which headless testing cannot do
 2. **A list of the browsers an account is signed in from** (the alerts already know them), with a button to sign one out, and a way to **rotate the two-step encryption key**
 3. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
-4. **Small admin tool** to grant moderator rights without hand-written SQL
-5. **CodeQL for the Java backend** (it scans the frontend only for now)
-6. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
+4. **CodeQL for the Java backend** (it scans the frontend only for now)
+5. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
 
 ## Known limitations
 
 - Notifications are fetched every 30 seconds; there is no push.
 - Regional limits cover the EU only.
-- Moderator rights are granted by inserting a row in `community_moderators`.
+- Administrators are made only by inserting a row in `app_admins`, on purpose; there is one, and the tool does not act on administrator accounts.
 - `unique_inci_name` makes an INCI name unique across the library, so a powder and a solution of the same ingredient cannot both be rows.
 - Copying a community recipe leaves out lines that use another member's private ingredient; the copy is still made.
 - Accounts from the earlier Supabase-auth days were not imported (a fresh start was chosen).

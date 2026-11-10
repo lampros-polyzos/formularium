@@ -175,7 +175,7 @@ public class AuthService {
                 // Same verified email: it is the same person, so the accounts are joined
                 users.linkGoogle(byEmail.id(), who.sub());
                 users.markEmailVerified(byEmail.id(), clock.instant());   // Google vouched for the address
-                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username(), true, byEmail.guestExpiresAt(), byEmail.passwordLoginDisabledAt());
+                user = new UserAccount(byEmail.id(), byEmail.email(), byEmail.passwordHash(), who.sub(), byEmail.username(), true, byEmail.guestExpiresAt(), byEmail.passwordLoginDisabledAt(), byEmail.admin());
             } else {
                 user = createGoogleUser(email, who);
             }

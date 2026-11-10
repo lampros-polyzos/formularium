@@ -24,6 +24,7 @@ How sign-in and accounts are protected, what is not covered, and what to do when
 | Leaked secrets in git | A pre-commit hook blocks them. GitHub push protection is a second layer, but it only knows the formats of well-known secrets (an OAuth client secret, many API keys), not a database or mail password, so the hook stays essential |
 | Phishing: a fake site relaying a password and a code | A passkey is bound to the website's own domain: the browser offers it only to pages of that domain, and what it signs names the site, so a relay through a look-alike fails. It protects the sign-ins that use a passkey, and an account can switch password sign-in off to close the password path ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md), [ADR 0015](decisions/0015-password-sign-in-can-be-switched-off.md)) |
 | A stolen password or passkey being used without the owner knowing | A sign-in from a browser the account has not been seen on emails the owner (when, which browser, network address, how), whichever way it signed in; capped at 5 emails per account per day, every new browser still goes in the audit trail ([ADR 0016](decisions/0016-alerts-for-sign-ins-from-a-new-browser.md)) |
+| An administrator account being abused, or an administrator acting without anyone knowing ([ADR 0017](decisions/0017-an-admin-tool-for-recovery-and-moderators.md)) | Administrators exist only as rows added by hand in SQL (the tool cannot create one), are looked up in the database on every request (so removing the row takes the rights away at once, even with a token already issued), and must have two-step verification or a used passkey on their own account. Every change asks for the administrator's own password again (wrong ones are limited), needs a reason, is capped at 30 per hour, is written to an audit log that keeps both addresses for two years, and is emailed to the member. Opening a member is logged too. The tool cannot touch another administrator or the administrator's own account, and shows no secret and no network address |
 | Locking yourself out, or someone closing you out, with "password sign-in off" | Switching off needs the password and a passkey that has signed in before (one never used might not work); it signs out every other device and emails a notice; the last passkey known to work cannot be removed while it is off; and a password reset by email switches it back on |
 | Binding someone else's device to an account | Adding or removing a passkey needs the account password (wrong ones are limited per account and per address), is refused for guests, is capped at 10 per member and is recorded in the audit trail |
 | Abuse of "Try the demo" ([ADR 0013](decisions/0013-guest-sessions-for-the-demo.md)) | The same bot check as sign-up; 10 demos per address per hour; at most 200 guests at once; each guest is deleted after 24 hours with everything it made. A guest can read the community but not write to it, and cannot set up two-step verification (the API answers `403 guest_account`). `GUEST_ENABLED=false` switches it off |
@@ -34,6 +35,7 @@ Every sign-in, failure, reset, confirmation and replayed token is recorded in `a
 ## Known gaps
 
 - **Two-step verification is optional**, and a code does not stop phishing: a fake site can relay it in real time.
+- **An administrator is trusted.** The tool limits and records what one can do, but cannot stop a dishonest or hijacked administrator from weakening a member's account (switching off two-step verification, removing passkeys) so that someone else can take it over, if the member does not read the email. Hence the second factor, the password for every change, the hourly cap and the notice to the member. There is one administrator today; adding more is a decision, not a click.
 - **Switching password sign-in off is opt-in, and only about the password.** Until a member does it, their password (with its code) can still be phished. Google sign-in, if linked, stays a way in. And the mailbox is a way back in: a password reset by email switches password sign-in back on, so whoever controls the mailbox can undo it.
 - **A passkey that syncs is as safe as the account that syncs it** (Apple, Google, a password manager), and a passkey skips two-step verification altogether.
 - **We do not check what kind of device made a passkey** (attestation is off), and the relying party id is fixed: moving the site to another domain makes every passkey stop working.
@@ -65,7 +67,16 @@ Before the first real user:
 
 ## Helping someone who is locked out
 
-If a member has lost both their phone and their recovery codes, first make sure the request really comes from them (for example, from the email address on the account, and a question only they can answer). Then switch two-step verification off for that account only, in the SQL editor:
+The admin tool (Settings menu, "Admin", for administrators only) does all of this without SQL: it switches two-step verification off, removes passkeys (and switches password sign-in back on, so nobody is left with no way in), switches password sign-in back on, and signs every device out. It asks for your password and a reason, emails the member and keeps a record. Use it first; the SQL below is for when the tool itself is not available.
+
+**Making the first administrator** is deliberately only possible by hand, once, in the SQL editor (the account must already exist, and needs two-step verification or a used passkey before the tool will open):
+
+```sql
+insert into app_admins (user_id) select id from app_users where email = 'you@example.com';
+-- to take the rights away again:  delete from app_admins where user_id = '<that id>';
+```
+
+If a member has lost both their phone and their recovery codes, first make sure the request really comes from them (for example, from the email address on the account, and a question only they can answer). Then switch two-step verification off for that account only (with the admin tool, or in the SQL editor):
 
 ```sql
 -- replace the address; check that it returns one row first

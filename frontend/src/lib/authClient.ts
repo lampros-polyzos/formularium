@@ -17,7 +17,7 @@ import { describePasskeyError } from './passkeyErrors';
  * `guest` is true for the temporary "Try the demo" account (see {@link startGuest}). `hasPassword` is false for an account that only uses Google, which has no
  * password to change.
  */
-export interface AuthUser { id: string; email: string; username: string; guest?: boolean; hasPassword?: boolean }
+export interface AuthUser { id: string; email: string; username: string; guest?: boolean; hasPassword?: boolean; admin?: boolean }
 
 interface AuthResponse { accessToken: string; expiresInSeconds: number; user: AuthUser }
 

@@ -10,16 +10,19 @@ import org.springframework.stereotype.Component;
 class ExpiredTokenCleanup {
     private final AuthService auth;
     private final DeviceService devices;
+    private final AdminService admin;
 
-    ExpiredTokenCleanup(AuthService auth, DeviceService devices) {
+    ExpiredTokenCleanup(AuthService auth, DeviceService devices, AdminService admin) {
         this.auth = auth;
         this.devices = devices;
+        this.admin = admin;
     }
 
     @Scheduled(cron = "0 17 3 * * *")
     void run() {
         auth.purgeExpiredTokens();
         devices.purgeUnseen();   // browsers not seen for longer than a browser keeps the cookie
+        admin.purgeAudit();      // the admin audit log is kept two years
     }
 
     @Scheduled(cron = "0 41 * * * *")
