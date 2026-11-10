@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const browser = vi.hoisted(() => ({ startAuthentication: vi.fn(), supported: true }));
-vi.mock('@simplewebauthn/browser', () => ({ startAuthentication: browser.startAuthentication, browserSupportsWebAuthn: () => browser.supported }));
+const browser = vi.hoisted(() => ({ startAuthentication: vi.fn(), cancel: vi.fn(), supported: true, autofill: true }));
+vi.mock('@simplewebauthn/browser', () => ({
+    startAuthentication: browser.startAuthentication,
+    browserSupportsWebAuthn: () => browser.supported,
+    browserSupportsWebAuthnAutofill: () => Promise.resolve(browser.autofill),
+    WebAuthnAbortService: { cancelCeremony: () => browser.cancel() },
+}));
 
 type Client = typeof import('./authClient');
 
@@ -120,6 +125,195 @@ describe('signing in with a passkey', () => {
         expect(client.passkeysSupported()).toBe(true);
         browser.supported = false;
         expect(client.passkeysSupported()).toBe(false);
+    });
+});
+
+describe('passkey autofill', () => {
+    const OPTIONS = { challenge: 'abc', rpId: 'formularium.dev', userVerification: 'required', allowCredentials: [] };
+    const SIGNED = { id: 'cred-1', rawId: 'cred-1', type: 'public-key', response: { clientDataJSON: 'x', authenticatorData: 'y', signature: 'z', userHandle: 'u' } };
+    const aborted = () => Object.assign(new Error('The operation was aborted'), { name: 'AbortError', code: 'ERROR_CEREMONY_ABORTED' });
+    const deferred = <T,>() => {
+        let resolve!: (value: T) => void;
+        let reject!: (reason: unknown) => void;
+        const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+        return { promise, resolve, reject };
+    };
+    let challenges = 0;
+    const prompts = () => browser.startAuthentication.mock.calls.length;
+    const optionsRequests = () => callsTo('/api/v1/auth/login/passkey/options').length;
+    const loginRequests = () => callsTo('/api/v1/auth/login/passkey');
+    const handlers = () => ({ onSignedIn: vi.fn(), onError: vi.fn() });
+
+    beforeEach(() => {
+        challenges = 0;
+        browser.startAuthentication.mockReset();
+        browser.cancel.mockReset();
+        browser.autofill = true;
+        fetchMock.mockImplementation(async (url: unknown) => String(url).endsWith('/login/passkey/options')
+            ? reply(200, { challengeId: `ch-${++challenges}`, options: OPTIONS })
+            : reply(200, session()));
+    });
+
+    it('waits in the background with the browser\'s own autofill, sends nothing until a passkey is picked, then signs in', async () => {
+        const pick = deferred<unknown>();
+        browser.startAuthentication.mockReturnValue(pick.promise);
+        const h = handlers();
+        client.startPasskeyAutofill(h);
+
+        await vi.waitFor(() => expect(prompts()).toBe(1));
+        expect(browser.startAuthentication).toHaveBeenCalledWith({ optionsJSON: OPTIONS, useBrowserAutofill: true });
+        expect(loginRequests()).toHaveLength(0);
+        expect(h.onSignedIn).not.toHaveBeenCalled();
+
+        pick.resolve(SIGNED);
+        await vi.waitFor(() => expect(h.onSignedIn).toHaveBeenCalledWith(USER));
+        expect(JSON.parse(loginRequests()[0][1].body)).toEqual({ challengeId: 'ch-1', credential: SIGNED });
+        expect(loginRequests()[0][1].credentials).toBe('include');
+        expect(client.getCurrentUser()).toEqual(USER);
+        expect(client.getAccessToken()).toBe('token-1');
+        expect(prompts()).toBe(1);   // signed in: nothing waits any more
+    });
+
+    it('asks again with a fresh challenge a minute before the server\'s expires, so a pick made late still works', async () => {
+        vi.useFakeTimers();
+        const first = deferred<unknown>();
+        browser.startAuthentication.mockImplementationOnce(() => first.promise).mockImplementation(() => new Promise(() => {}));
+        browser.cancel.mockImplementation(() => first.reject(aborted()));   // what cancelling really does: the waiting prompt fails
+        const stop = client.startPasskeyAutofill(handlers());
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(prompts()).toBe(1);
+        await vi.advanceTimersByTimeAsync(4 * 60_000 - 1);
+        expect(browser.cancel).not.toHaveBeenCalled();
+        expect(optionsRequests()).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(1);   // four minutes: the server keeps a challenge for five
+        expect(browser.cancel).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(optionsRequests()).toBe(2);
+        expect(prompts()).toBe(2);
+        stop();
+    });
+
+    it('renews at once when a hidden tab is seen again and the request is nearly stale, but not when it is still fresh', async () => {
+        vi.useFakeTimers();
+        const first = deferred<unknown>();
+        browser.startAuthentication.mockImplementationOnce(() => first.promise).mockImplementation(() => new Promise(() => {}));
+        browser.cancel.mockImplementation(() => first.reject(aborted()));
+        const stop = client.startPasskeyAutofill(handlers());
+        await vi.advanceTimersByTimeAsync(0);
+        expect(prompts()).toBe(1);
+
+        const seen = () => document.dispatchEvent(new Event('visibilitychange'));
+        await vi.advanceTimersByTimeAsync(60_000);
+        seen();                                          // a minute old: nothing to do
+        expect(browser.cancel).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(2 * 60_000 + 40_000);   // 3 min 40 s old: the timer (4 min) has not fired, as in a throttled background tab
+        expect(browser.cancel).not.toHaveBeenCalled();
+        seen();
+        expect(browser.cancel).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(optionsRequests()).toBe(2);               // asked again with a fresh challenge
+        expect(prompts()).toBe(2);
+        stop();
+    });
+
+    it('stops listening for the tab being seen again once it is stopped', async () => {
+        vi.useFakeTimers();
+        const pick = deferred<unknown>();
+        browser.startAuthentication.mockReturnValue(pick.promise);
+        browser.cancel.mockImplementation(() => pick.reject(aborted()));
+        const stop = client.startPasskeyAutofill(handlers());
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(3 * 60_000 + 40_000);
+        stop();
+        expect(browser.cancel).toHaveBeenCalledTimes(1);   // its own prompt, once
+        browser.cancel.mockClear();
+
+        document.dispatchEvent(new Event('visibilitychange'));
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(browser.cancel).not.toHaveBeenCalled();
+        expect(optionsRequests()).toBe(1);
+    });
+
+    it('can be stopped: it cancels its own waiting prompt, signs nobody in even if a pick arrives late, and does not start another', async () => {
+        const pick = deferred<unknown>();
+        browser.startAuthentication.mockReturnValue(pick.promise);
+        browser.cancel.mockImplementation(() => pick.reject(aborted()));
+        const h = handlers();
+        const stop = client.startPasskeyAutofill(h);
+        await vi.waitFor(() => expect(prompts()).toBe(1));
+
+        stop();
+
+        expect(browser.cancel).toHaveBeenCalledTimes(1);
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(prompts()).toBe(1);
+        expect(optionsRequests()).toBe(1);
+        expect(loginRequests()).toHaveLength(0);
+        expect(h.onSignedIn).not.toHaveBeenCalled();
+        expect(h.onError).not.toHaveBeenCalled();
+    });
+
+    it('does not restart when another passkey prompt took over (the button), and a later stop does not cancel THAT prompt', async () => {
+        const mine = deferred<unknown>();
+        browser.startAuthentication.mockReturnValue(mine.promise);
+        const h = handlers();
+        const stop = client.startPasskeyAutofill(h);
+        await vi.waitFor(() => expect(prompts()).toBe(1));
+
+        mine.reject(aborted());   // the button started its own prompt, which cancelled this one
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(prompts()).toBe(1);          // restarting now would cancel the button's prompt
+        expect(optionsRequests()).toBe(1);
+        expect(h.onError).not.toHaveBeenCalled();
+
+        stop();
+        expect(browser.cancel).not.toHaveBeenCalled();   // the prompt in the browser now belongs to the button
+    });
+
+    it('shows a refusal after a pick, and waits again with a fresh challenge so the person can choose another', async () => {
+        browser.startAuthentication.mockResolvedValueOnce(SIGNED).mockImplementation(() => new Promise(() => {}));
+        fetchMock.mockImplementation(async (url: unknown) => String(url).endsWith('/login/passkey/options')
+            ? reply(200, { challengeId: `ch-${++challenges}`, options: OPTIONS })
+            : error(401, 'passkey_failed', 'That passkey did not work. Try again, or sign in another way.'));
+        const h = handlers();
+        client.startPasskeyAutofill(h);
+
+        await vi.waitFor(() => expect(h.onError).toHaveBeenCalledWith('That passkey did not work. Try again, or sign in another way.'));
+        await vi.waitFor(() => expect(prompts()).toBe(2));
+        expect(optionsRequests()).toBe(2);
+        expect(h.onSignedIn).not.toHaveBeenCalled();
+        expect(client.getCurrentUser()).toBeNull();
+    });
+
+    it('is silent when the browser cannot do it here (no usable email field, an old browser)', async () => {
+        browser.startAuthentication.mockRejectedValue(new Error('No <input> with "webauthn" as the only or last value in its `autocomplete` attribute was detected'));
+        const h = handlers();
+        client.startPasskeyAutofill(h);
+
+        await vi.waitFor(() => expect(prompts()).toBe(1));
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(h.onError).not.toHaveBeenCalled();
+        expect(prompts()).toBe(1);   // and it does not try in a loop
+    });
+
+    it('is silent when the server cannot give a challenge (busy, rate-limited, offline): the button and the password still work', async () => {
+        fetchMock.mockResolvedValue(error(429, 'too_many_attempts', 'Too many sign-in attempts. Try again in a few minutes.'));
+        const h = handlers();
+        client.startPasskeyAutofill(h);
+
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(browser.startAuthentication).not.toHaveBeenCalled();
+        expect(h.onError).not.toHaveBeenCalled();
+    });
+
+    it('reports whether the browser can offer passkeys in its autofill list', async () => {
+        expect(await client.passkeyAutofillSupported()).toBe(true);
+        browser.autofill = false;
+        expect(await client.passkeyAutofillSupported()).toBe(false);
     });
 });
 

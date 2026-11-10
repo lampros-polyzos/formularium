@@ -1,11 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthModal from './AuthModal';
 import { AuthError } from '../lib/authClient';
 
-const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn(), completeMfaLogin: vi.fn(), startGuest: vi.fn(), navigate: vi.fn(), loginWithPasskey: vi.fn(), passkeys: true }));
+const mocks = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), loginWithGoogle: vi.fn(), resendVerification: vi.fn(), forgotPassword: vi.fn(), completeMfaLogin: vi.fn(), startGuest: vi.fn(), navigate: vi.fn(), loginWithPasskey: vi.fn(), passkeys: true, autofill: false, startAutofill: vi.fn(), stopAutofill: vi.fn() }));
 
 // The demo button moves on to the studio itself; these tests render the form without a router
 vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
@@ -21,6 +21,8 @@ vi.mock('../lib/authClient', async (importOriginal) => ({
   startGuest: mocks.startGuest,
   loginWithPasskey: mocks.loginWithPasskey,
   passkeysSupported: () => mocks.passkeys,
+  passkeyAutofillSupported: () => Promise.resolve(mocks.autofill),
+  startPasskeyAutofill: mocks.startAutofill,
 }));
 
 // Every new widget gives one token, as the real one does (and a token is good for one use): the first is 'mock-captcha-token', the next ones 'mock-captcha-token-2', '-3'...
@@ -53,6 +55,9 @@ beforeEach(() => {
   mocks.navigate.mockReset();
   mocks.loginWithPasskey.mockReset().mockResolvedValue({ id: 'u1', email: 'test@example.com', username: 'tester' });
   mocks.passkeys = true;
+  mocks.autofill = false;   // off unless a test turns it on
+  mocks.stopAutofill.mockReset();
+  mocks.startAutofill.mockReset().mockReturnValue(mocks.stopAutofill);
 });
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
@@ -375,5 +380,117 @@ describe('AuthModal: the second step', () => {
     await screen.findByLabelText(/^Code$/i);
     fireEvent.click(screen.getByRole('button', { name: /Back to sign in/i }));
     expect(await screen.findByRole('button', { name: /^Sign In$/ })).toBeInTheDocument();
+  });
+});
+
+describe('passkey autofill in the sign-in form', () => {
+  const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  const email = () => screen.getByLabelText(/Email address/i);
+
+  beforeEach(() => { mocks.autofill = true; });
+
+  it('starts when the sign-in form opens, marks the email box for the browser, and says how to use it', async () => {
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+
+    expect(email()).toHaveAttribute('autocomplete', 'username webauthn');
+    expect(await screen.findByText('Saved a passkey? Click the box above and choose it from the list.')).toBeInTheDocument();
+  });
+
+  it('does not start for sign-up (which has its own plain email box), nor where the browser cannot do it', async () => {
+    const signUp = render(<AuthModal isOpen={true} onClose={vi.fn()} initialMode="signup" />);
+    await flush();
+    expect(mocks.startAutofill).not.toHaveBeenCalled();
+    expect(email()).toHaveAttribute('autocomplete', 'email');
+    expect(screen.queryByText(/Saved a passkey/)).not.toBeInTheDocument();
+    signUp.unmount();
+
+    mocks.autofill = false;
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await flush();
+    expect(mocks.startAutofill).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Saved a passkey/)).not.toBeInTheDocument();
+  });
+
+  it('stops when the form closes, and not while it is closed', async () => {
+    const { rerender, unmount } = render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+
+    rerender(<AuthModal isOpen={false} onClose={vi.fn()} />);
+    expect(mocks.stopAutofill).toHaveBeenCalledTimes(1);
+    await flush();
+    expect(mocks.startAutofill).toHaveBeenCalledTimes(1);   // nothing waits behind a closed form
+
+    unmount();
+  });
+
+  it('stops for sign-up and the password-reset screen, and waits again on coming back to sign-in', async () => {
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /Don't have an account\? Sign up/ }));
+    expect(mocks.stopAutofill).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /Already have an account\? Sign in/ }));
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole('button', { name: /Forgot your password/i }));
+    expect(mocks.stopAutofill).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes the form when a passkey picked from the browser\'s list signs in', async () => {
+    const onClose = vi.fn();
+    render(<AuthModal isOpen={true} onClose={onClose} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+
+    mocks.startAutofill.mock.calls[0][0].onSignedIn({ id: 'u1', email: 'test@example.com', username: 'tester' });
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(mocks.login).not.toHaveBeenCalled();
+  });
+
+  it('shows why a picked passkey was refused', async () => {
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+
+    act(() => mocks.startAutofill.mock.calls[0][0].onError('That passkey did not work. Try again, or sign in another way.'));
+
+    expect(await screen.findByText('That passkey did not work. Try again, or sign in another way.')).toBeInTheDocument();
+  });
+
+  it('waits again after the "Sign in with a passkey" button has used the browser\'s prompt without success', async () => {
+    mocks.loginWithPasskey.mockRejectedValueOnce(new AuthError('passkey_cancelled', 'The passkey sign-in was cancelled or timed out. You can try again.', 0));
+    render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+
+    expect(await screen.findByText(/cancelled or timed out/)).toBeInTheDocument();
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(2));
+    expect(mocks.stopAutofill).toHaveBeenCalledTimes(1);   // the first one made way, and a new one took its place
+  });
+
+  it('is not restarted when the page around it re-renders with a new close function', async () => {
+    const { rerender } = render(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+
+    rerender(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    rerender(<AuthModal isOpen={true} onClose={vi.fn()} />);
+    await flush();
+
+    expect(mocks.startAutofill).toHaveBeenCalledTimes(1);
+    expect(mocks.stopAutofill).not.toHaveBeenCalled();
+  });
+
+  it('uses the CURRENT close function when a passkey is picked', async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(<AuthModal isOpen={true} onClose={first} />);
+    await waitFor(() => expect(mocks.startAutofill).toHaveBeenCalledTimes(1));
+    rerender(<AuthModal isOpen={true} onClose={second} />);
+
+    mocks.startAutofill.mock.calls[0][0].onSignedIn({ id: 'u1', email: 'test@example.com', username: 'tester' });
+
+    expect(second).toHaveBeenCalledOnce();
+    expect(first).not.toHaveBeenCalled();
   });
 });

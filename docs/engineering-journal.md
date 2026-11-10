@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-10: Passkey autofill, and the trouble of testing something that waits
+
+- **Situation.** Signing in with a passkey meant pressing a button. Browsers can instead offer saved passkeys in the autofill list when the person clicks the email box ("conditional UI"), which is how most people expect it to work.
+- **Task.** Add it without ever blocking the button or the password, and without a challenge going stale while the form sits open.
+- **Action.** The request waits in the background while the sign-in form is open. The design problems were all about time and about the browser having one passkey prompt at a time: the server keeps a challenge five minutes, so the request renews itself after four; starting the button's prompt cancels the waiting one, so the waiting one must not restart itself then (that would cancel the button), and is started again by whoever took over; failures to start are silent. Tests with mocks covered the logic, and I broke the code on purpose twice to see the tests notice (one failed cleanly, the other made the suite spin, which is also a way of noticing).
+- **Result.** The real-browser run was worth more than the mocks. With no passkey, headless Edge rejects a conditional request at once instead of keeping it pending, so my first "renewal" check could never have passed; with a passkey it answers by itself, so autofill signed in with nothing clicked, which proved the whole path but not the waiting. To see the waiting I turned the virtual authenticator's automatic answer off, which showed the first request aborted and a fresh challenge asked for, and a sign-in on a renewed challenge, at 15 seconds and then at the real four minutes (238 s). It also showed me what a mock cannot: browsers slow timers in background tabs, so a form left in a hidden tab could miss the renewal; now a nearly stale request is renewed the moment the tab is seen again. What no test here can do is click the browser's own autofill popup, or run Safari or Firefox: those are on the roadmap, and the deploy guide has the manual check. 19 new frontend tests.
+
 ## 2026-11-10: Closing the password door without locking anyone in the hallway
 
 - **Situation.** Passkeys protect only the sign-ins that use them. A fake site can still collect a password and a code, so the account stays phishable until its password is refused.

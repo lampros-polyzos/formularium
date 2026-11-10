@@ -9,7 +9,7 @@
 //  - you are signed out only when the server says the sign-in is really over (401/403). A server that is down, busy or restarting
 //    (network error, 5xx, 429) never signs you out: the session is kept and renewal is tried again.
 
-import { browserSupportsWebAuthn, startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
+import { browserSupportsWebAuthn, browserSupportsWebAuthnAutofill, startAuthentication, WebAuthnAbortService, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { apiUrl } from './api';
 import { describePasskeyError } from './passkeyErrors';
 
@@ -199,6 +199,88 @@ export async function loginWithPasskey(): Promise<AuthUser> {
     const response = await post<AuthResponse>('/api/v1/auth/login/passkey', { challengeId: start.challengeId, credential });
     setSession(response);
     return response.user;
+}
+
+/** Whether the browser can offer passkeys in its autofill list (the "conditional UI"). Older browsers and some embedded ones cannot. */
+export const passkeyAutofillSupported = (): Promise<boolean> => browserSupportsWebAuthnAutofill().catch(() => false);
+
+/** The server keeps a passkey challenge for five minutes, so a waiting autofill request is renewed a minute earlier, or a pick made late would be refused. */
+const AUTOFILL_RENEW_MS = 4 * 60_000;
+
+/** Browsers slow or freeze timers in a background tab, so a request that is this close to stale is renewed as soon as the tab is seen again. */
+const AUTOFILL_STALE_MS = AUTOFILL_RENEW_MS - 30_000;
+
+/**
+ * Passkey autofill: while the sign-in form is open, waits quietly in the background, and when the person clicks the email box the browser lists their saved passkeys
+ * in its autofill list; choosing one signs them in. It needs an email input with `autocomplete="username webauthn"` on the page.
+ *
+ * It never gets in the way: a failure to start (the server is busy, the browser cannot) is silent, because the button and the password still work. It renews itself
+ * before the server's challenge expires. And it is cancelled by anything else that starts a passkey prompt (the "Sign in with a passkey" button): it does NOT restart
+ * itself then, since that would cancel the very prompt that took over; whoever started the other prompt starts this again afterwards.
+ *
+ * @returns a function that stops it (call it when the form closes)
+ */
+export function startPasskeyAutofill(handlers: { onSignedIn: (user: AuthUser) => void; onError: (message: string) => void }): () => void {
+    let stopped = false;
+    let waiting = false;    // our prompt is the one the browser has open
+    let renewing = false;   // we cancelled it ourselves, to ask again with a fresh challenge
+    let renewTimer: ReturnType<typeof setTimeout> | undefined;
+    let waitingSince = 0;
+
+    // cancels our own waiting prompt so that the loop below asks again with a fresh challenge
+    const renewNow = () => {
+        if (!waiting) return;
+        renewing = true;
+        WebAuthnAbortService.cancelCeremony();
+    };
+    // a hidden tab may have missed the timer: when it is seen again, renew at once if the request is nearly stale
+    const onVisible = () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible' && waiting && Date.now() - waitingSince >= AUTOFILL_STALE_MS) renewNow();
+    };
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+
+    const round = async (): Promise<void> => {
+        if (stopped) return;
+        let start: { challengeId: string; options: PublicKeyCredentialRequestOptionsJSON };
+        try {
+            start = await post('/api/v1/auth/login/passkey/options');
+        } catch {
+            return;   // busy, rate-limited or offline: nothing to show for a convenience
+        }
+        if (stopped) return;
+        waiting = true;
+        waitingSince = Date.now();
+        renewTimer = setTimeout(renewNow, AUTOFILL_RENEW_MS);
+        let credential;
+        try {
+            credential = await startAuthentication({ optionsJSON: start.options, useBrowserAutofill: true });
+        } catch {
+            waiting = false;
+            clearTimeout(renewTimer);
+            if (renewing && !stopped) { renewing = false; return round(); }
+            return;   // stopped, taken over by another prompt, or not possible here: silent
+        }
+        waiting = false;
+        clearTimeout(renewTimer);
+        if (stopped) return;
+        try {
+            const response = await post<AuthResponse>('/api/v1/auth/login/passkey', { challengeId: start.challengeId, credential });
+            setSession(response);
+            if (!stopped) handlers.onSignedIn(response.user);
+        } catch (error) {
+            if (stopped) return;
+            handlers.onError(error instanceof Error ? error.message : 'That passkey did not work. Try again, or sign in another way.');
+            return round();   // let them choose again, with a fresh challenge
+        }
+    };
+
+    void round();
+    return () => {
+        stopped = true;
+        clearTimeout(renewTimer);
+        if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
+        if (waiting) WebAuthnAbortService.cancelCeremony();   // only our own prompt, never one that has since taken over
+    };
 }
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

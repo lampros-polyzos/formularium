@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AuthError, completeMfaLogin, forgotPassword, isMfaChallenge, login, loginWithGoogle, loginWithPasskey, passkeysSupported, register, resendVerification } from '../lib/authClient';
+import React, { useState, useEffect, useRef } from 'react';
+import { AuthError, completeMfaLogin, forgotPassword, isMfaChallenge, login, loginWithGoogle, loginWithPasskey, passkeyAutofillSupported, passkeysSupported, register, resendVerification, startPasskeyAutofill } from '../lib/authClient';
 import GoogleSignInButton from './GoogleSignInButton';
 import DemoButton from './DemoButton';
 import { Beaker, X } from 'lucide-react';
@@ -27,6 +27,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
   const [notice, setNotice] = useState('');
   // Each bot check can be used once, so a screen that needs another one starts with a fresh widget
   const [widgetKey, setWidgetKey] = useState(0);
+  // Passkey autofill (the browser lists saved passkeys when the email box is clicked): whether it is running, and a counter that starts it again after the
+  // "Sign in with a passkey" button has used the browser's one passkey prompt
+  const [autofillOn, setAutofillOn] = useState(false);
+  const [autofillRound, setAutofillRound] = useState(0);
+  const onCloseRef = useRef(onClose);   // read when a passkey is picked, without restarting the autofill whenever the parent re-renders
+  useEffect(() => { onCloseRef.current = onClose; });
 
   // The server has used up the bot check once it has looked at it, success or not, so the next try needs a new one
   const freshBotCheck = () => {
@@ -40,6 +46,19 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
     setMessage('');
     freshBotCheck();
   };
+
+  // While the sign-in form is open, wait for a passkey to be chosen from the browser's autofill list. Stopped when the form closes or changes to something else.
+  useEffect(() => {
+    if (!isOpen || view !== 'form' || isSignUp) return;
+    let live = true;
+    let stop = () => {};
+    void passkeyAutofillSupported().then(supported => {
+      if (!live || !supported) return;
+      setAutofillOn(true);
+      stop = startPasskeyAutofill({ onSignedIn: () => onCloseRef.current(), onError: setMessage });
+    });
+    return () => { live = false; stop(); setAutofillOn(false); };
+  }, [isOpen, view, isSignUp, autofillRound]);
 
   useEffect(() => {
     if (isOpen) document.body.style.overflow = 'hidden';
@@ -130,6 +149,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
       setMessage(error instanceof Error ? error.message : 'The passkey did not work. Please try again, or use your password.');
     } finally {
       setIsLoading(false);
+      setAutofillRound(r => r + 1);   // the prompt was used (or cancelled): autofill may wait again
     }
   };
 
@@ -282,11 +302,13 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) 
               <input
                 id="email"
                 type="email"
+                autoComplete={isSignUp ? 'email' : 'username webauthn'}
                 required
                 className="w-full px-4 py-3 bg-[#f7f8f6] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2c4c3b] focus:bg-white transition-colors"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              {autofillOn && <p className="mt-1 text-xs text-gray-500">Saved a passkey? Click the box above and choose it from the list.</p>}
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
