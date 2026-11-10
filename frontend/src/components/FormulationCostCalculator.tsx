@@ -35,8 +35,11 @@ type FormulaRow = {
     percentage: number;
 };
 
+// One shared empty list for the default: a fresh `[]` each render would look like a change of formula every time
+const NO_INGREDIENTS: FormulaIngredientInput[] = [];
+
 export default function FormulationCostCalculator({
-    formulaIngredients = [],
+    formulaIngredients = NO_INGREDIENTS,
     currencySymbol = '$',
     initialBatchSize = 200
 }: FormulationCostCalculatorProps) {
@@ -51,15 +54,15 @@ export default function FormulationCostCalculator({
     const [selectedContainerId, setSelectedContainerId] = useState<string>('');
     const [containersUsed, setContainersUsed] = useState<number>(1);
 
-    useEffect(() => {
-        if (initialBatchSize) {
-            setBatchSizeGrams(initialBatchSize);
-        }
-    }, [initialBatchSize]);
+    // A new suggested batch size replaces the typed one (adjusted while rendering, not in an effect: no extra pass with stale values)
+    const [seenBatchSize, setSeenBatchSize] = useState(initialBatchSize);
+    if (initialBatchSize !== seenBatchSize) {
+        setSeenBatchSize(initialBatchSize);
+        if (initialBatchSize) setBatchSizeGrams(initialBatchSize);
+    }
 
     useEffect(() => {
         const fetchInventoryData = async () => {
-            setIsLoading(true);
             try {
                 const [stashData, containerData] = await Promise.all([fetchStash(), fetchContainers()]);
 
@@ -83,9 +86,12 @@ export default function FormulationCostCalculator({
         fetchInventoryData();
     }, []);
 
-    useEffect(() => {
+    // The rows follow the formula and the stash (adjusted while rendering): when either changes, the rows are rebuilt from the formula
+    const [syncedFrom, setSyncedFrom] = useState<{ formula: FormulaIngredientInput[]; stash: StashItem[] }>({ formula: formulaIngredients, stash });
+    if (syncedFrom.formula !== formulaIngredients || syncedFrom.stash !== stash) {
+        setSyncedFrom({ formula: formulaIngredients, stash });
         if (formulaIngredients.length > 0 && stash.length > 0) {
-            const syncedRows = formulaIngredients.map((fi, index) => {
+            setRows(formulaIngredients.map((fi, index) => {
                 const matchingStash = stash.find(s => s.ingredient_id === fi.ingredient_id);
                 return {
                     id: `auto-${index}-${fi.ingredient_id}`,
@@ -93,42 +99,24 @@ export default function FormulationCostCalculator({
                     customName: fi.name,
                     percentage: fi.percentage
                 };
-            });
-            setRows(syncedRows);
+            }));
         } else if (formulaIngredients.length === 0 && rows.length > 0 && rows[0].id.startsWith('auto-')) {
             setRows([]);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formulaIngredients, stash]);
+    }
 
     const { calculatedRows, totalIngredientCost, totalPercentage } = useMemo(() => {
-        let costAccumulator = 0;
-        let percentAccumulator = 0;
-
         const calculated = rows.map(row => {
             const stashItem = stash.find(s => s.id === row.stashId);
             const gramsNeeded = (row.percentage / 100) * batchSizeGrams;
-
-            let rowCost = 0;
-            if (stashItem && stashItem.price_per_g > 0) {
-                rowCost = gramsNeeded * stashItem.price_per_g;
-            }
-
-            costAccumulator += rowCost;
-            percentAccumulator += row.percentage;
-
-            return {
-                ...row,
-                stashItem,
-                gramsNeeded,
-                rowCost
-            };
+            const rowCost = stashItem && stashItem.price_per_g > 0 ? gramsNeeded * stashItem.price_per_g : 0;
+            return { ...row, stashItem, gramsNeeded, rowCost };
         });
 
         return {
             calculatedRows: calculated,
-            totalIngredientCost: costAccumulator,
-            totalPercentage: percentAccumulator
+            totalIngredientCost: calculated.reduce((sum, row) => sum + row.rowCost, 0),
+            totalPercentage: calculated.reduce((sum, row) => sum + row.percentage, 0)
         };
     }, [rows, batchSizeGrams, stash]);
 

@@ -94,6 +94,22 @@ const IngredientsLibraryPage = () => {
     const [inspectingIngredient, setInspectingIngredient] = useState<IngredientItem | null>(null);
 
     // Fetch master list and user favorites
+    // Fetch master list and user favorites: the shared ingredients and your own, and which ones you starred
+    useEffect(() => {
+        if (!user) return;
+        let live = true;
+        Promise.all([fetchAllIngredients(), fetchStarredIds()])
+            .then(([ingData, starData]) => {
+                if (!live) return;
+                setIngredients(ingData || []);
+                setStarredIds(new Set(starData));
+            })
+            .catch(error => console.error('Error fetching ingredients library:', error))
+            .finally(() => { if (live) setIsLoading(false); });
+        return () => { live = false; };
+    }, [user]);
+
+    // Load again after a change (the first load is the effect above)
     const fetchLibrary = async () => {
         if (!user) return;
         try {
@@ -110,10 +126,6 @@ const IngredientsLibraryPage = () => {
             setIsLoading(false);
         }
     };
-
-    useEffect(() => {
-        fetchLibrary();
-    }, [user]);
 
     // Star / Unstar toggle
     const toggleStar = async (ingredientId: string, e: React.MouseEvent) => {

@@ -15,6 +15,8 @@ type DatabaseIngredient = {
     function: string;
 };
 
+const NO_RESULTS: DatabaseIngredient[] = [];
+
 type StashItem = {
     id: string;
     user_id: string;
@@ -49,7 +51,7 @@ const StashPage = () => {
 
     // Global Search State
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<DatabaseIngredient[]>([]);
+    const [foundIngredients, setSearchResults] = useState<DatabaseIngredient[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [localSearchTerm, setLocalSearchTerm] = useState('');
 
@@ -60,6 +62,8 @@ const StashPage = () => {
     // The month and year picked so far. Either can be missing while choosing, and then the expiry cannot be saved yet
     const [expiry, setExpiry] = useState<ExpiryParts>(NO_EXPIRY);
     const expiryInvalid = isPartialExpiry(expiry);
+    // Results are only shown while something is typed (so clearing the box needs no effect to empty them)
+    const searchResults = searchTerm.trim() ? foundIngredients : NO_RESULTS;
 
     // Form State
     const [formData, setFormData] = useState<StashFormData>({
@@ -79,6 +83,18 @@ const StashPage = () => {
     });
 
     // Fetch Inventory
+    // Fetch Inventory
+    useEffect(() => {
+        if (!user) return;
+        let live = true;
+        fetchStashLots()
+            .then(lots => { if (live) setStashItems(lots as never); })
+            .catch(error => console.error('Error fetching stash:', error))
+            .finally(() => { if (live) setIsLoading(false); });
+        return () => { live = false; };
+    }, [user]);
+
+    // Load again after a change (the first load is the effect above)
     const fetchStash = async () => {
         if (!user) return;
         try {
@@ -91,16 +107,9 @@ const StashPage = () => {
         }
     };
 
-    useEffect(() => {
-        fetchStash();
-    }, [user]);
-
     // Global Ingredient Search (Debounced)
     useEffect(() => {
-        if (!searchTerm.trim()) {
-            setSearchResults([]);
-            return;
-        }
+        if (!searchTerm.trim()) return;
 
         const searchGlobalIngredients = async () => {
             setIsSearching(true);

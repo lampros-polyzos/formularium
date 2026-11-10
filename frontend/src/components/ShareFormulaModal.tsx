@@ -33,22 +33,27 @@ export default function ShareFormulaModal({
     const [success, setSuccess] = useState(false);
     const [currentVersion, setCurrentVersion] = useState(0);
 
-    useEffect(() => {
-        if (isOpen) {
+    // Each time the window opens, or is opened for another formula, the form starts afresh (adjusted while rendering, not in an effect)
+    const openedFor = isOpen ? `${currentProjectName}\u0000${communityPostId ?? ''}` : null;
+    const [seenOpenedFor, setSeenOpenedFor] = useState<string | null>(null);
+    if (openedFor !== seenOpenedFor) {
+        setSeenOpenedFor(openedFor);
+        if (openedFor !== null) {
             setTitle(currentProjectName);
             setSuccess(false);
             setError('');
             setReleaseNotes('');
-
-            if (communityPostId) {
-                fetchVersions(communityPostId)
-                    .then(versions => {
-                        if (versions.length > 0) setCurrentVersion(Math.max(...versions.map(v => v.version)));
-                    })
-                    .catch(() => { /* the next version number is worked out by the backend anyway */ });
-            }
         }
-    }, [isOpen, currentProjectName, communityPostId]);
+    }
+
+    useEffect(() => {
+        if (!isOpen || !communityPostId) return;
+        fetchVersions(communityPostId)
+            .then(versions => {
+                if (versions.length > 0) setCurrentVersion(Math.max(...versions.map(v => v.version)));
+            })
+            .catch(() => { /* the next version number is worked out by the backend anyway */ });
+    }, [isOpen, communityPostId]);
 
     if (!isOpen) return null;
 

@@ -66,6 +66,8 @@ import {
     type SubstituteOption,
 } from '../lib/substitutions';
 
+// Search results are only shown while something is typed, so clearing the box needs no effect to empty them
+const NO_RESULTS: DatabaseIngredient[] = [];
 const TOUR_SEEN_KEY = 'formularium.editorTourSeen';
 const STASH_CHECK_KEY = 'formularium.stashCheckHidden';
 const AUTO_BALANCE_KEY = 'formularium.autoBalance';
@@ -99,7 +101,7 @@ const FormulationEditor = () => {
 
     // Search and Ingredients State
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<DatabaseIngredient[]>([]);
+    const [foundIngredients, setSearchResults] = useState<DatabaseIngredient[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [formulaIngredients, setFormulaIngredients] = useState<FormulaIngredient[]>([]);
     const [selectedIngredient, setSelectedIngredient] = useState<DatabaseIngredient | null>(null);
@@ -264,6 +266,8 @@ const FormulationEditor = () => {
         const imported = takeImport();
         setSearchParams({}, { replace: true });
         if (!imported) return;
+        // A one-time hand-off from the import page (an external store, read once, guarded by the ref): the screen is filled in from it, which is what the rule warns about
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setProfileId(imported.profileId);
         setActiveProfile(imported.profile);
         setProjectName(imported.name);
@@ -298,10 +302,7 @@ const FormulationEditor = () => {
 
     // Debounced Database Search Effect
     useEffect(() => {
-        if (!searchTerm.trim()) {
-            setSearchResults([]);
-            return;
-        }
+        if (!searchTerm.trim()) return;
 
         const fetchIngredients = async () => {
             setIsSearching(true);
@@ -495,11 +496,9 @@ const FormulationEditor = () => {
         setFormulaIngredients(prev => withAutoBalance(prev.filter((_, i) => i !== index)));
     };
 
-    // Auto-balance the Q.S. ingredient
-    useEffect(() => {
-        const settled = settleQS(formulaIngredients);
-        if (settled !== formulaIngredients) setFormulaIngredients(settled);
-    }, [formulaIngredients]);
+    // Auto-balance the Q.S. ingredient: derived from the list, so it is settled while rendering (settleQS gives back the same list when nothing needs settling)
+    const settledIngredients = settleQS(formulaIngredients);
+    if (settledIngredients !== formulaIngredients) setFormulaIngredients(settledIngredients);
 
     // Run Validation via Spring Boot Backend
     useEffect(() => {
@@ -882,7 +881,7 @@ const FormulationEditor = () => {
                         searchTerm={searchTerm}
                         onSearchTermChange={setSearchTerm}
                         isSearching={isSearching}
-                        results={searchResults}
+                        results={searchTerm.trim() ? foundIngredients : NO_RESULTS}
                         onAdd={handleAddIngredient}
                     />
 

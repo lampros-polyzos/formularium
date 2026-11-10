@@ -31,7 +31,6 @@
 2. **A list of the browsers an account is signed in from** (the alerts already know them), with a button to sign one out, and a way to **rotate the two-step encryption key**
 3. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
 4. **CodeQL for the Java backend** (it scans the frontend only for now)
-5. **Clear the lint warnings**: 14 effects that set state or load data directly (`react-hooks/set-state-in-effect`) and one mutation in the cost calculator, reported as warnings until reworked
 
 ## Known limitations
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useDialog } from '../hooks/useDialog';
@@ -23,9 +23,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     const [isSaving, setIsSaving] = useState(false);
 
     // Sync input if the username loads after the modal is opened
-    useEffect(() => {
+    const [seenUsername, setSeenUsername] = useState(username);
+    if (username !== seenUsername) {
+        setSeenUsername(username);
         if (username) setDisplayName(username);
-    }, [username]);
+    }
 
     if (!isOpen) return null;
 

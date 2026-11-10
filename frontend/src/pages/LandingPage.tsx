@@ -64,10 +64,17 @@ const LandingPage = () => {
   // and "Create a free account" in the demo banner asks for sign-up
   const wantsSignIn = searchParams.get('signin') === '1';
   const wantsSignUp = searchParams.get('signup') === '1';
+  const asked = wantsSignUp ? 'signup' : wantsSignIn ? 'signin' : null;
+  const [seenAsked, setSeenAsked] = useState<'signin' | 'signup' | null>(null);
+  if (asked !== seenAsked) {   // adjusted while rendering; the effect below only tidies the address
+    setSeenAsked(asked);
+    if (asked) {
+      setAuthMode(asked);
+      setIsAuthModalOpen(true);
+    }
+  }
   useEffect(() => {
     if (!wantsSignIn && !wantsSignUp) return;
-    setAuthMode(wantsSignUp ? 'signup' : 'signin');
-    setIsAuthModalOpen(true);
     setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('signin'); next.delete('signup'); return next; }, { replace: true });
   }, [wantsSignIn, wantsSignUp, setSearchParams]);
 
@@ -87,7 +94,6 @@ const LandingPage = () => {
 
   useEffect(() => {
     const fetchPreviews = async () => {
-      setIsLoadingPosts(true);
       try {
         // Signed-out visitors only get a title, a short excerpt and tags; the full community needs an account
         const previews = await fetchRecipePreviews(3);

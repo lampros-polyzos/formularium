@@ -157,6 +157,17 @@ const ContainersPage = () => {
 
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', targetId: '' });
 
+    useEffect(() => {
+        if (!user) return;
+        let live = true;
+        fetchContainerRows()
+            .then(rows => { if (live) setContainers(rows); })
+            .catch(error => console.error('Error fetching containers:', error))
+            .finally(() => { if (live) setIsLoading(false); });
+        return () => { live = false; };
+    }, [user]);
+
+    // Load again after a change (the first load is the effect above)
     const fetchContainers = async () => {
         if (!user) return;
         try {
@@ -168,10 +179,6 @@ const ContainersPage = () => {
             setIsLoading(false);
         }
     };
-
-    useEffect(() => {
-        fetchContainers();
-    }, [user]);
 
 
     const openAddModal = () => {
