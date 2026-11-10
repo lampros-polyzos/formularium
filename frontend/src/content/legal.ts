@@ -82,16 +82,21 @@ export const PRIVACY_POLICY: LegalDocument = {
         {
             type: "p",
             text:
-                "We don't use advertising or analytics cookies. We store only what the app needs to work, in your browser's local storage:",
+                "We don't use advertising or analytics cookies. We store only what the app needs to work in your browser: two small cookies from our server, which scripts on the page cannot read, and some settings in local storage:",
         },
         {
             type: "table",
             headers: ["What", "Why", "How long"],
             rows: [
                 [
-                    "Sign-in session",
+                    "Sign-in session (a cookie)",
                     "Keeps you logged in",
-                    "Until you sign out",
+                    "Up to 30 days, or until you sign out",
+                ],
+                [
+                    "Browser identifier (a cookie: a random value that identifies the browser, not you)",
+                    "Lets us email you when your account is signed in to from a browser we have not seen before",
+                    "Up to 400 days, or until you clear your cookies",
                 ],
                 [
                     "Preferences (currency, date format, stash low-stock warning)",
@@ -211,6 +216,7 @@ export const PRIVACY_POLICY: LegalDocument = {
                 "When you delete your account in Settings (or ask us to), your data is removed from our database straight away. Copies in backups are overwritten on a rolling basis, within **30 days**.",
                 "Community posts and comments are deleted with your account. Where deleting a comment would break a discussion, we may instead remove your name and keep the text anonymously.",
                 "Our sign-in security log (when you sign in, reset your password or confirm your email, with the time, your IP address and browser, never your password): **90 days**, to spot and stop attacks. It is included in the copy of your data you can download.",
+                "The browsers you have signed in from (a one-way hash of the browser identifier, the browser's own description and the dates it was first and last seen), for the new-sign-in alerts: until the browser has not been seen for 400 days, or you delete your account.",
                 "If you turn on two-step verification: your authenticator secret (stored encrypted) and your recovery codes (stored only as one-way hashes), until you turn it off or delete your account.",
                 "If you add a passkey: its name, when you added and last used it, and the public half of the key (the private half never leaves your device), until you remove it or delete your account.",
                 "Security logs kept by our providers: for the short period they need them.",

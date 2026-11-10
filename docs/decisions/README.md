@@ -16,6 +16,7 @@ One short file per significant choice: what was decided, why, and what it costs.
 | [0010](0010-keep-own-authentication-and-harden-it.md) | Keep our own authentication, and harden it for real users | Accepted | 2026-11-08 |
 | [0011](0011-two-step-verification-with-an-authenticator-app.md) | Two-step verification with an authenticator app | Accepted | 2026-11-08 |
 | [0012](0012-migrations-are-sql-files-applied-by-hand.md) | Migrations are plain SQL files, applied by hand | Accepted | 2026-11-08 |
+| [0016](0016-alerts-for-sign-ins-from-a-new-browser.md) | Alerts for a sign-in from a browser the account has not been seen on | Accepted | 2026-11-10 |
 | [0015](0015-password-sign-in-can-be-switched-off.md) | Password sign-in can be switched off, once a passkey has proved it works | Accepted | 2026-11-10 |
 | [0014](0014-passkeys-as-a-full-sign-in.md) | Passkeys as a full, phishing-resistant sign-in | Accepted | 2026-11-10 |
 | [0013](0013-guest-sessions-for-the-demo.md) | "Try the demo" makes a temporary guest account for each visitor | Accepted | 2026-11-10 |

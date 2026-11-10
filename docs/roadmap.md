@@ -17,6 +17,7 @@
 - Screenshots and a demo GIF in the README
 - Docker image for the backend, Render and Vercel configuration, and a step-by-step [deploy guide](deploy.md)
 - **Change password while signed in**: needs the current password, signs out every other device but keeps this one, and emails a notice
+- **Alerts for a sign-in from a new browser**: an email with when, which browser, network address and how, for every way of signing in; the first browser is learnt silently and the email is capped per day ([ADR 0016](decisions/0016-alerts-for-sign-ins-from-a-new-browser.md))
 - **Passkey autofill**: on the sign-in form, clicking the email box offers the saved passkeys in the browser's autofill list; it renews itself before the server's challenge expires and never fights the "Sign in with a passkey" button ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md))
 - **Switch password sign-in off**: an account with a passkey that has signed in can refuse its own password, which closes the one path a fake site can still use; it cannot lock the owner out ([ADR 0015](decisions/0015-password-sign-in-can-be-switched-off.md))
 - **Passkeys (WebAuthn)**: sign in with a fingerprint, face or screen lock, nothing typed; phishing-resistant, replaces the password and the authenticator code, managed in Settings ([ADR 0014](decisions/0014-passkeys-as-a-full-sign-in.md))
@@ -26,7 +27,7 @@
 ## Next
 
 1. **Passkey check in Safari and Firefox**, including choosing a passkey from the autofill popup, which headless testing cannot do
-2. **Alerts for a sign-in from a new device**, and a way to **rotate the two-step encryption key**
+2. **A list of the browsers an account is signed in from** (the alerts already know them), with a button to sign one out, and a way to **rotate the two-step encryption key**
 3. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
 4. **Small admin tool** to grant moderator rights without hand-written SQL
 5. **CodeQL for the Java backend** (it scans the frontend only for now)

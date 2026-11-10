@@ -2,6 +2,13 @@
 
 Problems that took real thinking, each in short Situation / Task / Action / Result form. Newest first. Each entry is dated by the commit where the fix landed.
 
+## 2026-11-10: Telling someone that their account was used, without crying wolf
+
+- **Situation.** Every protection so far made a break-in harder, and none told the owner that one had happened. A stolen password or passkey that works is silent.
+- **Task.** Email the owner when their account is signed in to from somewhere new, in a way people would not learn to ignore, and without adding tracking.
+- **Action.** The whole design is the answer to "what is a new device?". Addresses change constantly, so alerts by address would mostly be wrong; fingerprinting a browser is unreliable and is the kind of tracking this app avoids; a cookie the browser keeps after a sign-in is reliable for the case that matters and identifies a browser, not a person. It is stored as a hash, per account, so a cookie known for one account proves nothing for another. The rules that keep it useful: the first browser an account is seen on is learnt silently (nothing to compare with, and no flood of alerts to every existing account when this ships); five emails a day at most, with every new browser still in the audit trail; and it can never make a sign-in fail. It reports at the moment a session starts, not at the password step of two-step verification, so an alert never fires for someone who has not got in.
+- **Result.** 14 backend tests for the rules, 4 for the browser wording and 7 for the migration, and a 15-step real-browser run with a real cookie: HttpOnly, scoped to the auth endpoints, 400 days, invisible to the page; quiet for the same browser twice; exactly one email after the cookies were cleared; quiet again afterwards. The new tests were not the only ones to notice: two of my earlier change-password tests failed, correctly, because they asserted that no email at all was sent while signing in from a second browser, which now sends one. They now say what they meant: no password-changed notice. Limits, in [ADR 0016](decisions/0016-alerts-for-sign-ins-from-a-new-browser.md): cleared cookies and private windows count as new, a thief who copied the cookie too would not be reported, and there is not yet a list of browsers.
+
 ## 2026-11-10: Passkey autofill, and the trouble of testing something that waits
 
 - **Situation.** Signing in with a passkey meant pressing a button. Browsers can instead offer saved passkeys in the autofill list when the person clicks the email box ("conditional UI"), which is how most people expect it to work.

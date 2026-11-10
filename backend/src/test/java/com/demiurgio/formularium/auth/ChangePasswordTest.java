@@ -134,7 +134,7 @@ class ChangePasswordTest {
         assertThat(loginStatus(m.email(), OLD)).isEqualTo(200);   // still the old one
         assertThat(loginStatus(m.email(), NEW)).isEqualTo(401);
         assertThat(refreshStatus(other.cookie())).isEqualTo(200);   // and nobody was signed out
-        verify(mail, never()).send(anyString(), anyString(), anyString());
+        verify(mail, never()).send(anyString(), eq("Your Formularium password was changed"), anyString());   // (a sign-in from another browser may send its own, different notice)
         assertThat(events("password_change_failed")).isEqualTo(1);
         assertThat(events("password_changed")).isZero();
     }
@@ -166,7 +166,7 @@ class ChangePasswordTest {
         MvcResult same = change(m, OLD, OLD);
         assertThat(status(same)).isEqualTo(400);
         assertThat(errorCode(same)).isEqualTo("password_unchanged");
-        verify(mail, never()).send(anyString(), anyString(), anyString());
+        verify(mail, never()).send(anyString(), eq("Your Formularium password was changed"), anyString());   // (a sign-in from another browser may send its own, different notice)
     }
 
     @Test
@@ -186,7 +186,7 @@ class ChangePasswordTest {
         assertThat(errorCode(leaked)).isEqualTo("password_breached");
 
         assertThat(loginStatus(m.email(), OLD)).isEqualTo(200);   // none of them changed anything
-        verify(mail, never()).send(anyString(), anyString(), anyString());
+        verify(mail, never()).send(anyString(), eq("Your Formularium password was changed"), anyString());   // (a sign-in from another browser may send its own, different notice)
     }
 
     @Test

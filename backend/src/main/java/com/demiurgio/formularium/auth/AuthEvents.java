@@ -34,6 +34,8 @@ class AuthEvents {
     static final String PASSKEY_FAILED = "passkey_failed";
     /** A passkey sign-in was started (a challenge was asked for); counted per address so the endpoint cannot be used to fill the table. */
     static final String PASSKEY_LOGIN_STARTED = "passkey_login_started";
+    /** A sign-in from a browser the account had not been seen on before (recorded whether or not the alert email was sent, which is capped per day). */
+    static final String NEW_DEVICE_SIGN_IN = "new_device_sign_in";
     /** Password sign-in was switched off or on for an account (switched on again by the member, or by a password reset). */
     static final String PASSWORD_LOGIN_DISABLED = "password_login_disabled";
     static final String PASSWORD_LOGIN_ENABLED = "password_login_enabled";

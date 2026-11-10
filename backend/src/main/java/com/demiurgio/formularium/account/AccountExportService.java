@@ -56,6 +56,7 @@ public class AccountExportService {
             "email_tokens",         // one-time links sent by email, also secrets
             "user_mfa",             // the encrypted authenticator secret
             "mfa_recovery_codes",   // hashes of the recovery codes
+            "known_devices",        // hashed browser identifiers behind the new-sign-in alerts (the sign-ins themselves, with the browser, are in auth_events)
             "mfa_challenges",       // one-time sign-in tokens
             "webauthn_challenges",  // one-time passkey challenges, five minutes long
             "community_moderators"  // a role given by the operators, not the member's own data
