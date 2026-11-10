@@ -41,7 +41,7 @@ Hobbyists mix creams and serums from forum posts and spreadsheets, with no check
 ## How it is built
 
 ```mermaid
-flowchart LR
+flowchart TB
     B["React SPA<br/>(TypeScript, Vite, Tailwind)"] -- "REST + JWT" --> A["Spring Boot API<br/>(Java 27)"]
     A -- "JDBC" --> D[("PostgreSQL<br/>hosted on Supabase")]
     A --> G["Google sign-in<br/>Turnstile bot check"]
