@@ -16,6 +16,7 @@
 - Secret-leak protection: a pre-commit check that blocks staged secrets
 - Screenshots and a demo GIF in the README
 - Docker image for the backend, Render and Vercel configuration, and a step-by-step [deploy guide](deploy.md)
+- **Main flows checked in a real browser (Firefox)**: sign up, make a formula, make a batch, by hand
 - **Change password while signed in**: needs the current password, signs out every other device but keeps this one, and emails a notice
 - **Admin tool**: administrators (rows added by hand) look a member up, give or take away moderator rights, and do the recovery steps that needed SQL (switch off two-step verification, remove passkeys, switch password sign-in back on, sign out every device); each needs the administrator's password and a reason, is audited and emailed to the member ([ADR 0017](decisions/0017-an-admin-tool-for-recovery-and-moderators.md))
 - **Alerts for a sign-in from a new browser**: an email with when, which browser, network address and how, for every way of signing in; the first browser is learnt silently and the email is capped per day ([ADR 0016](decisions/0016-alerts-for-sign-ins-from-a-new-browser.md))
@@ -29,7 +30,7 @@
 
 1. **Passkey check in Safari and Firefox**, including choosing a passkey from the autofill popup, which headless testing cannot do
 2. **A list of the browsers an account is signed in from** (the alerts already know them), with a button to sign one out, and a way to **rotate the two-step encryption key**
-3. **Browser end-to-end tests** for the main flows: sign up, make a formula, make a batch
+3. **Browser end-to-end tests that run in CI** (the main flows were checked by hand in Firefox, but nothing in the repository repeats them)
 4. **CodeQL for the Java backend** (it scans the frontend only for now)
 
 ## Known limitations
